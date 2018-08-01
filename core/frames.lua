@@ -231,11 +231,30 @@
 		end)
 		if event == "GROUP_ROSTER_UPDATE" then return end
 		if not (IsAddOnLoaded("Shadowed Unit Frames") or IsAddOnLoaded("PitBull Unit Frames 4.0") or IsAddOnLoaded("X-Perl UnitFrames")) then
+                if not (IsAddOnLoaded("EasyFrames")) then
                 	for i,v in pairs({
-				PlayerFrameTexture,
-				PlayerFrameAlternateManaBarBorder,
-				PlayerFrameAlternateManaBarLeftBorder,
-				PlayerFrameAlternateManaBarRightBorder,
+						PlayerFrameTexture, 
+						PlayerFrameAlternateManaBarBorder, 
+						PlayerFrameAlternateManaBarRightBorder, 
+						PlayerFrameAlternateManaBarLeftBorder,
+						TargetFrameTextureFrameTexture, 
+						TargetFrameToTTextureFrameTexture,
+						PetFrameTexture, 
+						FocusFrameTextureFrameTexture, 
+						FocusFrameToTTextureFrameTexture,
+						PartyMemberFrame1Texture, 
+						PartyMemberFrame2Texture, 
+						PartyMemberFrame3Texture, 
+						PartyMemberFrame4Texture,
+						PartyMemberFrame1PetFrameTexture, 
+						PartyMemberFrame2PetFrameTexture, 
+						PartyMemberFrame3PetFrameTexture,
+						PartyMemberFrame4PetFrameTexture
+                		}) do
+                	v:SetVertexColor(.05,.05,.05)
+                	end
+                end
+                	for i,v in pairs({
 				ComboPointPlayerFrame.Background,
 				ComboPointPlayerFrame.Combo1.PointOff,
 				ComboPointPlayerFrame.Combo2.PointOff,
@@ -247,17 +266,6 @@
 				AlternatePowerBarLeftBorder,
 				AlternatePowerBarRightBorder,
   				PetFrameTexture,
-				PartyMemberFrame1Texture,
-				PartyMemberFrame2Texture,
-				PartyMemberFrame3Texture,
-				PartyMemberFrame4Texture,
-				PartyMemberFrame1PetFrameTexture,
-				PartyMemberFrame2PetFrameTexture,
-				PartyMemberFrame3PetFrameTexture,
-				PartyMemberFrame4PetFrameTexture,
-   				FocusFrameTextureFrameTexture,
-   				TargetFrameToTTextureFrameTexture,
-   				FocusFrameToTTextureFrameTexture,
 				Boss1TargetFrameTextureFrameTexture,
 				Boss2TargetFrameTextureFrameTexture,
 				Boss3TargetFrameTextureFrameTexture,
@@ -356,15 +364,6 @@
 			v:SetVertexColor(.2, .2, .2)
   	
 		end
-	
-		--if UberuiDB.Gryphon and UberuiDB.Classcolor then
-		--	MainMenuBarArtFrame.LeftEndCap:SetTexture("Interface\\AddOns\\Uber UI\\textures\\classtextures\\"..class.."\\mainmenubar-endcap-dwarf")
-		--	MainMenuBarArtFrame.LeftEndCap:SetVertexColor(1, 1, 1)
-		--	MainMenuBarArtFrame.LeftEndCap:SetTexCoord(0,1,.40625,1)
-		--	MainMenuBarArtFrame.RightEndCap:SetTexture("Interface\\AddOns\\Uber UI\\textures\\classtextures\\"..class.."\\mainmenubar-endcap-dwarf")
-		--	MainMenuBarArtFrame.RightEndCap:SetVertexColor(1, 1, 1)
-		--	MainMenuBarArtFrame.RightEndCap:SetTexCoord(1,0,.40625,1)
-		--else
     		for i,v in ipairs({
 				MainMenuBarArtFrame.LeftEndCap,
     		    MainMenuBarArtFrame.RightEndCap, 
@@ -375,7 +374,6 @@
     		    	v:Hide()
     		    end
     	 	end
-    	--end
 	end)
 	
  -- COLORING ARENA FRAMES

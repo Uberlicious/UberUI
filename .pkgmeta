@@ -1,1 +1,3 @@
 package-as: Uber UI
+
+manual-changelog: changelog.txt
