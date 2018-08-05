@@ -65,6 +65,20 @@ end
     outer_shadow      = "Interface\\AddOns\\Uber UI\\textures\\outer_shadow",
   }
 
+  cfg.targetframebig  = {
+    targetingframe    = "Interface\\AddOns\\Uber UI\\textures\\target\\targetingframebig",
+    elite             = "Interface\\Addons\\Uber UI\\textures\\target\\elitebig",
+    rareelite         = "Interface\\Addons\\Uber UI\\textures\\target\\rare-elitebig",
+    rare              = "Interface\\AddOns\\Uber UI\\textures\\target\\rarebig",
+}
+
+  cfg.targetframe = {
+    targetingframe    = "Interface\\AddOns\\Uber UI\\textures\\target\\targetingframe",
+    elite             = "Interface\\Addons\\Uber UI\\textures\\target\\elite",
+    rareelite         = "Interface\\Addons\\Uber UI\\textures\\target\\rare-elite",
+    rare              = "Interface\\AddOns\\Uber UI\\textures\\target\\rare",
+}
+
   cfg.background = {
     showbg            = true,  --show an background image?
     showshadow        = true,   --show an outer shadow?
