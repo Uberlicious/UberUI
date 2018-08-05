@@ -396,7 +396,7 @@ function StyleTargetFrame(self, forceNormalTexture)
 hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 
 	hooksecurefunc("PetFrame_Update", function(self, override)
-		  if ( (not PlayerFrame.animating) or (override) ) then
+		  if ( (not PlayerFrame.animating or UnitInVehicle("player") or UnitisDead("player")) or (override) ) then
   			  if ( UnitIsVisible(self.unit) and PetUsesPetFrame() and not PlayerFrame.vehicleHidesPet ) then
   			    if ( self:IsShown() ) then
   			      UnitFrame_Update(self);
@@ -592,13 +592,15 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 			CompactRaidFrameManagerToggleButton:SetNormalTexture("Interface\\AddOns\\Uber UI\\textures\\raid\\RaidPanel-Toggle")
 			
 			hooksecurefunc("GameTooltip_ShowCompareItem", function(self, anchorFrame)
-				local shoppingTooltip1, shoppingTooltip2 = unpack(self.shoppingTooltips)
-				if self and UberuiDB.ClassColorFrames then
-					shoppingTooltip1:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
-					shoppingTooltip2:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
-				elseif self then
-					shoppingTooltip1:SetBackdropBorderColor(.05, .05, .05)
-					shoppingTooltip2:SetBackdropBorderColor(.05, .05, .05)
+				if (self) then
+					local shoppingTooltip1, shoppingTooltip2 = unpack(self.shoppingTooltips)
+					if UberuiDB.ClassColorFrames then
+						shoppingTooltip1:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
+						shoppingTooltip2:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
+					else
+						shoppingTooltip1:SetBackdropBorderColor(.05, .05, .05)
+						shoppingTooltip2:SetBackdropBorderColor(.05, .05, .05)
+					end
 				end
 			end)
 			
@@ -611,14 +613,20 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 			end)
 
 			--GameTooltip.SetBackdropBorderColor = function() end
-			
+		function uui_pvpicons()
 			for i,v in pairs({
 				PlayerPVPIcon,
 				TargetFrameTextureFramePVPIcon,
 				FocusFrameTextureFramePVPIcon,
 			}) do
-				v:SetAlpha(0)
+				if not UberuiDB.pvpicons then
+					v:SetAlpha(0)
+				else
+					v:SetVertexColor(.75,.75,.75,1)
+				end
 			end
+		end
+
 			for i=1,4 do 
 				_G["PartyMemberFrame"..i.."PVPIcon"]:SetAlpha(0)
 				_G["PartyMemberFrame"..i.."NotPresentIcon"]:Hide()
@@ -646,6 +654,7 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 	end
 	MBBB_Toggle()
 	UUI_BigFrames()
+	uui_pvpicons()
 end)
 
 

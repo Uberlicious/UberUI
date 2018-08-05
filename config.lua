@@ -27,6 +27,7 @@ local defaults = {
     ClassColorFrames = false,
     BigFrames = true,
     MBBB = true,
+    pvpicons = false,
 }
 
 function cfg:PLAYER_LOGIN()
