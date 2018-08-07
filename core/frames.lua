@@ -742,9 +742,8 @@ end)
 				ArenaPrepFrame5SpecBorder,
 			}) do
                 	v:SetVertexColor(.05, .05, .05)
-	      		end 		
+	      	end 		
 		end 
-	end)
 	if IsAddOnLoaded("Blizzard_ArenaUI") then
 		for i,v in pairs({
  			ArenaEnemyFrame1Texture,
@@ -762,10 +761,11 @@ end)
 			ArenaEnemyFrame3PetFrameTexture,
 			ArenaEnemyFrame4PetFrameTexture, 
 			ArenaEnemyFrame5PetFrameTexture,
-              	}) do
+            }) do
                 	v:SetVertexColor(.05, .05, .05)
-	      	end 
+	    end 
 	end
+end)
 	function UUI_BigFrames()
 		if UberuiDB.BigFrames == true then
 			PlayerFrame:SetScale(1.2)
@@ -789,15 +789,14 @@ CF:SetScript("OnEvent", function(self, event, addon)
 			if UberuiDB.MBBB then
 				local point, rf, rp, ofsx, ofxy = v:GetPoint()
 				v:ClearAllPoints()
-				v:SetPoint(point, rf, rp, ofsx, ofxy-500)
+				v:SetPoint(point, rf, rp, ofsx, ofxy-100)
 			else
 				local point, rf, rp, ofsx, ofxy = v:GetPoint()
 				if ofxy ~= 0 then
 					v:ClearAllPoints()
-					v:SetPoint(point, rf, rp, ofsx, ofxy+500)
+					v:SetPoint(point, rf, rp, ofsx, ofxy+100)
 				end
 			end
 		end
-	end
-	MBBB_Toggle()
+	end	
 end)

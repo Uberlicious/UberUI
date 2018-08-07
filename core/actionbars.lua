@@ -226,7 +226,7 @@ end)
           nt:SetVertexColor(0.999,0.999,0.999,1)
         else
           bu:SetNormalTexture(cfg.textures.normal)
-          nt:SetVertexColor(cfg.color.normal.r,cfg.color.normal.g,cfg.color.normal.b,.5)
+          nt:SetVertexColor(cfg.color.normal.r,cfg.color.normal.g,cfg.color.normal.b,1)
         end
       end
     end)
