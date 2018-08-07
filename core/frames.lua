@@ -229,7 +229,7 @@ hooksecurefunc(
   --PLAYER
 function PlayerFrameHealth(self)
 	if not (IsAddOnLoaded("EasyFrames")) then
-	PlayerFrameTexture:SetTexture("Interface\\Addons\\Uber UI\\textures\\target\\TargetFramebig")
+	PlayerFrameTexture:SetTexture("Interface\\Addons\\Uber UI\\textures\\target\\targetingframebig")
 	if UberuiDB.ClassColorFrames then
 		PlayerFrameTexture:SetVertexColor(classcolor.r, classcolor.g, classcolor.b)
 	else
@@ -242,7 +242,7 @@ function PlayerFrameHealth(self)
 	PlayerFrameGroupIndicatorMiddle:Hide()
 	PlayerFrameGroupIndicatorRight:Hide()
 	PlayerFrameHealthBar:SetPoint("TOPLEFT", 106, -24)
-	PlayerFrameHealthBar:SetHeight(26)
+	PlayerFrameHealthBar:SetHeight(29)
 	PlayerFrameHealthBar.LeftText:ClearAllPoints()
 	PlayerFrameHealthBar.LeftText:SetPoint("LEFT", PlayerFrameHealthBar, "LEFT", 10, 0)
 	PlayerFrameHealthBar.RightText:ClearAllPoints()
@@ -313,7 +313,7 @@ function StyleTargetFrame(self, forceNormalTexture)
 		TextStatusBar_UpdateTextString(self.manabar)
 		self.threatIndicator:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Flash")
 		self.name:SetPoint("LEFT", self, 15, 36)
-		self.healthbar:SetSize(119, 26)
+		self.healthbar:SetSize(119, 29)
 		self.healthbar:ClearAllPoints()
 		self.healthbar:SetPoint("TOPLEFT", 5, -24)
 		self.healthbar.LeftText:ClearAllPoints()
@@ -346,13 +346,11 @@ function StyleTargetFrame(self, forceNormalTexture)
 		FocusFrameToT.deadText:SetWidth(0.01)
 	end
 
-			--TargetFrame.EliteDragon = CreateFrame("frame", "EliteDragon",TargetFrame)
-			--TargetFrame.EliteDragon:ClearAllPoints()
-			--TargetFrame.EliteDragon:SetPoint("TOPRIGHT", TargetFrame)
-			--TargetFrame.EliteDragon:SetFrameStrata("MEDIUM")
-			--TargetFrame.EliteDragon:SetFrameLevel(4)
-			--TargetFrame.EliteDragonTexture = TargetFrame:CreateTexture(nil, "ARTWORK", nil, -8)
-			--TargetFrame.EliteDragonTexture:SetPoint("TOPRIGHT", TargetFrame)
+			if UberuiDB.LargeHealth then
+				frametexture = cfg.targetframebig
+			else
+				frametexture = cfg.targetframe
+			end
 
 			local classification = UnitClassification(self.unit)
 			if ( classification == "minus" ) then
@@ -366,36 +364,31 @@ function StyleTargetFrame(self, forceNormalTexture)
 				self.manabar.RightText:Hide();
 				forceNormalTexture = true;
 			elseif ( classification == "worldboss" or classification == "elite" ) then
+				self.borderTexture:SetTexture(frametexture.elite)
 				if UberuiDB.ClassColorFrames then
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\elitewhite")
 					self.borderTexture:SetVertexColor(classcolor.r, classcolor.g, classcolor.b)
 				else
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\elitewhite")
 					self.borderTexture:SetVertexColor(.05, .05, .05)
 				end
 			elseif ( classification == "rareelite" ) then
+				self.borderTexture:SetTexture(frametexture.rareelite)
 				if UberuiDB.ClassColorFrames then
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\rare-elitewhite")
 					self.borderTexture:SetVertexColor(classcolor.r, classcolor.g, classcolor.b)
 				else
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\rare-elitewhite")
 					self.borderTexture:SetVertexColor(.05, .05, .05)
 				end
 			elseif ( classification == "rare" ) then
+				self.borderTexture:SetTexture(frametexture.rare)
 				if UberuiDB.ClassColorFrames then
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\rarewhite")
 					self.borderTexture:SetVertexColor(classcolor.r, classcolor.g, classcolor.b)
 				else
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\rarewhite")
 					self.borderTexture:SetVertexColor(.05, .05, .05)
 				end
 			else
-				
+				self.borderTexture:SetTexture(frametexture.targetingframe)
 				if UberuiDB.ClassColorFrames then
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\TargetFramebig")
 					self.borderTexture:SetVertexColor(classcolor.r, classcolor.g, classcolor.b)
 				else
-					self.borderTexture:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\TargetFramebig")
 					self.borderTexture:SetVertexColor(.05, .05, .05)
 				end
 			end
@@ -403,7 +396,7 @@ function StyleTargetFrame(self, forceNormalTexture)
 hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 
 	hooksecurefunc("PetFrame_Update", function(self, override)
-		  if ( (not PlayerFrame.animating) or (override) ) then
+		  if ( (not PlayerFrame.animating or UnitInVehicle("player") or UnitisDead("player")) or (override) ) then
   			  if ( UnitIsVisible(self.unit) and PetUsesPetFrame() and not PlayerFrame.vehicleHidesPet ) then
   			    if ( self:IsShown() ) then
   			      UnitFrame_Update(self);
@@ -492,6 +485,11 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 			end
 		end)
 	end)
+		if UberuiDB.LargeHealth then
+			frametexture = cfg.targetframebig
+		else
+			frametexture = cfg.targetframe
+		end
 
 		if event == "GROUP_ROSTER_UPDATE" then return end
 		if not (IsAddOnLoaded("Shadowed Unit Frames") or IsAddOnLoaded("PitBull Unit Frames 4.0") or IsAddOnLoaded("X-Perl UnitFrames")) then
@@ -517,7 +515,7 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
                 		}) do
                 	    if UberuiDB.ClassColorFrames then
                 	    	if v:GetTexture() == "Interface\\TargetingFrame\\UI-TargetingFrame" and not UberuiDB.LargeHealth then
-                	    		v:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\targetingframebig")
+                	    		v:SetTexture(frametexture.targetingframe)
                 	    		v:SetVertexColor(classcolor.r, classcolor.g, classcolor.b)
                 	    	elseif v:GetTexture() == "Interface\\TargetingFrame\\UI-SmallTargetingFrame" then
                 	    		v:SetTexture("Interface\\AddOns\\Uber UI\\textures\\target\\smalltargetingframe") 
@@ -594,13 +592,15 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 			CompactRaidFrameManagerToggleButton:SetNormalTexture("Interface\\AddOns\\Uber UI\\textures\\raid\\RaidPanel-Toggle")
 			
 			hooksecurefunc("GameTooltip_ShowCompareItem", function(self, anchorFrame)
-				local shoppingTooltip1, shoppingTooltip2 = unpack(self.shoppingTooltips)
-				if self and UberuiDB.ClassColorFrames then
-					shoppingTooltip1:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
-					shoppingTooltip2:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
-				elseif self then
-					shoppingTooltip1:SetBackdropBorderColor(.05, .05, .05)
-					shoppingTooltip2:SetBackdropBorderColor(.05, .05, .05)
+				if (self) then
+					local shoppingTooltip1, shoppingTooltip2 = unpack(self.shoppingTooltips)
+					if UberuiDB.ClassColorFrames then
+						shoppingTooltip1:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
+						shoppingTooltip2:SetBackdropBorderColor(classcolor.r, classcolor.g, classcolor.b)
+					else
+						shoppingTooltip1:SetBackdropBorderColor(.05, .05, .05)
+						shoppingTooltip2:SetBackdropBorderColor(.05, .05, .05)
+					end
 				end
 			end)
 			
@@ -613,14 +613,20 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 			end)
 
 			--GameTooltip.SetBackdropBorderColor = function() end
-			
+		function uui_pvpicons()
 			for i,v in pairs({
 				PlayerPVPIcon,
 				TargetFrameTextureFramePVPIcon,
 				FocusFrameTextureFramePVPIcon,
 			}) do
-				v:SetAlpha(0)
+				if not UberuiDB.pvpicons then
+					v:SetAlpha(0)
+				else
+					v:SetVertexColor(.75,.75,.75,1)
+				end
 			end
+		end
+
 			for i=1,4 do 
 				_G["PartyMemberFrame"..i.."PVPIcon"]:SetAlpha(0)
 				_G["PartyMemberFrame"..i.."NotPresentIcon"]:Hide()
@@ -648,6 +654,7 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 	end
 	MBBB_Toggle()
 	UUI_BigFrames()
+	uui_pvpicons()
 end)
 
 
@@ -735,9 +742,8 @@ end)
 				ArenaPrepFrame5SpecBorder,
 			}) do
                 	v:SetVertexColor(.05, .05, .05)
-	      		end 		
+	      	end 		
 		end 
-	end)
 	if IsAddOnLoaded("Blizzard_ArenaUI") then
 		for i,v in pairs({
  			ArenaEnemyFrame1Texture,
@@ -755,10 +761,11 @@ end)
 			ArenaEnemyFrame3PetFrameTexture,
 			ArenaEnemyFrame4PetFrameTexture, 
 			ArenaEnemyFrame5PetFrameTexture,
-              	}) do
+            }) do
                 	v:SetVertexColor(.05, .05, .05)
-	      	end 
+	    end 
 	end
+end)
 	function UUI_BigFrames()
 		if UberuiDB.BigFrames == true then
 			PlayerFrame:SetScale(1.2)
@@ -782,15 +789,14 @@ CF:SetScript("OnEvent", function(self, event, addon)
 			if UberuiDB.MBBB then
 				local point, rf, rp, ofsx, ofxy = v:GetPoint()
 				v:ClearAllPoints()
-				v:SetPoint(point, rf, rp, ofsx, ofxy-500)
+				v:SetPoint(point, rf, rp, ofsx, ofxy-100)
 			else
 				local point, rf, rp, ofsx, ofxy = v:GetPoint()
 				if ofxy ~= 0 then
 					v:ClearAllPoints()
-					v:SetPoint(point, rf, rp, ofsx, ofxy+500)
+					v:SetPoint(point, rf, rp, ofsx, ofxy+100)
 				end
 			end
 		end
-	end
-	MBBB_Toggle()
+	end	
 end)

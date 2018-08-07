@@ -27,6 +27,7 @@ local defaults = {
     ClassColorFrames = false,
     BigFrames = true,
     MBBB = true,
+    pvpicons = false,
 }
 
 function cfg:PLAYER_LOGIN()
@@ -64,6 +65,20 @@ end
     buttonbackflat    = "Interface\\AddOns\\Uber UI\\textures\\button_background_flat",
     outer_shadow      = "Interface\\AddOns\\Uber UI\\textures\\outer_shadow",
   }
+
+  cfg.targetframebig  = {
+    targetingframe    = "Interface\\AddOns\\Uber UI\\textures\\target\\targetingframebig",
+    elite             = "Interface\\Addons\\Uber UI\\textures\\target\\elitebig",
+    rareelite         = "Interface\\Addons\\Uber UI\\textures\\target\\rare-elitebig",
+    rare              = "Interface\\AddOns\\Uber UI\\textures\\target\\rarebig",
+}
+
+  cfg.targetframe = {
+    targetingframe    = "Interface\\AddOns\\Uber UI\\textures\\target\\targetingframe",
+    elite             = "Interface\\Addons\\Uber UI\\textures\\target\\elite",
+    rareelite         = "Interface\\Addons\\Uber UI\\textures\\target\\rare-elite",
+    rare              = "Interface\\AddOns\\Uber UI\\textures\\target\\rare",
+}
 
   cfg.background = {
     showbg            = true,  --show an background image?

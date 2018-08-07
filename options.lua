@@ -210,7 +210,7 @@ Options:SetScript("OnShow", function(self)
 
 	local MicroButtonBagBar = CreateFrame("CheckButton", "$parentMicroButtonBagBar", self, "InterfaceOptionsCheckButtonTemplate")
 	MicroButtonBagBar:SetPoint("TOPLEFT", ClassColorHealth, "BOTTOMLEFT", 0, -12)
-	MicroButtonBagBar.Text:SetText("MicroButtonBagBar")
+	MicroButtonBagBar.Text:SetText("MicroButtonBagBar Hide")
 	MicroButtonBagBar.tooltipText = "Enable / Disable the Bag Bar Menu in the lower right corner."
 	MicroButtonBagBar:SetScript("OnClick", function(this)
 		local checked = not not this:GetChecked()
@@ -220,6 +220,23 @@ Options:SetScript("OnShow", function(self)
 			MBBB_Toggle()
 		else
 			MBBB_Toggle()
+		end
+	end)
+
+	local Pvpicons = CreateFrame("CheckButton", "$parentPvpicons", self, "InterfaceOptionsCheckButtonTemplate")
+	Pvpicons:SetPoint("TOPLEFT", MicroButtonBagBar, "BOTTOMLEFT", 0, -12)
+	Pvpicons.Text:SetText("Toggle PVP Icons")
+	Pvpicons.tooltipText = "Toggles showing of the Player / Target PVP icons. (will not be colored)"
+	Pvpicons:SetScript("OnClick", function(this)
+		local checked = not not this:GetChecked()
+		PlaySound(checked and SOUND_ON or SOUND_OFF)
+		UberuiDB.pvpicons = checked
+		if checked then
+			UberuiDB.pvpicons = true
+			uui_pvpicons()
+		else
+			UberuiDB.pvpicons = false
+			uui_pvpicons()
 		end
 	end)
 
@@ -233,6 +250,7 @@ Options:SetScript("OnShow", function(self)
 		ClassColorHealth:SetChecked(UberuiDB.ClassColorHealth)
 		BigFrames:SetChecked(UberuiDB.BigFrames)
 		MicroButtonBagBar:SetChecked(UberuiDB.MBBB)
+		Pvpicons:SetChecked(UberuiDB.pvpicons)
 	end
 
 	self:refresh()
