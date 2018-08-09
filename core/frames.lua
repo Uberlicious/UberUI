@@ -472,8 +472,19 @@ hooksecurefunc("TargetFrame_CheckClassification", StyleTargetFrame)
 				end
 			end
 		end
+		if CompactPartyFrameBorderFrame then
+			for _,region in pairs({CompactPartyFrameBorderFrame:GetRegions()}) do
+   				if UberuiDB.ClassColorFrames then
+					region:SetVertexColor(classcolor.r, classcolor.g, classcolor.b)
+				else
+					region:SetVertexColor(.05, .05, .05)
+				end
+			end
+		end
 	end
 	
+	CF:RegisterEvent("PLAYER_ENTERING_WORLD")
+	CF:RegisterEvent("GROUP_ROSTER_UPDATE")
 	CF:SetScript("OnEvent", function(self, event)
 		ColorRaid()
 		CF:SetScript("OnUpdate", function()
