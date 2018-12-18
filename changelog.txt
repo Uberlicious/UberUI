@@ -4,3 +4,6 @@ Additions:
 	Class Color Arena Frames
 	Change Health Bar Textures
 	Dark PvP icons
+
+8.1.0:
+	Updating for WoW to not flag addon out of date
