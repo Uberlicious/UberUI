@@ -40,7 +40,7 @@ function targetframes:HealthBarColor()
 end
 
 function targetframes:HealthManaBarTexture()
-    local targetFrame = TargetFrame.TargetFrameContent.TargetFrameContentMain;
+    local targetFrame = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBar;
     if (uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.statusbars[uuidb.general.texture];
         targetFrame.HealthBar:SetStatusBarTexture(texture);

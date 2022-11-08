@@ -3,7 +3,6 @@ local playerframes = {}
 
 local class = UnitClass("player")
 local classcolor = RAID_CLASS_COLORS[select(2, UnitClass("player"))]
-local defaultTex = PlayerFrameHealthBar:GetStatusBarTexture()
 local pvphook = false;
 
 playerframes = CreateFrame("frame")
@@ -36,12 +35,13 @@ function playerframes:Color()
 end
 
 function playerframes:HealthBarColor()
+    local playerFrame = PlayerFrame.PlayerFrameContent.PlayerFrameContentMain;
     if uuidb.playerframes.classcolor then
-        PlayerFrameHealthBar:SetStatusBarDesaturated(true);
-        PlayerFrameHealthBar:SetStatusBarColor(classcolor.r, classcolor.g, classcolor.b, classcolor.a);
+        playerFrame.HealthBarArea.HealthBar:SetStatusBarDesaturated(true);
+        playerFrame.HealthBarArea.HealthBar:SetStatusBarColor(classcolor.r, classcolor.g, classcolor.b, classcolor.a);
     else
-        PlayerFrameHealthBar:SetStatusBarDesaturated(false);
-        PlayerFrameHealthBar:SetStatusBarColor(0, 1, 0, 1);
+        playerFrame.HealthBarArea.HealthBar:SetStatusBarDesaturated(false);
+        playerFrame.HealthBarArea.HealthBar:SetStatusBarColor(0, 1, 0, 1);
     end
     PetFrameHealthBar:SetStatusBarDesaturated(false);
     PetFrameHealthBar:SetStatusBarColor(0, 1, 0, 1);
@@ -60,7 +60,7 @@ function playerframes:HealthManaBarTexture(force)
             local pc = PowerBarColor[playerPowerType];
             PlayerFrameManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
-        PlayerFrameHealthBar.styled = true;
+        playerFrame.healthbar.styled = true;
 
         PetFrameHealthBar:SetStatusBarTexture(texture);
         local petPowerType = UnitPowerType("pet");
