@@ -44,42 +44,14 @@ function buffsandauras:ColorAuras()
     local dc = uuidb.general.darkencolor;
     local tx = MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
-    for _, v in pairs({ TargetFrame:GetChildren() }) do
-        if not v.styled and v.Icon then
-            local iconSize = v.Icon:GetSize();
-            v.NormalTexture = CreateFrame("Frame", "TargetFrameAuraBorder", v);
-            v.NormalTexture:SetSize(iconSize + 4, iconSize + 4);
-            if (v:GetName() == "TargetFrameSpellBar") then
-                v.NormalTexture:SetPoint("RIGHT", v, "LEFT", 2, -7);
-            else
-                v.NormalTexture:SetPoint("TOPLEFT", v, "TOPLEFT", 0, 0);
-                v.NormalTexture:SetPoint("BOTTOMRIGHT", v, "BOTTOMRIGHT", 3, -3);
-            end
-            if (v.Count) then
-                v.Count:SetPoint("BOTTOMRIGHT", v, "BOTTOMRIGHT", 1, 0);
-            end
-            v.NormalTexture.texture = v.NormalTexture:CreateTexture(nil, "OVERLAY");
-            v.NormalTexture.texture:SetAtlas(tx);
-            v.NormalTexture.texture:SetAllPoints();
-            v.NormalTexture.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-            v.styled = true;
-        elseif ((v.styled and v.Stealable and v.Stealable:IsShown()) or
-            (v.styled and v.Border and v.Border:IsShown())) then
-            v.NormalTexture:Hide();
-        elseif (v.styled) then
-            v.NormalTexture:Show()
-            local iconSize = v.Icon:GetSize();
-            v.NormalTexture:SetSize(iconSize + 4, iconSize + 4);
-        end
-    end
-
-    if (not FocusFrame.smallSize) then
-        for _, v in pairs({ FocusFrame:GetChildren() }) do
+    local function AddBorderAndTexture(frame)
+        local frameName = frame:GetName();
+        for _, v in pairs({ frame:GetChildren() }) do
             if not v.styled and v.Icon then
                 local iconSize = v.Icon:GetSize();
-                v.NormalTexture = CreateFrame("Frame", "FocusFrameAuraBorder", v);
+                v.NormalTexture = CreateFrame("Frame", frameName .. "AuraBorder", v);
                 v.NormalTexture:SetSize(iconSize + 4, iconSize + 4);
-                if (v:GetName() == "FocusFrameSpellBar") then
+                if (v:GetName() == frameName .. "SpellBar") then
                     v.NormalTexture:SetPoint("RIGHT", v, "LEFT", 2, -7);
                 else
                     v.NormalTexture:SetPoint("TOPLEFT", v, "TOPLEFT", 0, 0);
@@ -102,6 +74,12 @@ function buffsandauras:ColorAuras()
                 v.NormalTexture:SetSize(iconSize + 5, iconSize + 5);
             end
         end
+    end
+
+    AddBorderAndTexture(TargetFrame);
+
+    if (not FocusFrame.smallSize) then
+        AddBorderAndTexture(FocusFrame);
     end
 end
 
