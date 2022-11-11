@@ -32,3 +32,4 @@
 
 10.0.2.8: - Beta
 - add texturing to compact raid frames and party raid frames
+- update playerframe variables, old global names no longer available
