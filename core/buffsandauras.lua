@@ -37,6 +37,14 @@ function buffsandauras:ColorBuffs()
             v.NormalTexture.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
             v.styled = true;
         end
+
+        if (not v.NormalTexture) then return end
+        -- allow temp enchants to color correctly
+        if (v.Border and v.Border:IsShown()) then
+            v.NormalTexture:Hide();
+        else
+            v.NormalTexture:Show();
+        end
     end
 end
 

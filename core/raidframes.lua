@@ -15,7 +15,7 @@ end)
 function raidframes:HealthManaBarTexture()
     local dc = uuidb.general.darkencolor;
     local texture = uuidb.general.raidbartextures and uuidb.statusbars[uuidb.general.raidbartexture] or
-        uuidb.statusbars[uuidb.general.texture]
+        uuidb.statusbars[uuidb.general.texture];
     for i = 1, 8 do
         local group = _G["CompactRaidGroup" .. i];
         if (group ~= nil) then
@@ -37,7 +37,9 @@ function raidframes:HealthManaBarTexture()
                     local member = _G[group:GetName() .. "Member" .. i];
                     local texture = uuidb.general.secondarybartextures and
                         uuidb.statusbars[uuidb.general.secondarybartexture] or
-                        uuidb.statusbars[uuidb.general.raidbartexture];
+                        uuidb.general.raidbartextures and
+                        uuidb.statusbars[uuidb.general.raidbartexture] or
+                        uuidb.statusbars[uuidb.general.texture];
                     member.myHealPrediction:SetTexture(texture);
                     member.otherHealPrediction:SetTexture(texture);
                     member.totalAbsorb:SetTexture(texture);
