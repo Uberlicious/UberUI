@@ -29,3 +29,6 @@
 
 10.0.2.7:
 - fix bug with partyframe textures causing lua error
+
+10.0.2.8: - Beta
+- add texturing to compact raid frames and party raid frames
