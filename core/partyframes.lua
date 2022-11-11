@@ -56,17 +56,15 @@ function partyframes:ColorDefaultPartyFrames()
                 if (uuidb.general.texture ~= "Blizzard") then
                     local texture = uuidb.statusbars[uuidb.general.texture];
                     p.HealthBar:SetStatusBarTexture(texture);
-                    p.myHealPredictionBar:SetTexture(texture);
-                    p.otherHealPredictionBar:SetTexture(texture);
-                    p.totalAbsorbBar:SetTexture(texture);
-                    p.totalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
                     local partyPowerType = UnitPowerType(idx);
                     if (partyPowerType < 4) then
                         p.ManaBar:SetStatusBarTexture(texture);
                         local pc = PowerBarColor[partyPowerType];
                         p.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
                     end
-                elseif (uuidb.general.secondarybartextures) then
+                end
+                if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
+                if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
                     local texture = uuidb.statusbars[uuidb.general.secondarybartexture];
                     p.myHealPredictionBar:SetTexture(texture);
                     p.otherHealPredictionBar:SetTexture(texture);
@@ -91,6 +89,21 @@ function partyframes:ColorTextureCompactPartyFrames()
         for i = 1, MEMBERS_PER_RAID_GROUP do
             local member = _G["CompactPartyFrameMember" .. i];
             member.healthBar:SetStatusBarTexture(texture);
+        end
+    end
+    if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
+    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+        for i = 1, MEMBERS_PER_RAID_GROUP do
+            local member = _G["CompactPartyFrameMember" .. i];
+            local texture = uuidb.general.secondarybartextures and
+                uuidb.statusbars[uuidb.general.secondarybartexture] or
+                uuidb.general.raidbartextures and
+                uuidb.statusbars[uuidb.general.raidbartexture] or
+                uuidb.statusbars[uuidb.general.texture];
+            member.myHealPrediction:SetTexture(texture);
+            member.otherHealPrediction:SetTexture(texture);
+            member.totalAbsorb:SetTexture(texture);
+            member.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
         end
     end
 end

@@ -44,10 +44,6 @@ function targetframes:HealthManaBarTexture()
     if (uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.statusbars[uuidb.general.texture];
         targetFrame.HealthBar:SetStatusBarTexture(texture);
-        targetFrame.MyHealPredictionBar:SetTexture(texture);
-        targetFrame.OtherHealPredictionBar:SetTexture(texture);
-        targetFrame.TotalAbsorbBar:SetTexture(texture);
-        targetFrame.TotalAbsorbBar:SetVertexColor(.7, .9, .9, 1);
         TargetFrameToT.HealthBar:SetStatusBarTexture(texture);
 
         -- Color bar accordingly
@@ -65,8 +61,11 @@ function targetframes:HealthManaBarTexture()
             local pc = PowerBarColor[totPowerType];
             TargetFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
-    elseif (uuidb.general.secondarybartextures) then
-        local texture = uuidb.statusbars[uuidb.general.secondarybartexture];
+    end
+    if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
+    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+        local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
+            uuidb.statusbars[uuidb.general.texture];
         targetFrame.HealAbsorbBar:SetTexture(texture);
         targetFrame.MyHealPredictionBar:SetTexture(texture);
         targetFrame.OtherHealPredictionBar:SetTexture(texture);
@@ -77,20 +76,6 @@ end
 
 function targetframes:PvPIcon()
     UberUI.general:PvPIcon(TargetFrame.TargetFrameContent.TargetFrameContentContextual);
-    -- local pvpIcon = TargetFrame.TargetFrameContent.TargetFrameContentContextual.PvpIcon;
-    -- local prestigePortrait = TargetFrame.TargetFrameContent.TargetFrameContentContextual.PrestigePortrait;
-    -- local prestigeBadge = TargetFrame.TargetFrameContent.TargetFrameContentContextual.PrestigeBadge;
-    -- local dc = uuidb.general.darkencolor;
-    -- if (uuidb.general.hidehonor) then
-    --     prestigePortrait:SetAlpha(0);
-    --     prestigeBadge:SetAlpha(0);
-    --     pvpIcon:SetAlpha(0);
-    -- else
-    --     prestigePortrait:SetAlpha(1);
-    --     prestigeBadge:SetAlpha(1);
-    --     pvpIcon:SetAlpha(1);
-    --     prestigePortrait:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    -- end
 end
 
 UberUI.targetframes = targetframes

@@ -52,11 +52,6 @@ function playerframes:HealthManaBarTexture(force)
     if (uuidb.general.texture ~= "Blizzard" or force) then
         local texture = uuidb.statusbars[uuidb.general.texture];
         PlayerFrameHealthBar:SetStatusBarTexture(texture);
-        playerFrame.HealAbsorbBar:SetTexture(texture);
-        playerFrame.MyHealPredictionBar:SetTexture(texture);
-        playerFrame.OtherHealPredictionBar:SetTexture(texture);
-        playerFrame.TotalAbsorbBar:SetTexture(texture);
-        playerFrame.TotalAbsorbBar:SetVertexColor(.7, .9, .9, 1);
         PlayerFrameHealthBar.AnimatedLossBar:SetStatusBarTexture(texture);
 
         local playerPowerType = UnitPowerType("player");
@@ -74,8 +69,11 @@ function playerframes:HealthManaBarTexture(force)
             local pc = PowerBarColor[petPowerType];
             PetFrameManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
-    elseif (uuidb.general.secondarybartextures) then
-        local texture = uuidb.statusbars[uuidb.general.secondarybartexture];
+    end
+    if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
+    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+        local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
+            uuidb.statusbars[uuidb.general.texture];
         playerFrame.HealAbsorbBar:SetTexture(texture);
         playerFrame.MyHealPredictionBar:SetTexture(texture);
         playerFrame.OtherHealPredictionBar:SetTexture(texture);

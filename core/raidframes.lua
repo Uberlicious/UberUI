@@ -24,11 +24,24 @@ function raidframes:HealthManaBarTexture()
             end
             if (uuidb.general.raidbartextures and uuidb.general.raidbartexture == "Blizzard") then return end
             if (uuidb.general.raidbartextures or uuidb.general.texture ~= "Blizzard") then
-                for m = 1, 5 do
+                for m = 1, MEMBERS_PER_RAID_GROUP do
                     local member = _G[group:GetName() .. "Member" .. m];
                     if (member ~= nil) then
                         member.healthBar:SetStatusBarTexture(texture);
                     end
+                end
+            end
+            if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
+            if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+                for i = 1, MEMBERS_PER_RAID_GROUP do
+                    local member = _G[group:GetName() .. "Member" .. i];
+                    local texture = uuidb.general.secondarybartextures and
+                        uuidb.statusbars[uuidb.general.secondarybartexture] or
+                        uuidb.statusbars[uuidb.general.raidbartexture];
+                    member.myHealPrediction:SetTexture(texture);
+                    member.otherHealPrediction:SetTexture(texture);
+                    member.totalAbsorb:SetTexture(texture);
+                    member.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
                 end
             end
         end
