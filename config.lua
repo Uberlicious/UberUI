@@ -55,6 +55,7 @@ local defaults = {
         darkencolor          = { r = .4, g = .4, b = .4, a = 1 };
         texture              = "Blizzard";
         secondarybartexture  = "Blizzard";
+        raidbartexture       = "Blizzard";
         arenanumbers         = true;
         hidearenaframes      = false;
         border               = "Interface\\AddOns\\Uber UI\\textures\\border";
@@ -66,6 +67,7 @@ local defaults = {
         ccpersonalresource   = true;
         hidenameplateglow    = false;
         secondarybartextures = false;
+        raidbartextures      = false;
     },
     playerframes = {
         classcolor = true,

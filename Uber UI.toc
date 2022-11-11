@@ -19,6 +19,7 @@ core\focusframe.lua
 core\miscframes.lua
 core\partyframes.lua
 core\arenaframes.lua
+core\raidframes.lua
 core\actionbars.lua
 core\minimap.lua
 core\buffsandauras.lua
