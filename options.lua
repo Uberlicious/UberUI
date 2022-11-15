@@ -81,7 +81,7 @@ end
 
 local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Number, defaultValue)
 setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-ddInit = Settings.CreateDropDown(category, setting, GetOptions, tooltip);
+Settings.CreateDropDown(category, setting, GetOptions, tooltip);
 
 -- Raid Bar Textures
 local cbvariable, cbname = "RaidBarTextures", "Raid Bar Textures";
