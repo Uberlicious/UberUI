@@ -17,10 +17,9 @@ local function commitValue()
     UberUI:Save();
 end
 
+if (settingsLoaded) then return end --make sure we're only initializing settings once
 local category, layout = Settings.RegisterVerticalLayoutCategory("Uber UI");
 Settings.RegisterAddOnCategory(category);
-
-if (settingsLoaded) then return end --make sure we're only initializing settings once
 
 -- DarknessLevel
 local variable, name, tooltip = "DarknessLevel", "Darkness Level", "Set your desired level of darkness";
@@ -633,14 +632,24 @@ local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings
 setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
 Settings.CreateCheckBox(category, setting, tooltip);
 
-local Reload = CreateFrame("Button", "$parentReload", SettingsPanel.CloseButton, "UIPanelButtonTemplate")
-Reload:SetPoint("RIGHT", SettingsPanel.CloseButton, "LEFT", -5, 0);
-Reload:SetSize(SettingsPanel.CloseButton:GetSize());
-Reload:SetText("Reload UI");
+hooksecurefunc(SettingsPanel, "DisplayCategory", function(self, category)
+    local header = SettingsPanel.Container.SettingsList.Header;
+    if (category:GetName() == "Uber UI" and not header.UUI_Reload) then
+        header.UUI_Reload = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+        header.UUI_Reload:SetPoint("RIGHT", header.DefaultsButton, "LEFT", -5, 0);
+        header.UUI_Reload:SetSize(header.DefaultsButton:GetSize());
+        header.UUI_Reload:SetFrameStrata("HIGH");
+        header.UUI_Reload:SetText("Reload UI");
 
-Reload:SetScript("OnClick", function(self, button, down)
-    SettingsPanel:Hide();
-    ReloadUI();
+        header.UUI_Reload:SetScript("OnClick", function(self, button, down)
+            SettingsPanel:Hide();
+            ReloadUI();
+        end)
+    elseif (category:GetName() == "Uber UI" and header.UUI_Reload) then
+        header.UUI_Reload:Show();
+    elseif (header.UUI_Reload) then
+        header.UUI_Reload:Hide();
+    end
 end)
 
 settingsLoaded = true;

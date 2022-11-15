@@ -63,13 +63,14 @@ function partyframes:ColorDefaultPartyFrames()
                         p.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
                     end
                 end
-                if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-                if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
-                    local texture = uuidb.statusbars[uuidb.general.secondarybartexture];
-                    p.myHealPredictionBar:SetTexture(texture);
-                    p.otherHealPredictionBar:SetTexture(texture);
-                    p.totalAbsorbBar:SetTexture(texture);
-                    p.totalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
+                if (not uuidb.general.secondarybartextures and not uuidb.general.secondarybartexture == "Blizzard") then
+                    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+                        local texture = uuidb.statusbars[uuidb.general.secondarybartexture];
+                        p.myHealPredictionBar:SetTexture(texture);
+                        p.otherHealPredictionBar:SetTexture(texture);
+                        p.totalAbsorbBar:SetTexture(texture);
+                        p.totalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
+                    end
                 end
             end
         end

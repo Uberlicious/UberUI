@@ -7,8 +7,14 @@ raidframes = CreateFrame("Frame");
 raidframes:RegisterEvent("ADDON_LOADED");
 raidframes:RegisterEvent("PLAYER_ENTERING_WORLD");
 raidframes:RegisterEvent("RAID_ROSTER_UPDATE");
+raidframes:RegisterEvent("PLAYER_REGEN_ENABLED");
 raidframes:SetScript("OnEvent", function(self, event)
-    raidframes:HealthManaBarTexture();
+    -- raidframes:HealthManaBarTexture();
+    if (event == "PLAYER_REGEN_ENABLED" and IsInRaid()) then
+        raidframes:HealthManaBarTexture()
+    elseif (event ~= "PLAYER_REGEN_ENABLED") then
+        raidframes:HealthManaBarTexture()
+    end
     raidframes:AddHooks();
 end)
 
@@ -31,19 +37,20 @@ function raidframes:HealthManaBarTexture()
                     end
                 end
             end
-            if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-            if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
-                for i = 1, MEMBERS_PER_RAID_GROUP do
-                    local member = _G[group:GetName() .. "Member" .. i];
-                    local texture = uuidb.general.secondarybartextures and
-                        uuidb.statusbars[uuidb.general.secondarybartexture] or
-                        uuidb.general.raidbartextures and
-                        uuidb.statusbars[uuidb.general.raidbartexture] or
-                        uuidb.statusbars[uuidb.general.texture];
-                    member.myHealPrediction:SetTexture(texture);
-                    member.otherHealPrediction:SetTexture(texture);
-                    member.totalAbsorb:SetTexture(texture);
-                    member.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
+            if (not uuidb.general.secondarybartextures and not uuidb.general.secondarybartexture == "Blizzard") then
+                if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+                    for i = 1, MEMBERS_PER_RAID_GROUP do
+                        local member = _G[group:GetName() .. "Member" .. i];
+                        local texture = uuidb.general.secondarybartextures and
+                            uuidb.statusbars[uuidb.general.secondarybartexture] or
+                            uuidb.general.raidbartextures and
+                            uuidb.statusbars[uuidb.general.raidbartexture] or
+                            uuidb.statusbars[uuidb.general.texture];
+                        member.myHealPrediction:SetTexture(texture);
+                        member.otherHealPrediction:SetTexture(texture);
+                        member.totalAbsorb:SetTexture(texture);
+                        member.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
+                    end
                 end
             end
         end
@@ -52,6 +59,7 @@ end
 
 function raidframes:AddHooks()
     -- hook to  make sure raid gets textured on show event
+
     if (hookRaid == false) then
         CompactRaidFrameManager.container:HookScript("OnShow", function(self)
             raidframes:HealthManaBarTexture();

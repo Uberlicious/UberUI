@@ -35,32 +35,34 @@ function playerframes:Color()
 end
 
 function playerframes:HealthBarColor()
-    local playerFrame = PlayerFrame.PlayerFrameContent.PlayerFrameContentMain;
+    local healthBar = PlayerFrame_GetHealthBar();
     if uuidb.playerframes.classcolor then
-        playerFrame.HealthBarArea.HealthBar:SetStatusBarDesaturated(true);
-        playerFrame.HealthBarArea.HealthBar:SetStatusBarColor(classcolor.r, classcolor.g, classcolor.b, classcolor.a);
+        healthBar:SetStatusBarDesaturated(true);
+        healthBar:SetStatusBarColor(classcolor.r, classcolor.g, classcolor.b, classcolor.a);
     else
-        playerFrame.HealthBarArea.HealthBar:SetStatusBarDesaturated(false);
-        playerFrame.HealthBarArea.HealthBar:SetStatusBarColor(0, 1, 0, 1);
+        healthBar:SetStatusBarDesaturated(false);
+        healthBar:SetStatusBarColor(0, 1, 0, 1);
     end
     PetFrameHealthBar:SetStatusBarDesaturated(false);
     PetFrameHealthBar:SetStatusBarColor(0, 1, 0, 1);
 end
 
 function playerframes:HealthManaBarTexture(force)
-    local playerFrame = PlayerFrame.PlayerFrameContent.PlayerFrameContentMain;
+    local healthBar = PlayerFrame_GetHealthBar();
+    local manaBar = PlayerFrame_GetManaBar();
     if (uuidb.general.texture ~= "Blizzard" or force) then
         local texture = uuidb.statusbars[uuidb.general.texture];
-        PlayerFrameHealthBar:SetStatusBarTexture(texture);
-        PlayerFrameHealthBar.AnimatedLossBar:SetStatusBarTexture(texture);
+        healthBar:SetStatusBarTexture(texture);
+        healthBar.AnimatedLossBar:SetStatusBarTexture(texture);
 
         local playerPowerType = UnitPowerType("player");
         if (playerPowerType < 4) then
-            PlayerFrameManaBar:SetStatusBarTexture(texture);
+            manaBar:SetStatusBarTexture(texture);
             local pc = PowerBarColor[playerPowerType];
-            PlayerFrameManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+            manaBar:SetStatusBarDesaturated(true);
+            manaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
-        playerFrame.healthbar.styled = true;
+        healthBar.styled = true;
 
         PetFrameHealthBar:SetStatusBarTexture(texture);
         local petPowerType = UnitPowerType("pet");
@@ -74,11 +76,11 @@ function playerframes:HealthManaBarTexture(force)
     if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
             uuidb.statusbars[uuidb.general.texture];
-        playerFrame.HealAbsorbBar:SetTexture(texture);
-        playerFrame.MyHealPredictionBar:SetTexture(texture);
-        playerFrame.OtherHealPredictionBar:SetTexture(texture);
-        playerFrame.TotalAbsorbBar:SetTexture(texture);
-        playerFrame.TotalAbsorbBar:SetVertexColor(.7, .9, .9, 1);
+        healthBar.HealAbsorbBar:SetTexture(texture);
+        healthBar.MyHealPredictionBar:SetTexture(texture);
+        healthBar.OtherHealPredictionBar:SetTexture(texture);
+        healthBar.TotalAbsorbBar:SetTexture(texture);
+        healthBar.TotalAbsorbBar:SetVertexColor(.7, .9, .9, 1);
     end
 end
 
@@ -105,6 +107,12 @@ function playerframes:ColorAlternateMana()
     PlayerFrameAlternateManaBarBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
     PlayerFrameAlternateManaBarLeftBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
     PlayerFrameAlternateManaBarRightBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+
+    local texture = uuidb.statusbars[uuidb.general.texture];
+    local pc = PowerBarColor[0];
+    PlayerFrameAlternateManaBar:SetStatusBarTexture(texture);
+    PlayerFrameAlternateManaBar:SetStatusBarDesaturated(true);
+    PlayerFrameAlternateManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
 end
 
 function playerframes:ColorHolyPower()

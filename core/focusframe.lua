@@ -40,7 +40,7 @@ function focusframes:HealthBarColor()
 end
 
 function focusframes:HealthManaBarTexture()
-    local focusFrame = FocusFrame.TargetFrameContent.TargetFrameContentMain.HealthBar;
+    local focusFrame = FocusFrame.TargetFrameContent.TargetFrameContentMain;
     if (uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.statusbars[uuidb.general.texture];
         focusFrame.HealthBar:SetStatusBarTexture(texture);
@@ -66,11 +66,11 @@ function focusframes:HealthManaBarTexture()
     if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
             uuidb.statusbars[uuidb.general.texture];
-        focusFrame.HealAbsorbBar:SetTexture(texture);
-        focusFrame.MyHealPredictionBar:SetTexture(texture);
-        focusFrame.OtherHealPredictionBar:SetTexture(texture);
-        focusFrame.TotalAbsorbBar:SetTexture(texture);
-        focusFrame.TotalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
+        focusFrame.HealthBar.HealAbsorbBar:SetTexture(texture);
+        focusFrame.HealthBar.MyHealPredictionBar:SetTexture(texture);
+        focusFrame.HealthBar.OtherHealPredictionBar:SetTexture(texture);
+        focusFrame.HealthBar.TotalAbsorbBar:SetTexture(texture);
+        focusFrame.HealthBar.TotalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
     end
 end
 
