@@ -36,3 +36,7 @@
 
 10.0.2.7.2: (hotfix)
 - fix typo in actionbar script
+
+10.0.2.8: 
+- update player / target / focus scripts for new naming
+- add option to texture raid and player raid frames
