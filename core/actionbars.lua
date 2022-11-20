@@ -39,15 +39,17 @@ function actionbars:Color()
         end
     end
 
-    local function modButton(button)
+    local function modButton(button, secondaryBar)
         local action = button.action;
-        if (action == nil) then return end
-        local texture = GetActionTexture(action);
+        local texture = nil;
+        if (action) then
+            texture = GetActionTexture(action);
+        end
 
         button.NormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
         if (uuidb.general.hidehotkeys) then
             button.HotKey:Hide();
-        elseif (texture) then
+        elseif (texture or secondaryBar) then
             button.HotKey:Show();
         end
 

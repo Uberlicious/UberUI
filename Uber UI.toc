@@ -8,8 +8,6 @@
 ## SavedVariables: UberuiDB
 
 config.lua
-customsetting.xml
-customsetting.lua
 options.lua
 
 core\generalfunctions.lua

@@ -27,18 +27,28 @@ function misc:NameplateTexture()
                 local classColor = RAID_CLASS_COLORS[select(2, UnitClass("player"))];
                 frame.healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b);
             end
-            local texture = uuidb.statusbars[uuidb.general.texture];
-            frame.healthBar:SetStatusBarTexture(texture);
-            frame.healthBar:SetStatusBarDesaturated(true);
-            frame.myHealPrediction:SetTexture(texture);
-            frame.otherHealPrediction:SetTexture(texture);
-            frame.totalAbsorb:SetTexture(texture);
-            frame.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
             if (uuidb.general.hidenameplateglow) then
                 frame.selectionHighlight:SetAlpha(0);
             else
-                frame.selectionHighlight:SetAlpha(.2);
+                frame.selectionHighlight:SetAlpha(.24);
             end
+
+            local texture = uuidb.statusbars[uuidb.general.texture]
+            frame.healthBar:SetStatusBarTexture(texture);
+            frame.healthBar:SetStatusBarDesaturated(true);
+
+            if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
+            if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+                local texture = uuidb.general.secondarybartextures and
+                    uuidb.statusbars[uuidb.general.secondarybartexture] or
+                    uuidb.statusbars[uuidb.general.texture];
+                frame.myHealPrediction:SetTexture(texture);
+                frame.otherHealPrediction:SetTexture(texture);
+                frame.totalAbsorb:SetTexture(texture);
+                frame.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
+            end
+            ClassNameplateManaBarFrame:SetStatusBarTexture(texture);
+            ClassNameplateManaBarFrame:SetStatusBarDesaturated(true);
         end
     end)
     nthook = true

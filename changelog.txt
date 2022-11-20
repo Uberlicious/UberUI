@@ -40,3 +40,7 @@
 10.0.2.8: 
 - update player / target / focus scripts for new naming
 - add option to texture raid and player raid frames
+
+10.0.2.9:
+- add subcategory to options menu to avoid taint from section header when saving settings not dealing with UberUI
+- Fix coloring for stance / pet bars
