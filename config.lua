@@ -51,23 +51,24 @@ local defaults = {
         Flat          = "Interface\\AddOns\\Uber UI\\textures\\statusbars\\flat",
     },
     general = {
-        classcolorhealth     = true;
-        darkencolor          = { r = .4, g = .4, b = .4, a = 1 };
-        texture              = "Blizzard";
-        secondarybartexture  = "Blizzard";
-        raidbartexture       = "Blizzard";
-        arenanumbers         = true;
-        hidearenaframes      = false;
-        border               = "Interface\\AddOns\\Uber UI\\textures\\border";
-        hidehotkeys          = false;
-        hidemacros           = false;
-        hidehonor            = false;
-        hiderepcolor         = true;
-        hostilitycolor       = true;
-        ccpersonalresource   = true;
-        hidenameplateglow    = false;
-        secondarybartextures = false;
-        raidbartextures      = false;
+        classcolorhealth       = true,
+        darkencolor            = { r = .4, g = .4, b = .4, a = 1 },
+        texture                = "Blizzard",
+        secondarybartexture    = "Blizzard",
+        raidbartexture         = "Blizzard",
+        arenanumbers           = true,
+        hidearenaframes        = false,
+        border                 = "Interface\\AddOns\\Uber UI\\textures\\border",
+        hidehotkeys            = false,
+        hidemacros             = false,
+        hidehonor              = false,
+        hiderepcolor           = true,
+        hostilitycolor         = true,
+        ccpersonalresource     = true,
+        hidenameplateglow      = false,
+        secondarybartextures   = false,
+        raidbartextures        = false,
+        smallfriendlynameplate = false,
     },
     playerframes = {
         classcolor = true,
@@ -121,11 +122,11 @@ function UberUI:Save()
         for k, v in pairs(tbl) do
             if type(v) == "table" then
                 saved[k] = updateSave(def[k], v, saved[k])
-            elseif type(saved[k]) ~= "table" and v ~= def[k] then -- If temp value does not equal the default, save it
+            elseif type(saved[k]) ~= "table" and v ~= def[k] then                        -- If temp value does not equal the default, save it
                 saved[k] = v
             elseif type(saved[k]) ~= "table" and v == def[k] and saved[k] ~= def[k] then -- Unset saved value if temp == default and saved value exists
                 saved[k] = nil
-            elseif type(saved[k]) ~= "table" and saved[k] == def[k] then -- Cleanup if save value happens to == default
+            elseif type(saved[k]) ~= "table" and saved[k] == def[k] then                 -- Cleanup if save value happens to == default
                 saved[k] = nil
             end
         end

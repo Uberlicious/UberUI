@@ -367,6 +367,29 @@ local function Register()
         Settings.CreateCheckBox(category, setting, tooltip);
     end
 
+    -- Hide Nameplate Selection Glow
+    do
+        local variable, name = "SmallFriendlyNampelates", "Small Friendly Nameplates";
+        local tooltip = "Make friendly nameplates half the size\n\n|cffff0000Requires reload on disable"
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.smallfriendlynameplate;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.smallfriendlynameplate = value;
+            UberUI.misc:SetFriendlyNameplateSize(not value);
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue);
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckBox(category, setting, tooltip);
+    end
+
     -- Color options
     local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, "Health Bar Color Options");
 

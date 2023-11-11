@@ -1,19 +1,3 @@
-10.1.5.0: Bug Fixes
-- fix bug that occurred when playerframe elements were renamed
-- fix bug and hook from party frames being reworked
-
-10.1.5.1: Bug Fix
-- fix bug that caused mana frame to revert when mounting
-
-10.1.5.2: Fixes
-    Features:
-        - Color and texture default blizzard arena frames
-
-    Fixes:
-        - fix party and raid frames randomly reverting textures
-        - fix hiding arena frames
-
-10.1.5.3: Updates
-    Features:
-        - correct texturing of monk energy loss
-        - color monk chi
+10.2.0.0:
+    - Update toc to correct Version
+    - add option for half size friendly nameplates

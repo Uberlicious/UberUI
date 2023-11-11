@@ -12,6 +12,7 @@ misc:SetScript("OnEvent", function(self, event)
     misc:NameplateTexture();
     misc:EndCaps();
     misc:StatusTrackingBars();
+    misc:SetFriendlyNameplateSize();
 end)
 
 local nthook = false
@@ -52,6 +53,17 @@ function misc:NameplateTexture()
         end
     end)
     nthook = true
+end
+
+function misc:SetFriendlyNameplateSize(force)
+    if (not uuidb.general.smallfriendlynameplate and force) then
+        C_NamePlate.SetNamePlateFriendlySize(120, 30);
+        return;
+    end
+
+    if (uuidb.general.smallfriendlynameplate) then
+        C_NamePlate.SetNamePlateFriendlySize(60, 30);
+    end
 end
 
 function misc:EndCaps()
