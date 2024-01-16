@@ -1,3 +1,6 @@
 10.2.0.0:
     - Update toc to correct Version
     - add option for half size friendly nameplates
+
+10.2.5.0:
+    - Fixes for frame changes in 10.2.5

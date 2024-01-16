@@ -13,7 +13,6 @@ partyframes:SetScript("OnEvent", function(self, event)
     partyframes:Color();
     partyframes:HealthBarColor();
     partyframes:HealthManaBarTexture();
-    partyframes:AddHooks();
 end)
 
 function partyframes:Color()
@@ -81,10 +80,6 @@ function partyframes:ColorTextureCompactPartyFrames()
         local member = _G["CompactPartyFrameMember" .. i]
         UberUI.cuf.default(member)
     end
-end
-
-function partyframes:AddHooks()
-    -- hook to keep party frame updated with textures
 end
 
 UberUI.partyframes = partyframes

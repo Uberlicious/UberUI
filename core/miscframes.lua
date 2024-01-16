@@ -3,6 +3,7 @@ local misc = {}
 
 
 local misc = CreateFrame("frame")
+misc:RegisterEvent("ADDON_LOADED")
 misc:RegisterEvent("PLAYER_ENTERING_WORLD")
 misc:RegisterEvent("GROUP_ROSTER_UPDATE")
 misc:RegisterEvent("RAID_ROSTER_UPDATE")
@@ -56,13 +57,17 @@ function misc:NameplateTexture()
 end
 
 function misc:SetFriendlyNameplateSize(force)
+    NameplatOne = C_NamePlate.GetNamePlates()[1];
     if (not uuidb.general.smallfriendlynameplate and force) then
         C_NamePlate.SetNamePlateFriendlySize(120, 30);
         return;
     end
 
     if (uuidb.general.smallfriendlynameplate) then
-        C_NamePlate.SetNamePlateFriendlySize(60, 30);
+        w, _ = C_NamePlate.GetNamePlateFriendlySize()
+        if (w ~= 60) then
+            C_NamePlate.SetNamePlateFriendlySize(60, 30);
+        end
     end
 end
 

@@ -72,12 +72,6 @@ function actionbars:Color()
             modButton(_G["StanceButton" .. i]);
             modButton(_G["PetActionButton" .. i]);
         end
-
-        _G["ActionButton" .. i].RightDivider:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    end
-
-    for _, border in pairs({ MainMenuBar.BorderArt:GetRegions() }) do
-        border:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
     end
 end
 

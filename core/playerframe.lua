@@ -83,7 +83,7 @@ function playerframes:HealthManaBarTexture(force)
 
         PetFrameHealthBar:SetStatusBarTexture(texture);
         local petPowerType = UnitPowerType("pet");
-        if (petPowerType < 4) then
+        if (petPowerType and petPowerType < 4) then
             PetFrameManaBar:SetStatusBarTexture(texture);
             local pc = PowerBarColor[petPowerType];
             PetFrameManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
@@ -93,12 +93,12 @@ function playerframes:HealthManaBarTexture(force)
     if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
             uuidb.statusbars[uuidb.general.texture];
-        healthBar.HealAbsorbBar:SetTexture(texture);
-        healthBar.MyHealPredictionBar:SetTexture(texture);
-        healthBar.OtherHealPredictionBar:SetTexture(texture);
-        healthBar.TotalAbsorbBar:SetTexture(texture);
-        healthBar.TotalAbsorbBar:SetVertexColor(.7, .9, .9, 1);
-        manaBar.ManaCostPredictionBar:SetTexture(texture);
+        healthBar.HealAbsorbBar.Fill:SetTexture(texture);
+        healthBar.MyHealPredictionBar.Fill:SetTexture(texture);
+        healthBar.OtherHealPredictionBar.Fill:SetTexture(texture);
+        healthBar.TotalAbsorbBar.Fill:SetTexture(texture);
+        healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
+        manaBar.ManaCostPredictionBar.Fill:SetTexture(texture);
         manaBar.FeedbackFrame.BarTexture:SetTexture(texture);
     end
 end

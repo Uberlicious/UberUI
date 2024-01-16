@@ -3,7 +3,8 @@ local targetframes = {}
 
 --[[
 	Local Variables
-]] --
+]]
+   --
 local targetframes = CreateFrame("frame")
 targetframes:RegisterEvent("ADDON_LOADED")
 targetframes:RegisterEvent("PLAYER_LOGIN")
@@ -49,14 +50,14 @@ function targetframes:HealthManaBarTexture()
         -- Color bar accordingly
         -- https://wowpedia.fandom.com/wiki/API_UnitPowerDisplayMod
         local targetPowerType = UnitPowerType("target");
-        if (targetPowerType < 4) then
+        if (targetPowerType and targetPowerType < 4) then
             targetFrame.ManaBar:SetStatusBarTexture(texture);
             local pc = PowerBarColor[targetPowerType];
             targetFrame.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
 
         local totPowerType = UnitPowerType("targettarget");
-        if (totPowerType < 4) then
+        if (totPowerType and totPowerType < 4) then
             TargetFrameToT.ManaBar:SetStatusBarTexture(texture);
             local pc = PowerBarColor[totPowerType];
             TargetFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
@@ -66,11 +67,11 @@ function targetframes:HealthManaBarTexture()
     if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
             uuidb.statusbars[uuidb.general.texture];
-        targetFrame.HealthBar.HealAbsorbBar:SetTexture(texture);
-        targetFrame.HealthBar.MyHealPredictionBar:SetTexture(texture);
-        targetFrame.HealthBar.OtherHealPredictionBar:SetTexture(texture);
-        targetFrame.HealthBar.TotalAbsorbBar:SetTexture(texture);
-        targetFrame.HealthBar.TotalAbsorbBar:SetVertexColor(.7, .9, .9, 1);
+        targetFrame.HealthBar.HealAbsorbBar.Fill:SetTexture(texture);
+        targetFrame.HealthBar.MyHealPredictionBar.Fill:SetTexture(texture);
+        targetFrame.HealthBar.OtherHealPredictionBar.Fill:SetTexture(texture);
+        targetFrame.HealthBar.TotalAbsorbBar.Fill:SetTexture(texture);
+        targetFrame.HealthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
     end
 end
 

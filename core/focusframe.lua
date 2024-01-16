@@ -4,7 +4,7 @@ local focusframes = {}
 --[[
 	Local Variables
 ]]
-   --
+--
 local focusframes = CreateFrame("frame")
 focusframes:RegisterEvent("ADDON_LOADED")
 focusframes:RegisterEvent("PLAYER_LOGIN")
@@ -50,14 +50,14 @@ function focusframes:HealthManaBarTexture()
         -- Color bar accordingly
         -- https://wowpedia.fandom.com/wiki/API_UnitPowerDisplayMod
         local focusPowerType = UnitPowerType("focus");
-        if (focusPowerType < 4) then
+        if (focusPowerType and focusPowerType < 4) then
             focusFrame.ManaBar:SetStatusBarTexture(texture);
             local pc = PowerBarColor[focusPowerType];
             focusFrame.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
 
         local focusTotPowerType = UnitPowerType("focustarget");
-        if (focusTotPowerType < 4) then
+        if (focusTotPowerType and focusTotPowerType < 4) then
             FocusFrameToT.ManaBar:SetStatusBarTexture(texture);
             local pc = PowerBarColor[focusTotPowerType];
             FocusFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
@@ -67,11 +67,11 @@ function focusframes:HealthManaBarTexture()
     if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
         local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
             uuidb.statusbars[uuidb.general.texture];
-        focusFrame.HealthBar.HealAbsorbBar:SetTexture(texture);
-        focusFrame.HealthBar.MyHealPredictionBar:SetTexture(texture);
-        focusFrame.HealthBar.OtherHealPredictionBar:SetTexture(texture);
-        focusFrame.HealthBar.TotalAbsorbBar:SetTexture(texture);
-        focusFrame.HealthBar.TotalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
+        focusFrame.HealthBar.HealAbsorbBar.Fill:SetTexture(texture);
+        focusFrame.HealthBar.MyHealPredictionBar.Fill:SetTexture(texture);
+        focusFrame.HealthBar.OtherHealPredictionBar.Fill:SetTexture(texture);
+        focusFrame.HealthBar.TotalAbsorbBar.Fill:SetTexture(texture);
+        focusFrame.HealthBar.TotalAbsorbBar.Fill:SetVertexColor(.6, .9, .9, 1);
     end
 end
 
