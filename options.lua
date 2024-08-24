@@ -42,7 +42,9 @@ local function Register()
             UberUI.misc:AllFramesColor()
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Number, defaultValue)
+        print(type(category))
+        local setting = Settings.RegisterAddOnSetting(category, variable, "darkencolor", uuidb.general,
+            Settings.VarType.Number, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateSlider(category, setting, options, tooltip);
     end
@@ -79,7 +81,8 @@ local function Register()
             UberUI.playerframes:HealthManaBarTexture(true);
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Number, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(category, variable, "texture", uuidb.general,
+            Settings.VarType.Number, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateDropdown(category, setting, GetOptions, tooltip)
     end
@@ -102,8 +105,9 @@ local function Register()
             uuidb.general.raidbartextures = value;
         end
 
-        local cbsetting = Settings.RegisterAddOnSetting(category, cbname, cbvariable, Settings.VarType.Boolean,
-            defaultValue)
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "raidbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
         cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
 
         -- drop down
@@ -136,8 +140,9 @@ local function Register()
             UberUI.misc:AllFramesHealthManaTexture();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddname, ddvariable, Settings.VarType.Number,
-            dddefaultValue)
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "raidbartexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, GetOptions,
@@ -164,8 +169,9 @@ local function Register()
             uuidb.general.secondarybartextures = value;
         end
 
-        local cbsetting = Settings.RegisterAddOnSetting(category, cbname, cbvariable, Settings.VarType.Boolean,
-            defaultValue)
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "secondarybartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
         cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
         -- drop down
         local ddvariable, ddname = "SecondaryTexture", "Secondary Bar Texture";
@@ -197,8 +203,9 @@ local function Register()
             UberUI.misc:AllFramesHealthManaTexture();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddname, ddvariable, Settings.VarType.Number,
-            dddefaultValue)
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "secondarybartexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, GetOptions,
@@ -224,11 +231,14 @@ local function Register()
             UberUI.arenaframes:NameplateNumbers();
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(category, variable, "arenanumbers", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
+    end
 
-        -- HideArenaFrames
+    -- HideArenaFrames
+    do
         local variable, name = "HideArenaFrames", "Hide Arena Frames";
         local tooltip = "Force hide default blizzard arena frames.\n\n|cffff0000Requires reload on unhiding"
         local defaultValue = false;
@@ -245,7 +255,8 @@ local function Register()
             UberUI.arenaframes:SetVisibility();
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hidearenaframes", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
@@ -268,7 +279,8 @@ local function Register()
             UberUI.actionbars:Color();
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hidehotkeys", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
@@ -291,7 +303,8 @@ local function Register()
             UberUI.actionbars:Color();
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hidemacros", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
@@ -316,7 +329,8 @@ local function Register()
             UberUI.focusframes:PvPIcon(value);
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hidehonor", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
@@ -340,7 +354,8 @@ local function Register()
             UberUI.focusframes:Color();
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hiderepcolor", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
@@ -363,7 +378,8 @@ local function Register()
             UberUI.misc:NameplateTexture();
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue);
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hidenameplateglow", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue);
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
@@ -386,7 +402,8 @@ local function Register()
             UberUI.misc:SetFriendlyNameplateSize(not value);
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, name, variable, Settings.VarType.Boolean, defaultValue);
+        local setting = Settings.RegisterAddOnSetting(category, variable, "smallfriendlynameplate", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue);
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
@@ -413,7 +430,8 @@ local function Register()
             UberUI.misc:AllFramesHealthColor();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "hostilitycolor", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, uuisetValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -436,7 +454,8 @@ local function Register()
             UberUI.playerframes:HealthBarColor();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "classcolor", uuidb.playerframes,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -459,7 +478,8 @@ local function Register()
             UberUI.targetframes:HealthBarColor();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "classcolorenemy", uuidb.targetframes,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -482,7 +502,8 @@ local function Register()
             UberUI.targetframes:HealthBarColor();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "classcolorfriendly", uuidb.targetframes,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -506,12 +527,13 @@ local function Register()
             UberUI.focusframes:HealthBarColor();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "classcolorenemy", uuidb.focusframes,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
 
-    -- -- Class Color Friendly Focus
+    -- Class Color Friendly Focus
     do
         local variable, name = "ccFriendlyFocus", "Class Color Friendly Focus";
         local tooltip = "Class color focus and focus target of target health bar of friendly players"
@@ -529,7 +551,8 @@ local function Register()
             UberUI.focusframes:HealthBarColor();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "classcolorfriendly", uuidb.focusframes,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -550,7 +573,8 @@ local function Register()
         end
 
         -- Class Color Enemy Nameplates
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, cvar, uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -571,7 +595,8 @@ local function Register()
         end
 
         -- Class Color Friendly Nameplates
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "ShowClassColorInNameplate", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -594,7 +619,8 @@ local function Register()
             UberUI.misc:NameplateTexture();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "ccpersonalresource", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -617,7 +643,8 @@ local function Register()
             UberUI.arenaframes:Loop();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "classcolor", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
@@ -640,7 +667,8 @@ local function Register()
             UberUI.partyframes:Color();
         end
 
-        local setting = Settings.RegisterAddOnSetting(subcategory, name, variable, Settings.VarType.Boolean, defaultValue)
+        local setting = Settings.RegisterAddOnSetting(subcategory, variable, "classcolor", uuidb.partyframes,
+            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(subcategory, setting, tooltip);
     end
