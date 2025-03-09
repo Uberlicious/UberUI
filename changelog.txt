@@ -9,3 +9,6 @@
 
 11.0.2.4:
     - fix options menu....again
+
+11.1.0.0:
+    - update version number
