@@ -42,7 +42,6 @@ local function Register()
             UberUI.misc:AllFramesColor()
         end
 
-        print(type(category))
         local setting = Settings.RegisterAddOnSetting(category, variable, "darkencolor", uuidb.general,
             Settings.VarType.Number, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
