@@ -1,14 +1,11 @@
-11.0.2.1:
-    - Fixes for structural changes to TargetFrame and FocusFrame
-
-11.0.2.2:
-    - Blizzard changed "CheckBox" -> "Checkbox" and "DropDown" -> "Dropdown" killing the options menu
-
-11.0.2.3:
-    - More bug fixes
-
 11.0.2.4:
     - fix options menu....again
 
 11.1.0.0:
     - update version number
+
+11.2.0.0:
+    - update version number
+
+11.2.0.1:
+    - convert blp to tga to fix texture issues

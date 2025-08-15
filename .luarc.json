@@ -1,3 +1,10 @@
 {
-  "workspace.library": ["D:\\github\\wow-ui-source"]
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "Lua 5.1",
+  "format.enable": true,
+  "workspace.library": [
+    "D:\\github\\wow-ui-source\\Interface\\Addons",
+    "D:\\github\\definitions"
+  ],
+  "workspace.ignoreDir": [".vscode", "./.libraries", ".zed"]
 }
