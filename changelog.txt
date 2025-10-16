@@ -1,11 +1,7 @@
-11.0.2.4:
-    - fix options menu....again
-
-11.1.0.0:
-    - update version number
-
-11.2.0.0:
-    - update version number
-
-11.2.0.1:
-    - convert blp to tga to fix texture issues
+11.2.7.0:
+    - Update for 11.2.7.
+    - Add new Cooldown Manager for cooldown bars and icons customization.
+    - Add texture previews to the options menu.
+    - Add option for borders on buffs and auras.
+    - Add individual texture settings for Player, Target, Focus, Nameplates, and Raid frames.
+    - Various bug fixes and performance improvements.

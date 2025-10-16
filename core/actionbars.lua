@@ -38,7 +38,7 @@ function actionbars:Color()
         end
     end
 
-    MainMenuBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    MainActionBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
 
     local function modButton(button, secondaryBar)
         local action = button.action;

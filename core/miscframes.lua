@@ -89,8 +89,8 @@ end
 
 function misc:EndCaps()
     local dc = uuidb.general.darkencolor;
-    MainMenuBar.EndCaps.RightEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    MainMenuBar.EndCaps.LeftEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    MainActionBar.EndCaps.RightEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    MainActionBar.EndCaps.LeftEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
 end
 
 function misc:StatusTrackingBars()
