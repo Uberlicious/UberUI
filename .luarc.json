@@ -4,7 +4,10 @@
   "format.enable": true,
   "workspace.library": [
     "D:\\github\\wow-ui-source\\Interface\\Addons",
-    "D:\\github\\definitions"
+    "D:\\github\\definitions",
+    "C:\\Users\\jevan\\.vscode\\extensions\\ketho.wow-api-0.21.0\\Annotations\\Core",
+    "C:\\Users\\jevan\\.vscode\\extensions\\ketho.wow-api-0.21.0\\Annotations\\FrameXML",
+    "D:\\github\\BlizzardInterfaceResources\\Resources"
   ],
   "workspace.ignoreDir": [".vscode", "./.libraries", ".zed"]
 }

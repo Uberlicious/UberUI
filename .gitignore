@@ -1,2 +1,7 @@
 ./.vscode/
 ./.vscode/*
+
+# Documentation files
+*.md
+!README.md
+!changelog.txt

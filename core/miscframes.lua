@@ -1,7 +1,6 @@
 local addon, ns = ...
 local misc = {}
 
-
 local misc = CreateFrame("frame")
 misc:RegisterEvent("ADDON_LOADED")
 misc:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -90,6 +89,7 @@ function misc:AllFramesColor()
     UberUI.focusframes:Color();
     UberUI.minimap:Color();
     UberUI.actionbars:Color();
+    UberUI.cdManager:Color();
 end
 
 function misc:AllFramesHealthColor()

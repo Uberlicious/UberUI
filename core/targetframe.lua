@@ -12,6 +12,9 @@ targetframes:RegisterEvent("PLAYER_ENTERING_WORLD")
 targetframes:RegisterEvent("PLAYER_TARGET_CHANGED")
 targetframes:RegisterEvent("PLAYER_FOCUS_CHANGED")
 targetframes:RegisterEvent("UNIT_TARGET")
+targetframes:RegisterUnitEvent("UNIT_DISPLAYPOWER", "target")
+targetframes:RegisterUnitEvent("UNIT_POWER_UPDATE", "target")
+targetframes:RegisterUnitEvent("UNIT_MAXPOWER", "target")
 targetframes:SetScript("OnEvent", function(self, event)
     targetframes:Color();
     targetframes:HealthBarColor();
