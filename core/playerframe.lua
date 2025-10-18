@@ -1,5 +1,16 @@
 local addon, ns = ...
-local playerframes = {}
+
+-- Cache frequently accessed globals for performance
+local UnitPowerType = UnitPowerType
+local UnitClass = UnitClass
+local PowerBarColor = PowerBarColor
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+
+-- Helper function for applying darken color
+local function ApplyDarkenColor(region)
+    local dc = uuidb.general.darkencolor
+    region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+end
 
 local class = UnitClass("player")
 local classcolor = RAID_CLASS_COLORS[select(2, UnitClass("player"))]
@@ -28,12 +39,11 @@ playerframes:SetScript("OnEvent", function(self)
 end)
 
 function playerframes:Color()
-    local dc = uuidb.general.darkencolor;
-    PlayerFrame.PlayerFrameContainer.FrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    PlayerFrame.PlayerFrameContainer.AlternatePowerFrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    PlayerFrame.PlayerFrameContainer.VehicleFrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    PlayerCastingBarFrame.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    PetFrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.FrameTexture)
+    ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.AlternatePowerFrameTexture)
+    ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.VehicleFrameTexture)
+    ApplyDarkenColor(PlayerCastingBarFrame.Border)
+    ApplyDarkenColor(PetFrameTexture)
 
     if (class == "Shaman") then
         self:ColorTotems();
@@ -108,9 +118,8 @@ function playerframes:PvPIcon()
 end
 
 function playerframes:ColorTotems()
-    local dc = uuidb.general.darkencolor;
     for _, totems in pairs({ TotemFrame:GetChildren() }) do
-        totems.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        ApplyDarkenColor(totems.Border)
     end
 end
 
@@ -124,31 +133,27 @@ function playerframes:ColorAlternatePower()
 end
 
 function playerframes:ColorHolyPower()
-    local dc = uuidb.general.darkencolor;
-    PaladinPowerBarFrame.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    PaladinPowerBarFrame.ActiveTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    ApplyDarkenColor(PaladinPowerBarFrame.Background)
+    ApplyDarkenColor(PaladinPowerBarFrame.ActiveTexture)
 end
 
 function playerframes:ColorComboPoints()
-    local dc = uuidb.general.darkencolor;
     for _, cp in pairs({ RogueComboPointBarFrame:GetChildren() }) do
-        cp.BGInactive:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-        cp.BGActive:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        ApplyDarkenColor(cp.BGInactive)
+        ApplyDarkenColor(cp.BGActive)
     end
 end
 
 function playerframes:ColorSoulShards()
-    local dc = uuidb.general.darkencolor;
     for _, ss in pairs({ WarlockPowerFrame:GetChildren() }) do
-        ss.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        ApplyDarkenColor(ss.Background)
     end
 end
 
 function playerframes:ColorMonkChi()
-    local dc = uuidb.general.darkencolor;
     for _, chi in pairs({ MonkHarmonyBarFrame:GetChildren() }) do
-        chi.Chi_BG:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-        chi.Chi_BG_Active:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        ApplyDarkenColor(chi.Chi_BG)
+        ApplyDarkenColor(chi.Chi_BG_Active)
     end
 end
 

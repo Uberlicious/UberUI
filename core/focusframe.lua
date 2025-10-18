@@ -1,5 +1,14 @@
 local addon, ns = ...
-local focusframes = {}
+
+-- Cache frequently accessed globals for performance
+local UnitPowerType = UnitPowerType
+local PowerBarColor = PowerBarColor
+
+-- Helper function for applying darken color
+local function ApplyDarkenColor(region)
+    local dc = uuidb.general.darkencolor
+    region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+end
 
 --[[
 	Local Variables
@@ -20,15 +29,14 @@ focusframes:SetScript("OnEvent", function(self, event)
 end)
 
 function focusframes:Color()
-    local dc = uuidb.general.darkencolor;
-    FocusFrame.TargetFrameContainer.FrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    FocusFrameSpellBar.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    FocusFrameToT.FrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    ApplyDarkenColor(FocusFrame.TargetFrameContainer.FrameTexture)
+    ApplyDarkenColor(FocusFrameSpellBar.Border)
+    ApplyDarkenColor(FocusFrameToT.FrameTexture)
 
-    if (uuidb.general.hiderepcolor) then
-        FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide();
+    if uuidb.general.hiderepcolor then
+        FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide()
     else
-        FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show();
+        FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show()
     end
 end
 

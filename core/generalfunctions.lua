@@ -1,4 +1,14 @@
 local addon, ns = ...
+
+-- Cache frequently accessed globals for performance
+local UnitPowerType = UnitPowerType
+local UnitClass = UnitClass
+local UnitIsPlayer = UnitIsPlayer
+local UnitIsFriend = UnitIsFriend
+local UnitIsEnemy = UnitIsEnemy
+local UnitSelectionColor = UnitSelectionColor
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+
 local general = {}
 
 function general:SetHealthColor(healthBar, target, variableParent)
@@ -22,7 +32,6 @@ function general:SetHealthColor(healthBar, target, variableParent)
         healthBar:SetStatusBarDesaturated(true);
         if (not variableParent.classcolorenemy and enemy and playerCheck) then
             healthBar:SetStatusBarColor(1, 0, 0, 1);
-
         elseif (not variableParent.classcolorfriend and friend and playerCheck) then
             healthBar:SetStatusBarDesaturated(false);
             healthBar:SetStatusBarColor(0, 1, 0, 1);

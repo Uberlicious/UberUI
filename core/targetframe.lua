@@ -1,5 +1,14 @@
 local addon, ns = ...
-local targetframes = {}
+
+-- Cache frequently accessed globals for performance
+local UnitPowerType = UnitPowerType
+local PowerBarColor = PowerBarColor
+
+-- Helper function for applying darken color
+local function ApplyDarkenColor(region)
+    local dc = uuidb.general.darkencolor
+    region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+end
 
 --[[
 	Local Variables
@@ -23,15 +32,14 @@ targetframes:SetScript("OnEvent", function(self, event)
 end)
 
 function targetframes:Color()
-    local dc = uuidb.general.darkencolor;
-    TargetFrame.TargetFrameContainer.FrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    TargetFrameSpellBar.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    TargetFrameToT.FrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    ApplyDarkenColor(TargetFrame.TargetFrameContainer.FrameTexture)
+    ApplyDarkenColor(TargetFrameSpellBar.Border)
+    ApplyDarkenColor(TargetFrameToT.FrameTexture)
 
-    if (uuidb.general.hiderepcolor) then
-        TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide();
+    if uuidb.general.hiderepcolor then
+        TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide()
     else
-        TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show();
+        TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show()
     end
 end
 
