@@ -17,16 +17,46 @@ end)
 
 local nthook = false
 function misc:NameplateTexture()
-    -- Determine which texture to use: nameplate-specific override or general texture
-    local useNameplateTexture = uuidb.general.nameplatebartextures and uuidb.general.nameplatebartexture ~= "Blizzard"
-    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
-    local texture = useNameplateTexture and uuidb.statusbars[uuidb.general.nameplatebartexture] or
-        uuidb.statusbars[uuidb.general.texture];
     if nthook then return end
     hooksecurefunc("CompactUnitFrame_UpdateHealthColor", function(frame)
         if not frame:IsForbidden() and frame.healthBar ~= nil and
             not
             (frame:GetName() ~= nil and (frame:GetName():find("CompactRaid") or frame:GetName():find("CompactParty"))) then
+            -- Main texture logic
+            local textureToApply
+            if uuidb.general.nameplatebartextures then
+                if uuidb.general.nameplatebartexture ~= "Blizzard" then
+                    textureToApply = uuidb.statusbars[uuidb.general.nameplatebartexture]
+                end
+            elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+                textureToApply = uuidb.statusbars[uuidb.general.texture]
+            end
+
+            if textureToApply then
+                frame.healthBar:SetStatusBarTexture(textureToApply);
+                frame.healthBar:SetStatusBarDesaturated(true);
+                ClassNameplateManaBarFrame:SetStatusBarTexture(textureToApply);
+                ClassNameplateManaBarFrame:SetStatusBarDesaturated(true);
+            end
+
+            -- Secondary texture logic
+            local secondaryTextureToApply
+            if uuidb.general.secondarybartextures then
+                if uuidb.general.secondarybartexture ~= "Blizzard" then
+                    secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
+                end
+            else
+                secondaryTextureToApply = textureToApply -- Fallback
+            end
+
+            if secondaryTextureToApply then
+                frame.myHealPrediction:SetTexture(secondaryTextureToApply);
+                frame.otherHealPrediction:SetTexture(secondaryTextureToApply);
+                frame.totalAbsorb:SetTexture(secondaryTextureToApply);
+                frame.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
+            end
+
+            -- Other logic from original function
             local player = UnitIsUnit(frame.unit, "player");
             if (player and uuidb.general.ccpersonalresource) then
                 local classColor = RAID_CLASS_COLORS[select(2, UnitClass("player"))];
@@ -37,24 +67,6 @@ function misc:NameplateTexture()
             else
                 frame.selectionHighlight:SetAlpha(.24);
             end
-
-            local texture = useNameplateTexture and uuidb.statusbars[uuidb.general.nameplatebartexture] or
-                uuidb.statusbars[uuidb.general.texture]
-            frame.healthBar:SetStatusBarTexture(texture);
-            frame.healthBar:SetStatusBarDesaturated(true);
-
-            if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-            if (uuidb.general.secondarybartextures or useNameplateTexture or useGeneralTexture) then
-                local texture = uuidb.general.secondarybartextures and
-                    uuidb.statusbars[uuidb.general.secondarybartexture] or
-                    (useNameplateTexture and uuidb.statusbars[uuidb.general.nameplatebartexture] or uuidb.statusbars[uuidb.general.texture]);
-                frame.myHealPrediction:SetTexture(texture);
-                frame.otherHealPrediction:SetTexture(texture);
-                frame.totalAbsorb:SetTexture(texture);
-                frame.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
-            end
-            ClassNameplateManaBarFrame:SetStatusBarTexture(texture);
-            ClassNameplateManaBarFrame:SetStatusBarDesaturated(true);
         end
     end)
     nthook = true

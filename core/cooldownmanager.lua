@@ -53,14 +53,16 @@ function cdManager:Texture()
     if not BuffBarCooldownViewer:IsShown() then return end
     if not uuidb or not uuidb.statusbars or not uuidb.general then return end
 
-    -- Determine which texture to use: cooldown-specific override or general texture
-    local useCooldownTexture = uuidb.general.cooldownbartextures and uuidb.general.cooldownbartexture ~= "Blizzard"
-    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+    local texture
+    if uuidb.general.cooldownbartextures then
+        if uuidb.general.cooldownbartexture ~= "Blizzard" then
+            texture = uuidb.statusbars[uuidb.general.cooldownbartexture]
+        end
+    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+        texture = uuidb.statusbars[uuidb.general.texture]
+    end
 
-    if not (useCooldownTexture or useGeneralTexture) then return end
-
-    local texture = useCooldownTexture and uuidb.statusbars[uuidb.general.cooldownbartexture] or
-        uuidb.statusbars[uuidb.general.texture]
+    if not texture then return end
 
     local children = { BuffBarCooldownViewer:GetChildren() }
     if #children == 0 then return end
@@ -82,8 +84,8 @@ function cdManager:Texture()
                 end
                 if not fill then
                     fill = bar:CreateTexture(nil, "ARTWORK")
-                    fill:SetAllPoints(bar)
                 end
+                fill:SetAllPoints(bar)
                 fill:SetTexture(texture)
             end
 
@@ -96,9 +98,9 @@ function cdManager:Texture()
                 fill._masked = true
             end
 
-            -- Keep mask aligned on resize
-            if not bar._maskSizer then
-                bar._maskSizer = true
+            -- Keep mask aligned on resize and fix tiling on update
+            if not bar._uberStyler then
+                bar._uberStyler = true
                 bar:HookScript("OnSizeChanged", function(self)
                     if self._uberMask then ApplyMask(self, MASK_OPTS) end
                 end)
@@ -132,21 +134,19 @@ function cdManager:Color()
     local tx = MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
     local function CreateBorder(parent, anchor, tl, br)
-        local border = CreateFrame("Frame", nil, parent)
-        border:SetPoint("TOPLEFT", anchor, "TOPLEFT", tl, -tl)
-        border:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", br, -br)
-
-        local level = parent:GetFrameLevel()
+        local holder
         if anchor:IsObjectType("Frame") then
-            level = anchor:GetFrameLevel()
+            holder = anchor
+        else -- is a region
+            holder = anchor:GetParent()
         end
-        border:SetFrameLevel(level + 5)
 
-        local borderTexture = border:CreateTexture(nil, "OVERLAY")
-        borderTexture:SetAllPoints()
+        local borderTexture = holder:CreateTexture(nil, "OVERLAY", nil, -8)
+        borderTexture:SetPoint("TOPLEFT", anchor, "TOPLEFT", tl, -tl)
+        borderTexture:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", br, -br)
         borderTexture:SetAtlas(tx)
         borderTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        return border
+        return borderTexture
     end
 
     -- Safety checks for BuffBarCooldownViewer

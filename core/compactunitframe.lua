@@ -38,28 +38,38 @@ end
 
 cuf.default = function(self)
     if (self == nil) then return end
-    local useRaidTexture = uuidb.general.raidbartextures and uuidb.general.raidbartexture ~= "Blizzard"
-    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
-    local texture = useRaidTexture and uuidb.statusbars[uuidb.general.raidbartexture] or
-        (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"])
 
-    if (useRaidTexture or useGeneralTexture) then
+    -- Main texture logic
+    local textureToApply
+    if uuidb.general.raidbartextures then
+        if uuidb.general.raidbartexture ~= "Blizzard" then
+            textureToApply = uuidb.statusbars[uuidb.general.raidbartexture]
+        end
+    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+        textureToApply = uuidb.statusbars[uuidb.general.texture]
+    end
+
+    if textureToApply then
         if (self.roleIcon) then
             self.roleIcon:SetDrawLayer("ARTWORK", 4)
         end
-        self.healthBar:SetStatusBarTexture(texture);
+        self.healthBar:SetStatusBarTexture(textureToApply);
     end
 
-    if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-    if (uuidb.general.secondarybartextures or useRaidTexture or useGeneralTexture) then
-        local texture = uuidb.general.secondarybartextures and
-            uuidb.statusbars[uuidb.general.secondarybartexture] or
-            useRaidTexture and
-            uuidb.statusbars[uuidb.general.raidbartexture] or
-            (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"]);
-        self.myHealPrediction:SetTexture(texture);
-        self.otherHealPrediction:SetTexture(texture);
-        self.totalAbsorb:SetTexture(texture);
+    -- Secondary texture logic
+    local secondaryTextureToApply
+    if uuidb.general.secondarybartextures then
+        if uuidb.general.secondarybartexture ~= "Blizzard" then
+            secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
+        end
+    else
+        secondaryTextureToApply = textureToApply -- Fallback to main texture decision
+    end
+
+    if secondaryTextureToApply then
+        self.myHealPrediction:SetTexture(secondaryTextureToApply);
+        self.otherHealPrediction:SetTexture(secondaryTextureToApply);
+        self.totalAbsorb:SetTexture(secondaryTextureToApply);
         self.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
     end
 end

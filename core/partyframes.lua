@@ -46,29 +46,40 @@ function partyframes:HealthManaBarTexture()
 end
 
 function partyframes:ColorDefaultPartyFrames()
+    -- Main texture logic
+    local textureToApply
+    if uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+        textureToApply = uuidb.statusbars[uuidb.general.texture]
+    end
+
+    -- Secondary texture logic
+    local secondaryTextureToApply
+    if uuidb.general.secondarybartextures then
+        if uuidb.general.secondarybartexture ~= "Blizzard" then
+            secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
+        end
+    else
+        secondaryTextureToApply = textureToApply -- Fallback
+    end
+
     for _, p in pairs({ PartyFrame:GetChildren() }) do
         if (p.HealthBar ~= nil) then
             local idx = p.unit;
             if (UnitIsConnected(idx)) then
-                local classColor = RAID_CLASS_COLORS[select(2, UnitClass(idx))];
-                if (uuidb.general.texture ~= "Blizzard") then
-                    local texture = uuidb.statusbars[uuidb.general.texture];
-                    p.HealthBar:SetStatusBarTexture(texture);
+                if textureToApply then
+                    p.HealthBar:SetStatusBarTexture(textureToApply);
                     local partyPowerType = UnitPowerType(idx);
                     if (partyPowerType < 4) then
-                        p.ManaBar:SetStatusBarTexture(texture);
+                        p.ManaBar:SetStatusBarTexture(textureToApply);
                         local pc = PowerBarColor[partyPowerType];
                         p.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
                     end
                 end
-                if (not uuidb.general.secondarybartextures and not uuidb.general.secondarybartexture == "Blizzard") then
-                    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
-                        local texture = uuidb.statusbars[uuidb.general.secondarybartexture];
-                        p.myHealPredictionBar:SetTexture(texture);
-                        p.otherHealPredictionBar:SetTexture(texture);
-                        p.totalAbsorbBar:SetTexture(texture);
-                        p.totalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
-                    end
+                if secondaryTextureToApply then
+                    p.myHealPredictionBar:SetTexture(secondaryTextureToApply);
+                    p.otherHealPredictionBar:SetTexture(secondaryTextureToApply);
+                    p.totalAbsorbBar:SetTexture(secondaryTextureToApply);
+                    p.totalAbsorbBar:SetVertexColor(.6, .9, .9, 1);
                 end
             end
         end

@@ -518,7 +518,7 @@ local function Register()
             if (uuidb.general) then
                 return gsub(uuidb.general.raidbartexture, "_", " ");
             else
-                return defaultValue;
+                return dddefaultValue;
             end
         end
 
@@ -598,7 +598,7 @@ local function Register()
             if (uuidb.general) then
                 return gsub(uuidb.general.secondarybartexture, "_", " ");
             else
-                return defaultValue;
+                return dddefaultValue;
             end
         end
 
@@ -638,7 +638,8 @@ local function Register()
     -- Cooldown Bar Textures
     do
         local cbvariable, cbname = "CooldownBarTextures", "Cooldown Bar Textures";
-        local cbtooltip = "Retexture Cooldown Viewer Bars Separately from All Bars texture"
+        local cbtooltip =
+        "Retexture Cooldown Viewer Bars Separately from All Bars texture\n\n|cffff0000Warning: Some textures may not work correctly due to tiling issues.|r";
         -- checkbox
         local defaultValue = false;
         local function cbgetValue()
@@ -661,7 +662,7 @@ local function Register()
         -- drop down
         local ddvariable, ddname = "CooldownTexture", "Cooldown Bar Texture";
         local ddtooltip =
-        "Set your desired status bar texture for Cooldown Viewer bars\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        "Set your desired status bar texture for Cooldown Viewer bars\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload\n\n|cffff0000Warning: Some textures may not work correctly due to tiling issues.|r";
         local function GetOptions()
             local container = Settings.CreateControlTextContainer();
             local c = 0;

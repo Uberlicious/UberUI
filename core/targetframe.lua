@@ -54,40 +54,49 @@ end
 function targetframes:HealthManaBarTexture()
     local targetFrame = TargetFrame.TargetFrameContent.TargetFrameContentMain;
 
-    -- Determine which texture to use: target-specific override or general texture
-    local useTargetTexture = uuidb.general.targetbartextures and uuidb.general.targetbartexture ~= "Blizzard"
-    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+    local textureToApply
+    if uuidb.general.targetbartextures then
+        if uuidb.general.targetbartexture ~= "Blizzard" then
+            textureToApply = uuidb.statusbars[uuidb.general.targetbartexture]
+        end
+    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+        textureToApply = uuidb.statusbars[uuidb.general.texture]
+    end
 
-    if (useTargetTexture or useGeneralTexture) then
-        local texture = useTargetTexture and uuidb.statusbars[uuidb.general.targetbartexture] or
-            uuidb.statusbars[uuidb.general.texture];
-        targetFrame.HealthBarsContainer.HealthBar:SetStatusBarTexture(texture);
-        TargetFrameToT.HealthBar:SetStatusBarTexture(texture);
+    if textureToApply then
+        targetFrame.HealthBarsContainer.HealthBar:SetStatusBarTexture(textureToApply);
+        TargetFrameToT.HealthBar:SetStatusBarTexture(textureToApply);
 
         -- Color bar accordingly
         -- https://wowpedia.fandom.com/wiki/API_UnitPowerDisplayMod
         local targetPowerType = UnitPowerType("target");
         if (targetPowerType and targetPowerType < 4) then
-            targetFrame.ManaBar:SetStatusBarTexture(texture);
+            targetFrame.ManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[targetPowerType];
             targetFrame.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
 
         local totPowerType = UnitPowerType("targettarget");
         if (totPowerType and totPowerType < 4) then
-            TargetFrameToT.ManaBar:SetStatusBarTexture(texture);
+            TargetFrameToT.ManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[totPowerType];
             TargetFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
     end
-    if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-    if (uuidb.general.secondarybartextures or useTargetTexture or useGeneralTexture) then
-        local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
-            (useTargetTexture and uuidb.statusbars[uuidb.general.targetbartexture] or uuidb.statusbars[uuidb.general.texture]);
-        targetFrame.HealthBarsContainer.HealthBar.HealAbsorbBar.Fill:SetTexture(texture);
-        targetFrame.HealthBarsContainer.HealthBar.MyHealPredictionBar.Fill:SetTexture(texture);
-        targetFrame.HealthBarsContainer.HealthBar.OtherHealPredictionBar.Fill:SetTexture(texture);
-        targetFrame.HealthBarsContainer.HealthBar.TotalAbsorbBar.Fill:SetTexture(texture);
+    local secondaryTextureToApply
+    if uuidb.general.secondarybartextures then
+        if uuidb.general.secondarybartexture ~= "Blizzard" then
+            secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
+        end
+    else
+        secondaryTextureToApply = textureToApply -- Fallback to the main texture decision
+    end
+
+    if secondaryTextureToApply then
+        targetFrame.HealthBarsContainer.HealthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
+        targetFrame.HealthBarsContainer.HealthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
+        targetFrame.HealthBarsContainer.HealthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
+        targetFrame.HealthBarsContainer.HealthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
         targetFrame.HealthBarsContainer.HealthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
     end
 end
