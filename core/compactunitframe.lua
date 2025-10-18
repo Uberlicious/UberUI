@@ -13,21 +13,22 @@ local default_hook = false
 
 cuf.updateFrameCB = function(self)
     if (self ~= nil) then return end
-    local texture = uuidb.general.raidbartextures and uuidb.statusbars[uuidb.general.raidbartexture] or
-        uuidb.statusbars[uuidb.general.texture]
+    local useRaidTexture = uuidb.general.raidbartextures and uuidb.general.raidbartexture ~= "Blizzard"
+    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+    local texture = useRaidTexture and uuidb.statusbars[uuidb.general.raidbartexture] or
+        (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"])
 
-    if (uuidb.general.raidbartextures and uuidb.general.raidbartexture == "Blizzard") then return end
-    if (uuidb.general.raidbartextures or uuidb.general.texture ~= "Blizzard") then
+    if (useRaidTexture or useGeneralTexture) then
         self.roleIcon:SetDrawLayer("ARTWORK", 4)
         self.healthBar:SetStatusBarTexture(texture);
     end
     if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+    if (uuidb.general.secondarybartextures or useRaidTexture or useGeneralTexture) then
         local texture = uuidb.general.secondarybartextures and
             uuidb.statusbars[uuidb.general.secondarybartexture] or
-            uuidb.general.raidbartextures and
+            useRaidTexture and
             uuidb.statusbars[uuidb.general.raidbartexture] or
-            uuidb.statusbars[uuidb.general.texture];
+            (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"]);
         self.myHealPrediction:SetTexture(texture);
         self.otherHealPrediction:SetTexture(texture);
         self.totalAbsorb:SetTexture(texture);
@@ -37,11 +38,12 @@ end
 
 cuf.default = function(self)
     if (self == nil) then return end
-    local texture = uuidb.general.raidbartextures and uuidb.statusbars[uuidb.general.raidbartexture] or
-        uuidb.statusbars[uuidb.general.texture]
+    local useRaidTexture = uuidb.general.raidbartextures and uuidb.general.raidbartexture ~= "Blizzard"
+    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+    local texture = useRaidTexture and uuidb.statusbars[uuidb.general.raidbartexture] or
+        (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"])
 
-    if (uuidb.general.raidbartextures and uuidb.general.raidbartexture == "Blizzard") then return end
-    if (uuidb.general.raidbartextures or uuidb.general.texture ~= "Blizzard") then
+    if (useRaidTexture or useGeneralTexture) then
         if (self.roleIcon) then
             self.roleIcon:SetDrawLayer("ARTWORK", 4)
         end
@@ -49,12 +51,12 @@ cuf.default = function(self)
     end
 
     if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+    if (uuidb.general.secondarybartextures or useRaidTexture or useGeneralTexture) then
         local texture = uuidb.general.secondarybartextures and
             uuidb.statusbars[uuidb.general.secondarybartexture] or
-            uuidb.general.raidbartextures and
+            useRaidTexture and
             uuidb.statusbars[uuidb.general.raidbartexture] or
-            uuidb.statusbars[uuidb.general.texture];
+            (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"]);
         self.myHealPrediction:SetTexture(texture);
         self.otherHealPrediction:SetTexture(texture);
         self.totalAbsorb:SetTexture(texture);

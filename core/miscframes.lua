@@ -17,7 +17,11 @@ end)
 
 local nthook = false
 function misc:NameplateTexture()
-    local texture = uuidb.statusbars[uuidb.general.texture];
+    -- Determine which texture to use: nameplate-specific override or general texture
+    local useNameplateTexture = uuidb.general.nameplatebartextures and uuidb.general.nameplatebartexture ~= "Blizzard"
+    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+    local texture = useNameplateTexture and uuidb.statusbars[uuidb.general.nameplatebartexture] or
+        uuidb.statusbars[uuidb.general.texture];
     if nthook then return end
     hooksecurefunc("CompactUnitFrame_UpdateHealthColor", function(frame)
         if not frame:IsForbidden() and frame.healthBar ~= nil and
@@ -34,15 +38,16 @@ function misc:NameplateTexture()
                 frame.selectionHighlight:SetAlpha(.24);
             end
 
-            local texture = uuidb.statusbars[uuidb.general.texture]
+            local texture = useNameplateTexture and uuidb.statusbars[uuidb.general.nameplatebartexture] or
+                uuidb.statusbars[uuidb.general.texture]
             frame.healthBar:SetStatusBarTexture(texture);
             frame.healthBar:SetStatusBarDesaturated(true);
 
             if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-            if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+            if (uuidb.general.secondarybartextures or useNameplateTexture or useGeneralTexture) then
                 local texture = uuidb.general.secondarybartextures and
                     uuidb.statusbars[uuidb.general.secondarybartexture] or
-                    uuidb.statusbars[uuidb.general.texture];
+                    (useNameplateTexture and uuidb.statusbars[uuidb.general.nameplatebartexture] or uuidb.statusbars[uuidb.general.texture]);
                 frame.myHealPrediction:SetTexture(texture);
                 frame.otherHealPrediction:SetTexture(texture);
                 frame.totalAbsorb:SetTexture(texture);

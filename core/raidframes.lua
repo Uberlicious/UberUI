@@ -19,8 +19,10 @@ end)
 
 function raidframes:HealthManaBarTexture()
     local dc = uuidb.general.darkencolor;
-    local texture = uuidb.general.raidbartextures and uuidb.statusbars[uuidb.general.raidbartexture] or
-        uuidb.statusbars[uuidb.general.texture];
+    local useRaidTexture = uuidb.general.raidbartextures and uuidb.general.raidbartexture ~= "Blizzard"
+    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+    local texture = useRaidTexture and uuidb.statusbars[uuidb.general.raidbartexture] or
+        (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"]);
     for i = 1, 8 do
         local group = _G["CompactRaidGroup" .. i];
         if (group ~= nil) then

@@ -77,8 +77,14 @@ end
 function playerframes:HealthManaBarTexture(force)
     local healthBar = PlayerFrame_GetHealthBar();
     local manaBar = PlayerFrame_GetManaBar();
-    if (uuidb.general.texture ~= "Blizzard" or force) then
-        local texture = uuidb.statusbars[uuidb.general.texture];
+
+    -- Determine which texture to use: player-specific override or general texture
+    local usePlayerTexture = uuidb.general.playerbartextures and uuidb.general.playerbartexture ~= "Blizzard"
+    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+
+    if (usePlayerTexture or useGeneralTexture or force) then
+        local texture = usePlayerTexture and uuidb.statusbars[uuidb.general.playerbartexture] or
+            uuidb.statusbars[uuidb.general.texture];
         healthBar:SetStatusBarTexture(texture);
         healthBar.AnimatedLossBar:SetStatusBarTexture(texture);
 
@@ -100,9 +106,9 @@ function playerframes:HealthManaBarTexture(force)
         end
     end
     if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+    if (uuidb.general.secondarybartextures or usePlayerTexture or useGeneralTexture) then
         local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
-            uuidb.statusbars[uuidb.general.texture];
+            (usePlayerTexture and uuidb.statusbars[uuidb.general.playerbartexture] or uuidb.statusbars[uuidb.general.texture]);
         healthBar.HealAbsorbBar.Fill:SetTexture(texture);
         healthBar.MyHealPredictionBar.Fill:SetTexture(texture);
         healthBar.OtherHealPredictionBar.Fill:SetTexture(texture);

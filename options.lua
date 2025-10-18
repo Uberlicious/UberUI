@@ -17,6 +17,32 @@ local function Register()
     local category, layout = Settings.RegisterVerticalLayoutCategory("Uber UI");
     Settings.UBERUI_CATEGORY_ID = category:GetID();
 
+    -- Helper function to create dropdown with texture previews
+    local function CreateDropdownWithTextures(category, setting, getOptionsFunc, tooltip)
+        local initializer = Settings.CreateDropdownInitializer(setting, getOptionsFunc, tooltip)
+
+        -- Hook the options function to add texture previews
+        local originalGetOptions = getOptionsFunc
+        local function getOptionsWithTextures()
+            local options = originalGetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        initializer = Settings.CreateDropdownInitializer(setting, getOptionsWithTextures, tooltip)
+        layout:AddInitializer(initializer)
+    end
+
     -- DarknessLevel
     do
         local variable, name, tooltip = "DarknessLevel", "Darkness Level", "Set your desired level of darkness";
@@ -50,9 +76,31 @@ local function Register()
 
     -- BarTexture
     do
-        local variable, name = "BarTextures", "Health Bar Textures";
-        local tooltip =
-        "Set your desired status bar texture for health & mana bars\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local cbvariable, cbname = "BarTextures", "All Bar Textures";
+        local cbtooltip = "Apply texture to all bars (can be overridden by individual frame settings below)"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.allbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.allbartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "allbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "AllBarsTexture", "All Bars Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for all bars (can be overridden by individual frame settings below)\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
         local function GetOptions()
             local container = Settings.CreateControlTextContainer();
             local c = 0;
@@ -64,32 +112,373 @@ local function Register()
             return container:GetData();
         end
 
-        local defaultValue = "Blizzard";
-        local function getValue()
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
             if (uuidb.general) then
                 return gsub(uuidb.general.texture, "_", " ");
             else
-                return defaultValue;
+                return dddefaultValue;
             end
         end
 
-        local function setValue(self, value)
+        local function ddsetValue(self, value)
             value = gsub(value, " ", "_");
             uuidb.general.texture = value;
             UberUI.misc:AllFramesHealthManaTexture();
             UberUI.playerframes:HealthManaBarTexture(true);
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, variable, "texture", uuidb.general,
-            Settings.VarType.Number, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "texture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        layout:AddInitializer(cbdd);
+    end
+
+    -- Player Bar Textures
+    do
+        local cbvariable, cbname = "PlayerBarTextures", "Player Bar Textures";
+        local cbtooltip = "Retexture Player Frame Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.playerbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.playerbartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "playerbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "PlayerTexture", "Player Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Player frame\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                return gsub(uuidb.general.playerbartexture, "_", " ");
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.playerbartexture = value;
+            UberUI.playerframes:HealthManaBarTexture(true);
+        end
+
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "playerbartexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        layout:AddInitializer(cbdd);
+    end
+
+    -- Target Bar Textures
+    do
+        local cbvariable, cbname = "TargetBarTextures", "Target Bar Textures";
+        local cbtooltip = "Retexture Target Frame Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.targetbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.targetbartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "targetbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "TargetTexture", "Target Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Target frame\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                return gsub(uuidb.general.targetbartexture, "_", " ");
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.targetbartexture = value;
+            UberUI.targetframes:HealthManaBarTexture();
+        end
+
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "targetbartexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        layout:AddInitializer(cbdd);
+    end
+
+    -- Focus Bar Textures
+    do
+        local cbvariable, cbname = "FocusBarTextures", "Focus Bar Textures";
+        local cbtooltip = "Retexture Focus Frame Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.focusbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.focusbartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "focusbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "FocusTexture", "Focus Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Focus frame\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                return gsub(uuidb.general.focusbartexture, "_", " ");
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.focusbartexture = value;
+            UberUI.focusframes:HealthManaBarTexture();
+        end
+
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "focusbartexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        layout:AddInitializer(cbdd);
+    end
+
+    -- Nameplate Bar Textures
+    do
+        local cbvariable, cbname = "NameplateBarTextures", "Nameplate Bar Textures";
+        local cbtooltip = "Retexture Nameplate Frames Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.nameplatebartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.nameplatebartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "nameplatebartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "NameplateTexture", "Nameplate Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Nameplate frames\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                return gsub(uuidb.general.nameplatebartexture, "_", " ");
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.nameplatebartexture = value;
+            UberUI.misc:NameplateTexture();
+        end
+
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "nameplatebartexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        layout:AddInitializer(cbdd);
     end
 
     -- Raid Bar Textures
     do
         local cbvariable, cbname = "RaidBarTextures", "Raid Bar Textures";
-        local cbtooltip = "Retexture Raid & Raid Party Frames Separately from general texture"
+        local cbtooltip = "Retexture Raid & Raid Party Frames Separately from All Bars texture"
         -- checkbox
         local defaultValue = false;
         local function cbgetValue()
@@ -144,8 +533,25 @@ local function Register()
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
-        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, GetOptions,
-            ddname, ddtooltip);
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip)
         layout:AddInitializer(cbdd);
     end
 
@@ -207,9 +613,132 @@ local function Register()
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
-        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, GetOptions,
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip)
         layout:AddInitializer(cbdd);
+    end
+
+    -- Cooldown Bar Textures
+    do
+        local cbvariable, cbname = "CooldownBarTextures", "Cooldown Bar Textures";
+        local cbtooltip = "Retexture Cooldown Viewer Bars Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.cooldownbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.cooldownbartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "cooldownbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "CooldownTexture", "Cooldown Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Cooldown Viewer bars\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                return gsub(uuidb.general.cooldownbartexture, "_", " ");
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.cooldownbartexture = value;
+            UberUI.cdManager:Refresh();
+        end
+
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "cooldownbartexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        layout:AddInitializer(cbdd);
+    end
+
+    -- Cooldown Borders
+    do
+        local variable, name = "CooldownBorders", "Cooldown Manager Icon Borders";
+        local tooltip = "Enable borders on Cooldown Viewer icons"
+        local defaultValue = true;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.cooldownborders;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.cooldownborders = value;
+            if UberUI.cdManager then
+                UberUI.cdManager:Refresh();
+            end
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "cooldownborders", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
     end
 
     -- Arena Nameplate Numbers

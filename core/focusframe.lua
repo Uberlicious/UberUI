@@ -50,8 +50,14 @@ end
 
 function focusframes:HealthManaBarTexture()
     local focusFrame = FocusFrame.TargetFrameContent.TargetFrameContentMain;
-    if (uuidb.general.texture ~= "Blizzard") then
-        local texture = uuidb.statusbars[uuidb.general.texture];
+
+    -- Determine which texture to use: focus-specific override or general texture
+    local useFocusTexture = uuidb.general.focusbartextures and uuidb.general.focusbartexture ~= "Blizzard"
+    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+
+    if (useFocusTexture or useGeneralTexture) then
+        local texture = useFocusTexture and uuidb.statusbars[uuidb.general.focusbartexture] or
+            uuidb.statusbars[uuidb.general.texture];
         focusFrame.HealthBarsContainer.HealthBar:SetStatusBarTexture(texture);
         FocusFrameToT.HealthBar:SetStatusBarTexture(texture);
 
@@ -72,9 +78,9 @@ function focusframes:HealthManaBarTexture()
         end
     end
     if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-    if (uuidb.general.secondarybartextures or uuidb.general.texture ~= "Blizzard") then
+    if (uuidb.general.secondarybartextures or useFocusTexture or useGeneralTexture) then
         local texture = uuidb.general.secondarybartextures and uuidb.statusbars[uuidb.general.secondarybartexture] or
-            uuidb.statusbars[uuidb.general.texture];
+            (useFocusTexture and uuidb.statusbars[uuidb.general.focusbartexture] or uuidb.statusbars[uuidb.general.texture]);
         focusFrame.HealthBarsContainer.HealthBar.HealAbsorbBar.Fill:SetTexture(texture);
         focusFrame.HealthBarsContainer.HealthBar.MyHealPredictionBar.Fill:SetTexture(texture);
         focusFrame.HealthBarsContainer.HealthBar.OtherHealPredictionBar.Fill:SetTexture(texture);

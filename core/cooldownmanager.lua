@@ -47,14 +47,20 @@ local function ApplyMask(bar, opts)
     m:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -R + SX, B + SY)
 end
 
-function cdManager:Color()
+function cdManager:Texture()
     -- Safety checks
     if not BuffBarCooldownViewer then return end
     if not BuffBarCooldownViewer:IsShown() then return end
     if not uuidb or not uuidb.statusbars or not uuidb.general then return end
 
-    local texture  = uuidb.statusbars[uuidb.general.texture]
-    local dc       = uuidb.general.darkencolor
+    -- Determine which texture to use: cooldown-specific override or general texture
+    local useCooldownTexture = uuidb.general.cooldownbartextures and uuidb.general.cooldownbartexture ~= "Blizzard"
+    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
+
+    if not (useCooldownTexture or useGeneralTexture) then return end
+
+    local texture = useCooldownTexture and uuidb.statusbars[uuidb.general.cooldownbartexture] or
+        uuidb.statusbars[uuidb.general.texture]
 
     local children = { BuffBarCooldownViewer:GetChildren() }
     if #children == 0 then return end
@@ -90,13 +96,6 @@ function cdManager:Color()
                 fill._masked = true
             end
 
-            -- Tint BACKGROUND(s) normally (they aren't masked)
-            for _, r in ipairs({ bar:GetRegions() }) do
-                if r:IsObjectType("Texture") and r:GetDrawLayer() == "BACKGROUND" then
-                    r:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                end
-            end
-
             -- Keep mask aligned on resize
             if not bar._maskSizer then
                 bar._maskSizer = true
@@ -108,6 +107,100 @@ function cdManager:Color()
     end
 end
 
+function cdManager:Color()
+    if not uuidb or not uuidb.general then return end
+
+    if uuidb.general.cooldownborders == false then
+        local function DestroyBorders(viewer)
+            if not viewer then return end
+            for _, f in ipairs({ viewer:GetChildren() }) do
+                if f.uberBorder then
+                    f.uberBorder:Hide()
+                    f.uberBorder = nil
+                    f.styled = nil
+                end
+            end
+        end
+        DestroyBorders(BuffBarCooldownViewer)
+        DestroyBorders(BuffIconCooldownViewer)
+        DestroyBorders(UtilityCooldownViewer)
+        DestroyBorders(EssentialCooldownViewer)
+        return
+    end
+
+    local dc = uuidb.general.darkencolor
+    local tx = MultiBarBottomRightButton1NormalTexture:GetAtlas()
+
+    local function CreateBorder(parent, anchor, tl, br)
+        local border = CreateFrame("Frame", nil, parent)
+        border:SetPoint("TOPLEFT", anchor, "TOPLEFT", tl, -tl)
+        border:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", br, -br)
+
+        local level = parent:GetFrameLevel()
+        if anchor:IsObjectType("Frame") then
+            level = anchor:GetFrameLevel()
+        end
+        border:SetFrameLevel(level + 5)
+
+        local borderTexture = border:CreateTexture(nil, "OVERLAY")
+        borderTexture:SetAllPoints()
+        borderTexture:SetAtlas(tx)
+        borderTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        return border
+    end
+
+    -- Safety checks for BuffBarCooldownViewer
+    if BuffBarCooldownViewer and BuffBarCooldownViewer:IsShown() then
+        local children = { BuffBarCooldownViewer:GetChildren() }
+        for _, f in ipairs(children) do
+            if f and f.Bar then
+                -- Tint bar background
+                for _, r in ipairs({ f.Bar:GetRegions() }) do
+                    if r:IsObjectType("Texture") and r:GetDrawLayer() == "BACKGROUND" then
+                        r:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                    end
+                end
+            end
+
+            if f and not f.styled and f.Icon then
+                local iconFrame = f.Icon
+                local iconTexture
+                for _, region in ipairs({ iconFrame:GetRegions() }) do
+                    if region:IsObjectType("Texture") then
+                        iconTexture = region
+                        break
+                    end
+                end
+
+                if iconTexture then
+                    f.uberBorder = CreateBorder(f, iconFrame, 0, 4)
+                    f.styled = true
+                end
+            end
+        end
+    end
+
+    local function ApplyBordersToIconViewer(viewer, tl, br)
+        if viewer and viewer:IsShown() then
+            local children = { viewer:GetChildren() }
+            for _, f in ipairs(children) do
+                if f and not f.styled and f.Icon then
+                    local iconTexture = f.Icon
+                    -- Ensure f.Icon is a texture before calling texture methods
+                    if iconTexture and iconTexture:IsObjectType("Texture") then
+                        f.uberBorder = CreateBorder(f, iconTexture, tl, br)
+                        f.styled = true
+                    end
+                end
+            end
+        end
+    end
+
+    ApplyBordersToIconViewer(BuffIconCooldownViewer, .5, 5)
+    ApplyBordersToIconViewer(UtilityCooldownViewer, .5, 5)
+    ApplyBordersToIconViewer(EssentialCooldownViewer, .5, 5)
+end
+
 -- Register the specific callback we need
 local function RegisterCooldownCallbacks()
     if cdManager._callbackRegistered then return end
@@ -115,6 +208,7 @@ local function RegisterCooldownCallbacks()
     -- This is the specific callback that fires when hovering items in settings
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnEnterItem", function(cooldownItem)
         C_Timer.After(0, function()
+            cdManager:Texture()
             cdManager:Color()
         end)
     end, cdManager)
@@ -122,6 +216,7 @@ local function RegisterCooldownCallbacks()
     -- Also register for data changes (when items added/removed)
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
         C_Timer.After(0, function()
+            cdManager:Texture()
             cdManager:Color()
         end)
     end, cdManager)
@@ -139,6 +234,7 @@ cdManager:SetScript("OnEvent", function(self, event, addon)
         C_Timer.After(0.5, function()
             RegisterCooldownCallbacks()
             -- Apply initial styling
+            self:Texture()
             self:Color()
         end)
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -147,6 +243,7 @@ cdManager:SetScript("OnEvent", function(self, event, addon)
             if EventRegistry then
                 RegisterCooldownCallbacks()
             end
+            self:Texture()
             self:Color()
         end)
     end
@@ -154,6 +251,7 @@ end)
 
 -- Public function for manual refresh
 function cdManager:Refresh()
+    self:Texture()
     self:Color()
 end
 

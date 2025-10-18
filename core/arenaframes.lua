@@ -82,7 +82,7 @@ end
 
 function arenaframes:LoopFrames()
     for i = 1, 5 do
-        if (uuidb.general.texture ~= "Blizzard") then
+        if (uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard") then
             self:HealthManaBarTexture(i);
         end
     end
