@@ -8,6 +8,8 @@
 ## IconTexture: Interface/Addons/Uber UI/logo_32x32.blp
 ## AddonCompartmentFunc: OpenUUISettings
 ## SavedVariables: UberuiDB
+## Dependencies: Blizzard_Settings
+## Category: Unit Frames
 
 config.lua
 options.lua

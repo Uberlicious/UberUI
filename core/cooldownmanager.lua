@@ -230,12 +230,22 @@ cdManager:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 cdManager:SetScript("OnEvent", function(self, event, addon)
     if event == "ADDON_LOADED" and addon == "Blizzard_CooldownViewer" then
+        local function applyStyling()
+            cdManager:Texture()
+            cdManager:Color()
+        end
+
+        -- Hook OnShow for all relevant viewers to apply styling when they are enabled
+        if BuffBarCooldownViewer then BuffBarCooldownViewer:HookScript("OnShow", applyStyling) end
+        if BuffIconCooldownViewer then BuffIconCooldownViewer:HookScript("OnShow", applyStyling) end
+        if UtilityCooldownViewer then UtilityCooldownViewer:HookScript("OnShow", applyStyling) end
+        if EssentialCooldownViewer then EssentialCooldownViewer:HookScript("OnShow", applyStyling) end
+
         -- Give it a moment to fully initialize
         C_Timer.After(0.5, function()
             RegisterCooldownCallbacks()
             -- Apply initial styling
-            self:Texture()
-            self:Color()
+            applyStyling()
         end)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- Apply styling on world enter (after everything is loaded)

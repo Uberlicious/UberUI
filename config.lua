@@ -82,6 +82,7 @@ local defaults = {
         focusbartextures       = false,
         nameplatebartextures   = false,
         cooldownbartextures    = false,
+        buffauraborders        = true,
         smallfriendlynameplate = false,
     },
     playerframes = {
@@ -96,7 +97,6 @@ local defaults = {
         classcolorfriendly = true,
     },
     arenaframes = {
-        hideframes = false,
         classcolor = true,
     },
     partyframes = {

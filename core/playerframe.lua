@@ -30,7 +30,6 @@ playerframes:RegisterEvent("PLAYER_LOSES_VEHICLE_DATA")
 playerframes:RegisterEvent("PLAYER_GAINS_VEHICLE_DATA")
 playerframes:RegisterEvent("PVP_MATCH_ACTIVE")
 playerframes:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
-playerframes:RegisterEvent("ARENA_OPPONENT_UPDATE")
 playerframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 playerframes:SetScript("OnEvent", function(self)
     playerframes:Color();

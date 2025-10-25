@@ -12,25 +12,14 @@ arenaframes:SetScript("OnEvent", function(self, event, addon)
     arenaframes:HideOldArenaFrames();
 end)
 
-local point, relativeTo, relativePoint, offsetX, offsetY;
-
 function arenaframes:ShowArenaFrames()
-    if CompactArenaFrame:GetScale() ~= 1 then
-        CompactArenaFrame:SetScale(1);
-        CompactArenaFrame:ClearAllPoints();
-        CompactArenaFrame:SetPoint(point, relativeTo, relativePoint, offsetX, offsetY);
-        CompactArenaFrame:SetFrameStrata("LOW");
+    if CompactArenaFrame:GetAlpha() ~= 1 then
+        CompactArenaFrame:SetAlpha(1);
     end
 end
 
 function arenaframes:HideArena()
-    if point == nil then
-        point, relativeTo, relativePoint, offsetX, offsetY = CompactArenaFrame:GetPoint();
-    end
-    CompactArenaFrame:SetScale(.0001);
-    CompactArenaFrame:ClearAllPoints();
-    CompactArenaFrame:SetPoint(MinimapCluster.MinimapContainer:GetPoint());
-    CompactArenaFrame:SetFrameStrata("BACKGROUND");
+    CompactArenaFrame:SetAlpha(0);
 end
 
 function arenaframes:SetVisibility()
