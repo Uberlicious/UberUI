@@ -63,7 +63,6 @@ local defaults = {
         targetbartexture       = "Blizzard",
         focusbartexture        = "Blizzard",
         nameplatebartexture    = "Blizzard",
-        cooldownbartexture     = "Blizzard",
         arenanumbers           = true,
         hidearenaframes        = false,
         border                 = "Interface\\AddOns\\Uber UI\\textures\\border",
@@ -81,9 +80,13 @@ local defaults = {
         targetbartextures      = false,
         focusbartextures       = false,
         nameplatebartextures   = false,
-        cooldownbartextures    = false,
         buffauraborders        = true,
         smallfriendlynameplate = false,
+    },
+    cooldown = {
+        bartexture  = "Blizzard",
+        bartextures = false,
+        borders     = true,
     },
     playerframes = {
         classcolor = true,

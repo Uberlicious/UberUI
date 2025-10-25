@@ -649,18 +649,18 @@ local function Register()
         -- checkbox
         local defaultValue = false;
         local function cbgetValue()
-            if (uuidb.general) then
-                return uuidb.general.cooldownbartextures;
+            if (uuidb.cooldown) then
+                return uuidb.cooldown.bartextures;
             else
                 return defaultValue;
             end
         end
 
         local function cbsetValue(self, value)
-            uuidb.general.cooldownbartextures = value;
+            uuidb.cooldown.bartextures = value;
         end
 
-        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "cooldownbartextures", uuidb.general,
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "cooldownbartextures", uuidb.cooldown,
             Settings.VarType.Boolean,
             cbname, defaultValue)
         cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
@@ -682,8 +682,8 @@ local function Register()
 
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
-            if (uuidb.general) then
-                return gsub(uuidb.general.cooldownbartexture, "_", " ");
+            if (uuidb.cooldown) then
+                return gsub(uuidb.cooldown.bartexture, "_", " ");
             else
                 return dddefaultValue;
             end
@@ -691,11 +691,11 @@ local function Register()
 
         local function ddsetValue(self, value)
             value = gsub(value, " ", "_");
-            uuidb.general.cooldownbartexture = value;
+            uuidb.cooldown.bartexture = value;
             UberUI.cdManager:Refresh();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "cooldownbartexture", uuidb.general,
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "cooldownbartexture", uuidb.cooldown,
             Settings.VarType.Number,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
@@ -728,21 +728,21 @@ local function Register()
         local tooltip = "Enable borders on Cooldown Viewer icons"
         local defaultValue = true;
         local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.cooldownborders;
+            if (uuidb.cooldown) then
+                return uuidb.cooldown.borders;
             else
                 return defaultValue;
             end
         end
 
         local function setValue(self, value)
-            uuidb.general.cooldownborders = value;
+            uuidb.cooldown.borders = value;
             if UberUI.cdManager then
                 UberUI.cdManager:Refresh();
             end
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, variable, "cooldownborders", uuidb.general,
+        local setting = Settings.RegisterAddOnSetting(category, variable, "cooldownborders", uuidb.cooldown,
             Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);

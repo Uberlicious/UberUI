@@ -54,9 +54,9 @@ function cdManager:Texture()
     if not uuidb or not uuidb.statusbars or not uuidb.general then return end
 
     local texture
-    if uuidb.general.cooldownbartextures then
-        if uuidb.general.cooldownbartexture ~= "Blizzard" then
-            texture = uuidb.statusbars[uuidb.general.cooldownbartexture]
+    if uuidb.cooldown.bartextures then
+        if uuidb.cooldown.bartexture ~= "Blizzard" then
+            texture = uuidb.statusbars[uuidb.cooldown.bartexture]
         end
     elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
         texture = uuidb.statusbars[uuidb.general.texture]
@@ -112,7 +112,7 @@ end
 function cdManager:Color()
     if not uuidb or not uuidb.general then return end
 
-    if uuidb.general.cooldownborders == false then
+    if uuidb.cooldown.borders == false then
         local function DestroyBorders(viewer)
             if not viewer then return end
             for _, f in ipairs({ viewer:GetChildren() }) do
@@ -181,13 +181,29 @@ function cdManager:Color()
     end
 
     local function ApplyBordersToIconViewer(viewer, tl, br)
-        if viewer and viewer:IsShown() then
+        if viewer then
             local children = { viewer:GetChildren() }
             for _, f in ipairs(children) do
                 if f and not f.styled and f.Icon then
-                    local iconTexture = f.Icon
-                    -- Ensure f.Icon is a texture before calling texture methods
-                    if iconTexture and iconTexture:IsObjectType("Texture") then
+                    local icon = f.Icon
+                    if icon:IsObjectType("Frame") then
+                        -- Handle case where f.Icon is a frame
+                        local iconFrame = icon
+                        local iconTexture
+                        for _, region in ipairs({ iconFrame:GetRegions() }) do
+                            if region:IsObjectType("Texture") then
+                                iconTexture = region
+                                break
+                            end
+                        end
+
+                        if iconTexture then
+                            f.uberBorder = CreateBorder(f, iconFrame, tl, br)
+                            f.styled = true
+                        end
+                    elseif icon:IsObjectType("Texture") then
+                        -- Handle case where f.Icon is a texture
+                        local iconTexture = icon
                         f.uberBorder = CreateBorder(f, iconTexture, tl, br)
                         f.styled = true
                     end
