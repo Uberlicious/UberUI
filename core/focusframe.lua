@@ -14,7 +14,7 @@ end
 	Local Variables
 ]]
 --
-local focusframes = CreateFrame("frame")
+local focusframes = UberUI:CreateFrame("frame")
 focusframes:RegisterEvent("ADDON_LOADED")
 focusframes:RegisterEvent("PLAYER_LOGIN")
 focusframes:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -70,6 +70,7 @@ function focusframes:HealthManaBarTexture()
         if (focusPowerType and focusPowerType < 4) then
             focusFrame.ManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[focusPowerType];
+            focusFrame.ManaBar:SetStatusBarDesaturated(true)
             focusFrame.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
 
@@ -77,6 +78,7 @@ function focusframes:HealthManaBarTexture()
         if (focusTotPowerType and focusTotPowerType < 4) then
             FocusFrameToT.ManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[focusTotPowerType];
+            FocusFrameToT.ManaBar:SetStatusBarDesaturated(true)
             FocusFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
     end

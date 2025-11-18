@@ -6,7 +6,7 @@
 local addon, ns = ...
 local actionbars = {}
 
-local buffsandauras = CreateFrame("frame")
+local buffsandauras = UberUI:CreateFrame("frame")
 buffsandauras:RegisterEvent("ADDON_LOADED")
 buffsandauras:RegisterEvent("PLAYER_ENTERING_WORLD")
 buffsandauras:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -37,13 +37,13 @@ function buffsandauras:ColorBuffs(force)
 
         if (not v.styled or force) and v.Icon and v.originalSize then
             if uuidb.general.buffauraborders then
-                v.Icon:SetSize(v.originalSize - 2.2, v.originalSize - 2.2);
-                v.Icon:SetTexCoord(.05, .95, .05, .95);
-                v.NormalTexture = v.NormalTexture or CreateFrame("Frame", "BuffAuraBorder", v)
+                -- v.Icon:SetSize(v.originalSize - 2.2, v.originalSize - 2.2);
+                -- v.Icon:SetTexCoord(.05, .95, .05, .95);
+                v.NormalTexture = v.NormalTexture or UberUI:CreateFrame("Frame", "BuffAuraBorder", v)
                 v.NormalTexture:SetSize(v.originalSize + 1 + iconPadding, v.originalSize + 1 + iconPadding)
                 v.NormalTexture:SetPoint("CENTER", v.Icon, "CENTER", 2, -2);
                 v.NormalTexture.texture = v.NormalTexture.texture or
-                v.NormalTexture:CreateTexture("BuffNormalTexture", "OVERLAY");
+                    v.NormalTexture:CreateTexture("BuffNormalTexture", "OVERLAY");
                 v.NormalTexture.texture:SetAllPoints()
                 v.NormalTexture.texture:SetAtlas(tx)
                 v.NormalTexture.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
@@ -51,14 +51,14 @@ function buffsandauras:ColorBuffs(force)
                 if v.NormalTexture then
                     v.NormalTexture:Hide();
                 end
-                v.Icon:SetSize(v.originalSize, v.originalSize);
+                -- v.Icon:SetSize(v.originalSize, v.originalSize);
                 v.Icon:SetTexCoord(0, 1, 0, 1);
             end
             v.styled = true;
         end
 
         if v.NormalTexture then
-            if uuidb.general.buffauraborders and not (v.Border and v.Border:IsShown()) then
+            if uuidb.general.buffauraborders then
                 v.NormalTexture:Show();
             else
                 v.NormalTexture:Hide();
@@ -81,8 +81,8 @@ function buffsandauras:ColorAuras(force)
             if not v.styled and v.Icon then
                 if uuidb.general.buffauraborders then
                     local iconSize = v.Icon:GetSize();
-                    v.NormalTexture = v.NormalTexture or CreateFrame("Frame", frameName .. "AuraBorder", v);
-                    v.NormalTexture:SetSize(iconSize + 4, iconSize + 4);
+                    v.NormalTexture = v.NormalTexture or UberUI:CreateFrame("Frame", frameName .. "AuraBorder", v);
+                    -- v.NormalTexture:SetSize(iconSize + 4, iconSize + 4);
                     if (v:GetName() == frameName .. "SpellBar") then
                         v.NormalTexture:SetPoint("RIGHT", v, "LEFT", 2, -7);
                     else
@@ -102,16 +102,6 @@ function buffsandauras:ColorAuras(force)
                     end
                 end
                 v.styled = true;
-            end
-
-            if v.NormalTexture then
-                if uuidb.general.buffauraborders and not ((v.Stealable and v.Stealable:IsShown()) or (v.Border and v.Border:IsShown())) then
-                    v.NormalTexture:Show()
-                    local iconSize = v.Icon:GetSize();
-                    v.NormalTexture:SetSize(iconSize + 5, iconSize + 5);
-                else
-                    v.NormalTexture:Hide();
-                end
             end
         end
     end

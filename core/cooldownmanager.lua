@@ -1,5 +1,5 @@
 local addon, ns = ...
-local cdManager = CreateFrame("frame")
+local cdManager = UberUI:CreateFrame("frame")
 
 -- Get mask from config (fallback to hardcoded if not available)
 local function GetMaskTexture()

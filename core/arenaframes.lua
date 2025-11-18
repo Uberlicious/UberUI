@@ -1,7 +1,7 @@
 local addon, ns = ...
 arenaframes = {}
 
-local arenaframes = CreateFrame("Frame")
+local arenaframes = UberUI:CreateFrame("Frame")
 arenaframes:RegisterEvent("PLAYER_ENTERING_WORLD")
 arenaframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 arenaframes:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
@@ -52,19 +52,19 @@ uui_nn_hook = false
 function arenaframes:NameplateNumbers()
     local U = UnitIsUnit
     if not (uui_nn_hook) and (uuidb.general.arenanumbers) then
-        hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
-            if IsActiveBattlefieldArena() then
-                if frame.unit:find("nameplate") then
-                    for i = 1, 3 do
-                        if U(frame.unit, "arena" .. i) then
-                            frame.name:SetText(i)
-                            frame.name:SetTextColor(1, 1, 0)
-                            break
-                        end
-                    end
-                end
-            end
-        end)
+        -- hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
+        --     if IsActiveBattlefieldArena() then
+        --         if frame.unit:find("nameplate") then
+        --             for i = 1, 3 do
+        --                 if U(frame.unit, "arena" .. i) then
+        --                     frame.name:SetText(i)
+        --                     frame.name:SetTextColor(1, 1, 0)
+        --                     break
+        --                 end
+        --             end
+        --         end
+        --     end
+        -- end)
     end
     uui_nn_hook = true
 end

@@ -1,7 +1,7 @@
 local addon, ns = ...
 local minimap = {}
 
-minimap = CreateFrame("frame")
+minimap = UberUI:CreateFrame("frame")
 -- minimap:RegisterEvent("ADDON_LOADED")
 -- minimap:RegisterEvent("PLAYER_LOGIN")
 minimap:RegisterEvent("PLAYER_ENTERING_WORLD")

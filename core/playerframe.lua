@@ -16,7 +16,7 @@ local class = UnitClass("player")
 local classcolor = RAID_CLASS_COLORS[select(2, UnitClass("player"))]
 local pvphook = false;
 
-playerframes = CreateFrame("frame")
+playerframes = UberUI:CreateFrame("frame")
 playerframes:RegisterEvent("ADDON_LOADED")
 playerframes:RegisterEvent("PLAYER_LOGIN")
 playerframes:RegisterEvent("PLAYER_ENTERING_WORLD")

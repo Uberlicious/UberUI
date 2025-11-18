@@ -12,7 +12,7 @@ local dominos = C_AddOns.IsAddOnLoaded("Dominos")
 local bartender4 = C_AddOns.IsAddOnLoaded("Bartender4")
 
 
-local actionbars = CreateFrame("frame")
+local actionbars = UberUI:CreateFrame("frame")
 actionbars:RegisterEvent("ADDON_LOADED")
 actionbars:RegisterEvent("PLAYER_ENTERING_WORLD")
 actionbars:SetScript("OnEvent", function(self, event)

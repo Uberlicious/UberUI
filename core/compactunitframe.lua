@@ -1,82 +1,75 @@
 local addon, ns = ...
 local cuf = {}
 
-cuf = CreateFrame("Frame");
-cuf:RegisterEvent("PLAYER_ENTERING_WORLD")
-cuf:RegisterEvent("GROUP_ROSTER_UPDATE")
-cuf:RegisterEvent("UNIT_PET");
+cuf = UberUI:CreateFrame("Frame");
+cuf:RegisterEvent("ADDON_LOADED")
 cuf:SetScript("OnEvent", function(self)
     self:set_hook();
 end)
 
 local default_hook = false
 
-cuf.updateFrameCB = function(self)
-    if (self ~= nil) then return end
-    local useRaidTexture = uuidb.general.raidbartextures and uuidb.general.raidbartexture ~= "Blizzard"
-    local useGeneralTexture = uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard"
-    local texture = useRaidTexture and uuidb.statusbars[uuidb.general.raidbartexture] or
-        (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"])
-
-    if (useRaidTexture or useGeneralTexture) then
-        self.roleIcon:SetDrawLayer("ARTWORK", 4)
-        self.healthBar:SetStatusBarTexture(texture);
-    end
-    if (uuidb.general.secondarybartextures and uuidb.general.secondarybartexture == "Blizzard") then return end
-    if (uuidb.general.secondarybartextures or useRaidTexture or useGeneralTexture) then
-        local texture = uuidb.general.secondarybartextures and
-            uuidb.statusbars[uuidb.general.secondarybartexture] or
-            useRaidTexture and
-            uuidb.statusbars[uuidb.general.raidbartexture] or
-            (useGeneralTexture and uuidb.statusbars[uuidb.general.texture] or uuidb.statusbars["Blizzard"]);
-        self.myHealPrediction:SetTexture(texture);
-        self.otherHealPrediction:SetTexture(texture);
-        self.totalAbsorb:SetTexture(texture);
-        self.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
-    end
-end
-
 cuf.default = function(self)
-    if (self == nil) then return end
+    if not self or not self.healthBar or self:IsForbidden() then return end
 
-    -- Main texture logic
+    -- Only apply to raid and party frames
+    local frameName = self:GetName()
+    if not frameName or not (frameName:find("CompactRaid") or frameName:find("CompactParty") or frameName:find("CompactArena")) then
+        return
+    end
+
     local textureToApply
-    if uuidb.general.raidbartextures then
-        if uuidb.general.raidbartexture ~= "Blizzard" then
-            textureToApply = uuidb.statusbars[uuidb.general.raidbartexture]
-        end
+    if uuidb.general.raidbartextures and uuidb.general.raidbartexture ~= "Blizzard" then
+        textureToApply = uuidb.statusbars[uuidb.general.raidbartexture]
     elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
         textureToApply = uuidb.statusbars[uuidb.general.texture]
     end
 
+    local hsbt = self.healthBar:GetStatusBarTexture()
+    local psbt = self.powerBar:GetStatusBarTexture()
+    -- print("Before:", self:GetName(), hsbt:GetDrawLayer(), psbt:GetDrawLayer(), self.aggroHighlight:GetDrawLayer())
     if textureToApply then
-        if (self.roleIcon) then
+        self.healthBar:SetStatusBarTexture(textureToApply)
+        local sbt = self.healthBar:GetStatusBarTexture()
+        if sbt then
+            sbt:SetDrawLayer("BORDER")
+        end
+
+        if self.powerBar then
+            self.powerBar:SetStatusBarTexture(textureToApply)
+            local pbt = self.powerBar:GetStatusBarTexture()
+            if pbt then
+                pbt:SetDrawLayer("BORDER")
+            end
+        end
+
+        -- print("After:", self:GetName(), hsbt:GetDrawLayer(), psbt:GetDrawLayer(), self.aggroHighlight:GetDrawLayer())
+
+        if self.roleIcon then
             self.roleIcon:SetDrawLayer("ARTWORK", 4)
         end
-        self.healthBar:SetStatusBarTexture(textureToApply);
     end
 
     -- Secondary texture logic
     local secondaryTextureToApply
-    if uuidb.general.secondarybartextures then
-        if uuidb.general.secondarybartexture ~= "Blizzard" then
-            secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
-        end
+    if uuidb.general.secondarybartextures and uuidb.general.secondarybartexture ~= "Blizzard" then
+        secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
     else
         secondaryTextureToApply = textureToApply -- Fallback to main texture decision
     end
 
     if secondaryTextureToApply then
-        self.myHealPrediction:SetTexture(secondaryTextureToApply);
-        self.otherHealPrediction:SetTexture(secondaryTextureToApply);
-        self.totalAbsorb:SetTexture(secondaryTextureToApply);
-        self.totalAbsorb:SetVertexColor(.6, .9, .9, 1);
+        if self.myHealPrediction then self.myHealPrediction:SetTexture(secondaryTextureToApply) end
+        if self.otherHealPrediction then self.otherHealPrediction:SetTexture(secondaryTextureToApply) end
+        if self.totalAbsorb then
+            self.totalAbsorb:SetTexture(secondaryTextureToApply)
+            self.totalAbsorb:SetVertexColor(.6, .9, .9, 1)
+        end
     end
 end
-
 function cuf:set_hook()
-    if (default_hook ~= true) then
-        hooksecurefunc("DefaultCompactUnitFrameSetup", UberUI.cuf.default)
+    if not default_hook then
+        hooksecurefunc("CompactUnitFrame_UpdateHealthColor", UberUI.cuf.default)
         default_hook = true
     end
 end

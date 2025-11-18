@@ -14,7 +14,7 @@ end
 	Local Variables
 ]]
 --
-local targetframes = CreateFrame("frame")
+local targetframes = UberUI:CreateFrame("frame")
 targetframes:RegisterEvent("ADDON_LOADED")
 targetframes:RegisterEvent("PLAYER_LOGIN")
 targetframes:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -73,6 +73,7 @@ function targetframes:HealthManaBarTexture()
         if (targetPowerType and targetPowerType < 4) then
             targetFrame.ManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[targetPowerType];
+            targetFrame.ManaBar:SetStatusBarDesaturated(true)
             targetFrame.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
 
@@ -80,6 +81,7 @@ function targetframes:HealthManaBarTexture()
         if (totPowerType and totPowerType < 4) then
             TargetFrameToT.ManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[totPowerType];
+            TargetFrameToT.ManaBar:SetStatusBarDesaturated(true)
             TargetFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
     end

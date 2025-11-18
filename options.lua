@@ -129,7 +129,6 @@ local function Register()
             value = gsub(value, " ", "_");
             uuidb.general.texture = value;
             UberUI.misc:AllFramesHealthManaTexture();
-            UberUI.playerframes:HealthManaBarTexture(true);
         end
 
         local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "texture", uuidb.general,
@@ -319,33 +318,34 @@ local function Register()
         layout:AddInitializer(cbdd);
     end
 
-    -- Focus Bar Textures
+
+    -- Party Bar Textures
     do
-        local cbvariable, cbname = "FocusBarTextures", "Focus Bar Textures";
-        local cbtooltip = "Retexture Focus Frame Separately from All Bars texture"
+        local cbvariable, cbname = "PartyBarTextures", "Party Bar Textures";
+        local cbtooltip = "Retexture Party Frame Separately from All Bars texture"
         -- checkbox
         local defaultValue = false;
         local function cbgetValue()
             if (uuidb.general) then
-                return uuidb.general.focusbartextures;
+                return uuidb.general.partybartextures;
             else
                 return defaultValue;
             end
         end
 
         local function cbsetValue(self, value)
-            uuidb.general.focusbartextures = value;
+            uuidb.general.partybartextures = value;
         end
 
-        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "focusbartextures", uuidb.general,
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "partybartextures", uuidb.general,
             Settings.VarType.Boolean,
             cbname, defaultValue)
         cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
 
         -- drop down
-        local ddvariable, ddname = "FocusTexture", "Focus Bar Texture";
+        local ddvariable, ddname = "PartyTexture", "Party Bar Texture";
         local ddtooltip =
-        "Set your desired status bar texture for Focus frame\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        "Set your desired status bar texture for Party frame\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
         local function GetOptions()
             local container = Settings.CreateControlTextContainer();
             local c = 0;
@@ -360,7 +360,7 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.focusbartexture, "_", " ");
+                return gsub(uuidb.general.partybartexture, "_", " ");
             else
                 return dddefaultValue;
             end
@@ -368,11 +368,11 @@ local function Register()
 
         local function ddsetValue(self, value)
             value = gsub(value, " ", "_");
-            uuidb.general.focusbartexture = value;
-            UberUI.focusframes:HealthManaBarTexture();
+            uuidb.general.partybartexture = value;
+            UberUI.partyframes:HealthManaBarTexture();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "focusbartexture", uuidb.general,
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "partybartexture", uuidb.general,
             Settings.VarType.Number,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
@@ -449,7 +449,7 @@ local function Register()
         local function ddsetValue(self, value)
             value = gsub(value, " ", "_");
             uuidb.general.nameplatebartexture = value;
-            UberUI.misc:NameplateTexture();
+            UberUI.misc:ForceNameplateTexture();
         end
 
         local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "nameplatebartexture", uuidb.general,
@@ -940,7 +940,7 @@ local function Register()
 
         local function setValue(self, value)
             uuidb.general.smallfriendlynameplate = value;
-            UberUI.misc:SetFriendlyNameplateSize(not value);
+            UberUI.misc:UpdateNameplateSize();
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "smallfriendlynameplate", uuidb.general,
@@ -1129,7 +1129,7 @@ local function Register()
         local variable, name = "ccFriendlyNameplate", "Class Color Friendly Nameplates";
         local tooltip = "Class color friendly nameplates"
         local defaultValue = true;
-        local cvar = "ShowClassColorInFriendlyNameplate";
+        local cvar = "nameplateShowFriendlyClassColor";
         local function getValue()
             return strtobool[GetCVar(cvar)];
         end
@@ -1151,7 +1151,7 @@ local function Register()
         local variable, name = "ccEnemyNameplate", "Class Color Enemy Nameplates";
         local tooltip = "Class color enemy nameplates"
         local defaultValue = true;
-        local cvar = "ShowClassColorInNameplate";
+        local cvar = "nameplateShowClassColor";
         local function getValue()
             return strtobool[GetCVar(cvar)];
         end
@@ -1207,7 +1207,7 @@ local function Register()
 
         local function setValue(self, value)
             uuidb.arenaframes.classcolor = value;
-            UberUI.arenaframes:Loop();
+            UberUI.arenaframes:LoopFrames();
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "classcolor", uuidb.general,
@@ -1218,7 +1218,7 @@ local function Register()
 
     -- Class Color Party
     do
-        local variable, name = "ccPartyColor", "Class Color Party Targets";
+        local variable, name = "ccPartyColor", "Class Color Party Health";
         local tooltip = "Class color default blizzard party (non-raid) health bars";
         local defaultValue = true;
         local function getValue()
@@ -1232,6 +1232,7 @@ local function Register()
         local function setValue(self, value)
             uuidb.partyframes.classcolor = value;
             UberUI.partyframes:Color();
+            UberUI.partyframes:HealthBarColor();
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "classcolor", uuidb.partyframes,
@@ -1250,10 +1251,9 @@ hooksecurefunc(SettingsPanel, "DisplayCategory", function(self, category)
     if ((category:GetID() == Settings.UBERUI_CATEGORY_ID or
                 (category:HasParentCategory() and category:GetParentCategory():GetID() == Settings.UBERUI_CATEGORY_ID))
             and not header.UUI_Reload) then
-        header.UUI_Reload = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+        header.UUI_Reload = UberUI:CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
         header.UUI_Reload:SetPoint("RIGHT", header.DefaultsButton, "LEFT", -5, 0);
-        header.UUI_Reload:SetSize(header.DefaultsButton:GetSize());
-        header.UUI_Reload:SetFrameStrata("HIGH");
+        header.UUI_Reload:SetSize(header.DefaultsButton:GetSize()); header.UUI_Reload:SetFrameStrata("HIGH");
         header.UUI_Reload:SetText("Reload UI");
 
         header.UUI_Reload:SetScript("OnClick", function(self, button, down)

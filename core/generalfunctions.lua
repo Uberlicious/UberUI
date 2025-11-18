@@ -1,70 +1,64 @@
-local addon, ns = ...
+-- Centralized functions for UberUI
 
--- Cache frequently accessed globals for performance
-local UnitPowerType = UnitPowerType
-local UnitClass = UnitClass
-local UnitIsPlayer = UnitIsPlayer
-local UnitIsFriend = UnitIsFriend
-local UnitIsEnemy = UnitIsEnemy
-local UnitSelectionColor = UnitSelectionColor
-local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+function UberUI:CreateFrame(frameType, frameName, parent, template)
+    -- This function wraps the global CreateFrame.
+    -- It allows for centralized control and can be expanded later
+    -- to add debugging or frame management.
+    local frame = CreateFrame(frameType, frameName, parent, template)
+    return frame
+end
 
 local general = {}
 
-function general:SetHealthColor(healthBar, target, variableParent)
-    assert(healthBar:GetObjectType() == "StatusBar", "healthBar must be of type StatusBar");
-    assert(type(target) == "string", "Target must be of type string");
-    assert(type(variableParent) == "table" and variableParent.classcolorenemy ~= nil and
-        variableParent.classcolorfriendly ~= nil,
-        "variableParent must contain both classcolorenemy and classcolorfriendly")
-    -- assert(v )
-    local classColor = RAID_CLASS_COLORS[select(2, UnitClass(target))];
-    local playerCheck = UnitIsPlayer(target);
-    local friend = UnitIsFriend("player", target);
-    local enemy = UnitIsEnemy("player", target);
-    if ((variableParent.classcolorenemy and enemy) and playerCheck) then
-        healthBar:SetStatusBarDesaturated(true);
-        healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, classColor.a);
-    elseif (variableParent.classcolorfriendly and friend and playerCheck) then
-        healthBar:SetStatusBarDesaturated(true);
-        healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, classColor.a);
-    elseif (uuidb.general.hostilitycolor) then
-        healthBar:SetStatusBarDesaturated(true);
-        if (not variableParent.classcolorenemy and enemy and playerCheck) then
-            healthBar:SetStatusBarColor(1, 0, 0, 1);
-        elseif (not variableParent.classcolorfriend and friend and playerCheck) then
-            healthBar:SetStatusBarDesaturated(false);
-            healthBar:SetStatusBarColor(0, 1, 0, 1);
+function general:PvPIcon(frame)
+    if (frame and frame.HonorIcon) then
+        if (uuidb and uuidb.general and uuidb.general.hidehonor) then
+            frame.PrestigeBadge:SetAlpha(0)
+            frame.PrestigePortrait:SetAlpha(0)
+            frame.HonorIcon:Hide()
         else
-            healthBar:SetStatusBarColor(UnitSelectionColor(target, true));
+            frame.PrestigeBadge:SetAlpha(1)
+            frame.PrestigePortrait:SetAlpha(1)
+            frame.HonorIcon:Show()
         end
-    else
-        healthBar:SetStatusBarDesaturated(false);
-        healthBar:SetStatusBarColor(0, 1, 0, 1);
     end
 end
 
-function general:PvPIcon(frameParent)
-    assert(type(frameParent) == "table", "Must be a table containing the pvp icons");
-    -- frames have differnet names for pvpicon
-    local pvpIcon;
-    for i, v in pairs(frameParent) do
-        if (strlower(i) == "pvpicon") then pvpIcon = v end
+function general:SetHealthColor(healthBar, unit, db)
+    if healthBar == nil then return end
+
+    local canUseClassColor = UnitIsPlayer(unit)
+    local isFriendly = UnitIsFriend("player", unit)
+
+    if canUseClassColor then
+        local _, class = UnitClass(unit)
+        local classColor = RAID_CLASS_COLORS[class]
+        if classColor then
+            if (db.classcolorenemy and not isFriendly) or (db.classcolorfriendly and isFriendly) then
+                healthBar:SetStatusBarDesaturated(true)
+                healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
+                return -- Class color applied, so we are done.
+            end
+        end
     end
-    -- local pvpIcon = frameParent.PvpIcon;
-    local prestigePortrait = frameParent.PrestigePortrait;
-    local prestigeBadge = frameParent.PrestigeBadge;
-    local dc = uuidb.general.darkencolor;
-    if (uuidb.general.hidehonor) then
-        prestigePortrait:SetAlpha(0);
-        prestigeBadge:SetAlpha(0);
-        pvpIcon:SetAlpha(0);
-    else
-        prestigePortrait:SetAlpha(1);
-        prestigeBadge:SetAlpha(1);
-        pvpIcon:SetAlpha(1);
-        prestigePortrait:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+
+    local useHostilityColor = uuidb.general and uuidb.general.hostilitycolor
+    if useHostilityColor then
+        local reaction = UnitReaction(unit, "player")
+        healthBar:SetStatusBarDesaturated(true)
+        if reaction and reaction >= 5 then
+            healthBar:SetStatusBarColor(0, 1, 0) -- Friendly
+        elseif reaction == 4 then
+            healthBar:SetStatusBarColor(1, 1, 0) -- Neutral
+        else
+            healthBar:SetStatusBarColor(1, 0, 0) -- Hostile
+        end
+        return                                   -- Hostility color applied, so we are done.
     end
+
+    -- Default to friendly color if no other condition is met
+    healthBar:SetStatusBarDesaturated(true)
+    healthBar:SetStatusBarColor(0, 1, 0)
 end
 
 UberUI.general = general
