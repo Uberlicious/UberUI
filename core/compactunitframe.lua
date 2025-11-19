@@ -32,18 +32,17 @@ cuf.default = function(self)
         self.healthBar:SetStatusBarTexture(textureToApply)
         local sbt = self.healthBar:GetStatusBarTexture()
         if sbt then
-            sbt:SetDrawLayer("BORDER")
+            sbt:SetDrawLayer("BORDER", 3)
         end
 
         if self.powerBar then
             self.powerBar:SetStatusBarTexture(textureToApply)
-            local pbt = self.powerBar:GetStatusBarTexture()
-            if pbt then
-                pbt:SetDrawLayer("BORDER")
-            end
+            self.powerBar:SetFrameLevel(self.healthBar:GetFrameLevel())
         end
 
-        -- print("After:", self:GetName(), hsbt:GetDrawLayer(), psbt:GetDrawLayer(), self.aggroHighlight:GetDrawLayer())
+        if self.aggroHighlight then
+            self.aggroHighlight:SetDrawLayer("ARTWORK", 4)
+        end
 
         if self.roleIcon then
             self.roleIcon:SetDrawLayer("ARTWORK", 4)

@@ -639,6 +639,91 @@ local function Register()
         layout:AddInitializer(cbdd);
     end
 
+    -- Damage Meter Bar Textures
+    do
+        local cbvariable, cbname = "DamageMeterBarTextures", "Damage Meter Bar Textures";
+        local cbtooltip = "Retexture Damage Meter Bars Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.damagemeterbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.damagemeterbartextures = value;
+            if UberUI.damageMeter then
+                UberUI.damageMeter:ForceTexture()
+            end
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "damagemeterbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "DamageMeterTexture", "Damage Meter Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Damage Meter bars\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                return gsub(uuidb.general.damagemetertexture, "_", " ");
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.damagemetertexture = value;
+            if UberUI.damageMeter then
+                UberUI.damageMeter:ForceTexture()
+            end
+        end
+
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "damagemetertexture", uuidb.general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        layout:AddInitializer(cbdd);
+    end
+
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Cooldown Manager"));
 
     -- Cooldown Bar Textures
