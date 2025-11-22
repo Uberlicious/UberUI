@@ -158,6 +158,33 @@ local function Register()
         layout:AddInitializer(cbdd);
     end
 
+    -- Show Extended Bar Textures
+    do
+        local variable, name = "ShowExtendedBarTextures", "Show Extended Bar Textures";
+        local tooltip = "Show additional options for setting individual frame textures";
+        local defaultValue = false;
+
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.showExtendedBarTextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.showExtendedBarTextures = value;
+            if SettingsPanel:IsShown() and SettingsPanel:GetCurrentCategory():GetID() == Settings.UBERUI_CATEGORY_ID then
+                SettingsPanel.Container.SettingsList:RepairDisplay(layout);
+            end
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "showExtendedBarTextures", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
     -- Player Bar Textures
     do
         local cbvariable, cbname = "PlayerBarTextures", "Player Bar Textures";
@@ -235,6 +262,7 @@ local function Register()
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip);
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
         layout:AddInitializer(cbdd);
     end
 
@@ -315,9 +343,11 @@ local function Register()
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip);
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
         layout:AddInitializer(cbdd);
     end
 
+    -- Focus Bar Textures
 
     -- Party Bar Textures
     do
@@ -396,6 +426,7 @@ local function Register()
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip);
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
         layout:AddInitializer(cbdd);
     end
 
@@ -476,6 +507,7 @@ local function Register()
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip);
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
         layout:AddInitializer(cbdd);
     end
 
@@ -556,6 +588,7 @@ local function Register()
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip)
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
         layout:AddInitializer(cbdd);
     end
 
@@ -636,6 +669,7 @@ local function Register()
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip)
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
         layout:AddInitializer(cbdd);
     end
 
@@ -721,6 +755,7 @@ local function Register()
 
         local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
             ddname, ddtooltip);
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
         layout:AddInitializer(cbdd);
     end
 
@@ -828,6 +863,209 @@ local function Register()
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "cooldownborders", uuidb.cooldown,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Damage Meters
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Damage Meters"));
+
+    -- Background
+    do
+        local variable, name = "dmBackground", "Show Background";
+        local tooltip = "Show/Hide damage meter background";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.damagemeters) then
+                return uuidb.damagemeters.background;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.damagemeters.background = value;
+            UberUI.damageMeter:ForceTexture();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "background", uuidb.damagemeters,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Alpha
+    do
+        local variable, name = "dmAlpha", "Background Alpha";
+        local tooltip = "Set damage meter background alpha";
+        local defaultValue = 50;
+        local minValue, maxValue, step = 0, 100, 1;
+        local function getValue()
+            if (uuidb.damagemeters) then
+                return uuidb.damagemeters.alpha * 100;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.damagemeters.alpha = value / 100;
+            UberUI.damageMeter:ForceTexture();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "alpha", uuidb.damagemeters,
+            Settings.VarType.Number, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+
+        local options = Settings.CreateSliderOptions(minValue, maxValue, step);
+        options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right);
+        Settings.CreateSlider(category, setting, options, tooltip);
+    end
+
+    -- Hide Overlay
+    do
+        local variable, name = "dmHideOverlay", "Hide Overlay";
+        local tooltip = "Hide damage meter bar overlay (shine effect)";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.damagemeters) then
+                return uuidb.damagemeters.hideoverlay;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.damagemeters.hideoverlay = value;
+            UberUI.damageMeter:ForceTexture();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hideoverlay", uuidb.damagemeters,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Hide Bar Background
+    do
+        local variable, name = "dmHideBarBackground", "Hide Bar Background";
+        local tooltip =
+        "Hide damage meter bar background texture";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.damagemeters) then
+                return uuidb.damagemeters.hidebarbackground;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.damagemeters.hidebarbackground = value;
+            UberUI.damageMeter:ForceTexture();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hidebarbackground", uuidb.damagemeters,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Icon Zoom
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Icon Zoom"));
+
+    -- Player Buffs/Debuffs
+    do
+        local variable, name = "zoomIconBuffs", "Player Buffs/Debuffs";
+        local tooltip = "Zoom in on player buffs and debuffs icons";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.zoomiconbuffs;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.zoomiconbuffs = value;
+            UberUI.buffsandauras:Refresh();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconbuffs", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Target Auras
+    do
+        local variable, name = "zoomIconTarget", "Target Auras";
+        local tooltip = "Zoom in on target auras icons";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.zoomicontarget;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.zoomicontarget = value;
+            UberUI.targetframes:ForceZoom();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomicontarget", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Compact Frames (Raid/Party)
+    do
+        local variable, name = "zoomIconCompact", "Compact Frames (Raid/Party)";
+        local tooltip = "Zoom in on compact party/raid auras icons";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.zoomiconcompact;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.zoomiconcompact = value;
+            UberUI.cuf:ForceZoom();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconcompact", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Standard Party Frames
+    do
+        local variable, name = "zoomIconParty", "Standard Party Frames";
+        local tooltip = "Zoom in on standard party auras icons";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.zoomiconparty;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.zoomiconparty = value;
+            UberUI.partyframes:ForceZoom();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconparty", uuidb.general,
             Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);

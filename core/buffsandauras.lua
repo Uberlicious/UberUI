@@ -6,19 +6,26 @@ function buffsandauras:StyleAuraButton(button)
         return
     end
 
-    if uuidb.general.buffauraborders then
-        local dc = uuidb.general.darkencolor
-        if button.DebuffBorder then
-            local r, g, b, a = button.DebuffBorder:GetVertexColor()
-            local noneColor = DebuffTypeColor["none"]
-            if r == noneColor.r and g == noneColor.g and b == noneColor.b then
-                button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    if uuidb.general.buffauraborders and button:IsShown() then
+        -- local dc = uuidb.general.darkencolor
+        -- if button.auraType == "Buff" and not button.DebuffBorder:IsShown() then
+        --     button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        --     button.DebuffBorder:Show()
+        -- elseif button.auraType == "Debuff" and not button.buttonInfo.debuffType then
+        --     button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        --     button.DebuffBorder:Show()
+        -- end
+
+        local inset = 0.07
+        for _, region in pairs({ button:GetRegions() }) do
+            -- Check if the region is a Texture object
+            if region:IsObjectType("Texture") then
+                -- This is the object we need!
+                local iconTexture = region
+
+                UberUI.general:ApplyIconZoom(iconTexture, uuidb.general.zoomiconbuffs)
+                break
             end
-            button.DebuffBorder:Show()
-        end
-        if button.TempEnchantBorder then
-            button.TempEnchantBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-            button.TempEnchantBorder:Show()
         end
     else
         if button.DebuffBorder then
@@ -26,6 +33,9 @@ function buffsandauras:StyleAuraButton(button)
         end
         if button.TempEnchantBorder then
             button.TempEnchantBorder:Hide()
+        end
+        if button.NormalTexture then
+            button.NormalTexture:Hide()
         end
     end
 end

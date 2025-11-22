@@ -8,7 +8,7 @@
 ## IconTexture: Interface/Addons/Uber UI/logo_32x32.blp
 ## AddonCompartmentFunc: OpenUUISettings
 ## SavedVariables: UberuiDB
-## Dependencies: Blizzard_Settings, Blizzard_BuffFrame
+## Dependencies: Blizzard_Settings, Blizzard_BuffFrame, Blizzard_ActionBar
 ## Category: Unit Frames
 
 config.lua

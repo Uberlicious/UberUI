@@ -4,9 +4,16 @@ local damageMeter = UberUI:CreateFrame("frame")
 function damageMeter:HookDamageMeter(damageMeterWindow)
     -- Color the header immediately
     local header = damageMeterWindow:GetHeader()
+    local dc = uuidb.general.darkencolor
     if header then
-        local dc = uuidb.general.darkencolor
         header:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
+
+
+    if uuidb.damagemeters.background then
+        damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
+    else
+        damageMeterWindow.Background:SetAlpha(0)
     end
 
     -- We are hooking the SetupEntry function of the damage meter window frame.
@@ -25,6 +32,37 @@ function damageMeter:HookDamageMeter(damageMeterWindow)
                 textureToUse = uuidb.general.texture
             end
             statusBar:SetStatusBarTexture(uuidb.statusbars[textureToUse])
+
+            local overlay
+            local barBackground
+            local bar
+            for k, v in pairs({ statusBar:GetRegions() }) do
+                if v:GetObjectType() == "Texture" then
+                    if v:GetDrawLayer() == "BACKGROUND" then
+                        background = v
+                    elseif v:GetDrawLayer() == "OVERLAY" then
+                        overlay = v
+                    elseif v:GetDrawLayer() == "ARTWORK" then
+                        bar = v
+                    end
+                end
+            end
+
+            if overlay then
+                if uuidb.damagemeters.hideoverlay then
+                    overlay:Hide()
+                else
+                    overlay:Show()
+                end
+            end
+
+            if background then
+                if uuidb.damagemeters.hidebarbackground then
+                    background:Hide()
+                else
+                    background:Show()
+                end
+            end
         end
     end)
 end
@@ -46,6 +84,11 @@ function damageMeter:ForceTexture()
         local windowName = "DamageMeterSessionWindow" .. i
         local damageMeterWindow = _G[windowName]
         if damageMeterWindow then
+            if uuidb.damagemeters.background then
+                damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
+            else
+                damageMeterWindow.Background:SetAlpha(0)
+            end
             -- Loop through all the entries in the scrollbox
             for _, frame in damageMeterWindow:EnumerateEntryFrames() do
                 local statusBar = frame:GetStatusBar()
@@ -57,6 +100,37 @@ function damageMeter:ForceTexture()
                         textureToUse = uuidb.general.texture
                     end
                     statusBar:SetStatusBarTexture(uuidb.statusbars[textureToUse])
+
+                    local overlay
+                    local background
+                    local bar
+                    for k, v in pairs({ statusBar:GetRegions() }) do
+                        if v:GetObjectType() == "Texture" then
+                            if v:GetDrawLayer() == "BACKGROUND" then
+                                background = v
+                            elseif v:GetDrawLayer() == "OVERLAY" then
+                                overlay = v
+                            elseif v:GetDrawLayer() == "ARTWORK" then
+                                bar = v
+                            end
+                        end
+                    end
+
+                    if overlay then
+                        if uuidb.damagemeters.hideoverlay then
+                            overlay:Hide()
+                        else
+                            overlay:Show()
+                        end
+                    end
+
+                    if background then
+                        if uuidb.damagemeters.hidebarbackground then
+                            background:Hide()
+                        else
+                            background:Show()
+                        end
+                    end
                 end
             end
         end

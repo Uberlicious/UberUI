@@ -61,4 +61,20 @@ function general:SetHealthColor(healthBar, unit, db)
     healthBar:SetStatusBarColor(0, 1, 0)
 end
 
+-- Safer ApplyIconZoom in Uber UI/core/generalfunctions.lua
+function general:ApplyIconZoom(textureObject, enable)
+    -- Check if the object is actually a texture before attempting the call
+    if textureObject and textureObject:IsObjectType("Texture") then
+        if enable then
+            local inset = 0.07
+            textureObject:SetTexCoord(inset, 1 - inset, inset, 1 - inset)
+        else
+            textureObject:SetTexCoord(0, 1, 0, 1)
+        end
+    else
+        -- This will help you track down which object is being passed incorrectly
+        print("ApplyIconZoom received non-Texture object: " .. tostring(textureObject))
+    end
+end
+
 UberUI.general = general
