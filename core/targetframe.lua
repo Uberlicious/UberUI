@@ -103,32 +103,6 @@ function targetframes:HealthManaBarTexture()
     end
 end
 
--- UpdateAuraFrame(frame, aura)
--- hooksecurefunc(TargetFrame, "UpdateAuraFrames", function(auraList, ...)
---     -- print(frame, aura)
---     -- DevTools_Dump(aura)
--- end)
-
--- hooksecurefunc(TargetFrame, "UpdateAuras", function(self)
---     -- 'self' here is usually the TargetFrame itself (TargetFrameBuffs, TargetFrameDebuffs)
-
---     -- Iterate through the buff buttons
---     local buffButtons = self.BuffFrame.buttons
---     for _, button in pairs(buffButtons) do
---         if button:IsShown() then
---             print("Buff: ", button)
---         end
---     end
-
---     -- Iterate through the debuff buttons
---     local debuffButtons = self.DebuffFrame.buttons
---     for _, button in pairs(debuffButtons) do
---         if button:IsShown() then
---             print("Debuff: ", button)
---         end
---     end
--- end)
-
 function targetframes:ZoomAuras()
     local dc = uuidb.general.darkencolor
     for _, child in pairs({ TargetFrame:GetChildren() }) do

@@ -1,3 +1,15 @@
+12.0.0.0:
+    - Update 12.0.0.
+    - Added "Icon Zoom" options to enlarge aura icons on Player, Target, Party, and Raid frames.
+        - Borders no longer can work correctly as you cannot differentiate between dispellable vs non-dispellable buffs.
+    - Added "Damage Meters" customization:
+        - Added options to texture damage meter bars.
+        - Added options to show/hide background and adjust transparency.
+        - Added options to hide the bar overlay (shine) and bar background texture.
+    - Improved "Bar Textures" settings with a new collapsible "Show Extended Bar Textures" option to declutter the menu.
+    - Fixed Bag Slot coloring on the main menu bar (including Backpack).
+    - Fixed various texture and coloring persistence issues.
+
 11.2.7.0:
     - Update for 11.2.7.
     - Add new Cooldown Manager for cooldown bars and icons customization.

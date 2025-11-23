@@ -16,6 +16,40 @@ function damageMeter:HookDamageMeter(damageMeterWindow)
         damageMeterWindow.Background:SetAlpha(0)
     end
 
+    damageMeterWindow:HookScript("OnEnter", function(self)
+        local onUpdate = self:GetScript("OnUpdate")
+        if onUpdate then
+            self:SetScript("OnUpdate", function()
+                local resizeButton = self:GetResizeButton();
+                local shouldResizeButtonBeShown = (self:IsMouseOver() or resizeButton:IsMouseOver() or self:IsResizing()) and
+                    self:CanMoveOrResize();
+
+                if shouldResizeButtonBeShown and resizeButton:GetAlpha() == 0 then
+                    self.ShowResizeButton:Play();
+                    self.EmphasizeScrollBar:Play();
+
+                    if uuidb.damagemeters.background then
+                        damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
+                    else
+                        damageMeterWindow.ShowBackground:Play()
+                    end
+                elseif not shouldResizeButtonBeShown and resizeButton:GetAlpha() > 0 then
+                    self:SetScript("OnUpdate", nil);
+
+                    local reverse = true;
+                    self.ShowResizeButton:Play(reverse);
+                    self.EmphasizeScrollBar:Play(reverse);
+
+                    if uuidb.damagemeters.background then
+                        damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
+                    else
+                        damageMeterWindow.ShowBackground:Play(reverse)
+                    end
+                end
+            end);
+        end
+    end)
+
     -- We are hooking the SetupEntry function of the damage meter window frame.
     -- This function is called for each row in the damage meter when it's created or updated.
     hooksecurefunc(damageMeterWindow, "SetupEntry", function(self, frame)
@@ -34,7 +68,7 @@ function damageMeter:HookDamageMeter(damageMeterWindow)
             statusBar:SetStatusBarTexture(uuidb.statusbars[textureToUse])
 
             local overlay
-            local barBackground
+            local background
             local bar
             for k, v in pairs({ statusBar:GetRegions() }) do
                 if v:GetObjectType() == "Texture" then
