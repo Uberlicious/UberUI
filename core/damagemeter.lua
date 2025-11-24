@@ -1,37 +1,38 @@
 local addon, ns = ...
 local damageMeter = UberUI:CreateFrame("frame")
 
-function damageMeter:HookDamageMeter(damageMeterWindow)
+function damageMeter:StyleWindow(window)
     -- Color the header immediately
-    local header = damageMeterWindow:GetHeader()
+    local header = window:GetHeader()
     local dc = uuidb.general.darkencolor
     if header then
         header:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 
-
     if uuidb.damagemeters.background then
-        damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
+        window.Background:SetAlpha(uuidb.damagemeters.alpha)
     else
-        damageMeterWindow.Background:SetAlpha(0)
+        window.Background:SetAlpha(0)
     end
 
-    damageMeterWindow:HookScript("OnEnter", function(self)
+    window:HookScript("OnEnter", function(self)
         local onUpdate = self:GetScript("OnUpdate")
         if onUpdate then
             self:SetScript("OnUpdate", function()
                 local resizeButton = self:GetResizeButton();
-                local shouldResizeButtonBeShown = (self:IsMouseOver() or resizeButton:IsMouseOver() or self:IsResizing()) and
-                    self:CanMoveOrResize();
+                local shouldResizeButtonBeShown = (self:IsMouseOver() or resizeButton:IsMouseOver() or self:IsResizing());
+                if self.CanMoveOrResize then
+                    shouldResizeButtonBeShown = shouldResizeButtonBeShown and self:CanMoveOrResize()
+                end
 
                 if shouldResizeButtonBeShown and resizeButton:GetAlpha() == 0 then
                     self.ShowResizeButton:Play();
                     self.EmphasizeScrollBar:Play();
 
                     if uuidb.damagemeters.background then
-                        damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
+                        window.Background:SetAlpha(uuidb.damagemeters.alpha)
                     else
-                        damageMeterWindow.ShowBackground:Play()
+                        window.ShowBackground:Play()
                     end
                 elseif not shouldResizeButtonBeShown and resizeButton:GetAlpha() > 0 then
                     self:SetScript("OnUpdate", nil);
@@ -41,63 +42,78 @@ function damageMeter:HookDamageMeter(damageMeterWindow)
                     self.EmphasizeScrollBar:Play(reverse);
 
                     if uuidb.damagemeters.background then
-                        damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
+                        window.Background:SetAlpha(uuidb.damagemeters.alpha)
                     else
-                        damageMeterWindow.ShowBackground:Play(reverse)
+                        window.ShowBackground:Play(reverse)
                     end
                 end
             end);
         end
     end)
+end
+
+function damageMeter:StyleEntry(frame)
+    local statusBar = frame:GetStatusBar()
+    if statusBar then
+        local textureToUse
+        if uuidb.general.damagemeterbartextures then
+            textureToUse = uuidb.general.damagemetertexture
+        else
+            textureToUse = uuidb.general.texture
+        end
+        statusBar:SetStatusBarTexture(uuidb.statusbars[textureToUse])
+
+        local overlay
+        local background
+        local bar
+        for _, v in pairs({ statusBar:GetRegions() }) do
+            if v:GetObjectType() == "Texture" then
+                if v:GetDrawLayer() == "BACKGROUND" then
+                    background = v
+                elseif v:GetDrawLayer() == "OVERLAY" then
+                    overlay = v
+                elseif v:GetDrawLayer() == "ARTWORK" then
+                    bar = v
+                end
+            end
+        end
+
+        if overlay then
+            if uuidb.damagemeters.hideoverlay then
+                overlay:Hide()
+            else
+                overlay:Show()
+            end
+        end
+
+        if background then
+            if uuidb.damagemeters.hidebarbackground then
+                background:Hide()
+            else
+                background:Show()
+            end
+        end
+    end
+end
+
+function damageMeter:TextureEntries(window)
+    -- Loop through all the entries in the scrollbox
+    for _, frame in window:EnumerateEntryFrames() do
+        self:StyleEntry(frame)
+    end
+end
+
+function damageMeter:HookDamageMeter(damageMeterWindow)
+    self:StyleWindow(damageMeterWindow)
+
+    if damageMeterWindow.SourceWindow then
+        self:StyleWindow(damageMeterWindow.SourceWindow)
+    end
 
     -- We are hooking the SetupEntry function of the damage meter window frame.
     -- This function is called for each row in the damage meter when it's created or updated.
     hooksecurefunc(damageMeterWindow, "SetupEntry", function(self, frame)
-        -- "self" in this context is the DamageMeterSessionWindow frame.
-        -- "frame" is the DamageMeterEntryTemplate frame.
-
-        -- Texture the status bar
-        local statusBar = frame:GetStatusBar()
-        if statusBar then
-            local textureToUse
-            if uuidb.general.damagemeterbartextures then
-                textureToUse = uuidb.general.damagemetertexture
-            else
-                textureToUse = uuidb.general.texture
-            end
-            statusBar:SetStatusBarTexture(uuidb.statusbars[textureToUse])
-
-            local overlay
-            local background
-            local bar
-            for k, v in pairs({ statusBar:GetRegions() }) do
-                if v:GetObjectType() == "Texture" then
-                    if v:GetDrawLayer() == "BACKGROUND" then
-                        background = v
-                    elseif v:GetDrawLayer() == "OVERLAY" then
-                        overlay = v
-                    elseif v:GetDrawLayer() == "ARTWORK" then
-                        bar = v
-                    end
-                end
-            end
-
-            if overlay then
-                if uuidb.damagemeters.hideoverlay then
-                    overlay:Hide()
-                else
-                    overlay:Show()
-                end
-            end
-
-            if background then
-                if uuidb.damagemeters.hidebarbackground then
-                    background:Hide()
-                else
-                    background:Show()
-                end
-            end
-        end
+        damageMeter:StyleEntry(frame)
     end)
 end
 
@@ -110,6 +126,21 @@ function damageMeter:HookAllDamageMeters()
             self:HookDamageMeter(damageMeterWindow)
         end
     end
+
+    if not self.mixinsHooked then
+        if DamageMeterSpellEntryMixin then
+            hooksecurefunc(DamageMeterSpellEntryMixin, "Init", function(self)
+                damageMeter:StyleEntry(self)
+            end)
+        end
+
+        if DamageMeterSourceEntryMixin then
+            hooksecurefunc(DamageMeterSourceEntryMixin, "Init", function(self)
+                damageMeter:StyleEntry(self)
+            end)
+        end
+        self.mixinsHooked = true
+    end
 end
 
 function damageMeter:ForceTexture()
@@ -118,54 +149,12 @@ function damageMeter:ForceTexture()
         local windowName = "DamageMeterSessionWindow" .. i
         local damageMeterWindow = _G[windowName]
         if damageMeterWindow then
-            if uuidb.damagemeters.background then
-                damageMeterWindow.Background:SetAlpha(uuidb.damagemeters.alpha)
-            else
-                damageMeterWindow.Background:SetAlpha(0)
-            end
-            -- Loop through all the entries in the scrollbox
-            for _, frame in damageMeterWindow:EnumerateEntryFrames() do
-                local statusBar = frame:GetStatusBar()
-                if statusBar then
-                    local textureToUse
-                    if uuidb.general.damagemeterbartextures then
-                        textureToUse = uuidb.general.damagemetertexture
-                    else
-                        textureToUse = uuidb.general.texture
-                    end
-                    statusBar:SetStatusBarTexture(uuidb.statusbars[textureToUse])
+            self:StyleWindow(damageMeterWindow)
+            self:TextureEntries(damageMeterWindow)
 
-                    local overlay
-                    local background
-                    local bar
-                    for k, v in pairs({ statusBar:GetRegions() }) do
-                        if v:GetObjectType() == "Texture" then
-                            if v:GetDrawLayer() == "BACKGROUND" then
-                                background = v
-                            elseif v:GetDrawLayer() == "OVERLAY" then
-                                overlay = v
-                            elseif v:GetDrawLayer() == "ARTWORK" then
-                                bar = v
-                            end
-                        end
-                    end
-
-                    if overlay then
-                        if uuidb.damagemeters.hideoverlay then
-                            overlay:Hide()
-                        else
-                            overlay:Show()
-                        end
-                    end
-
-                    if background then
-                        if uuidb.damagemeters.hidebarbackground then
-                            background:Hide()
-                        else
-                            background:Show()
-                        end
-                    end
-                end
+            if damageMeterWindow.SourceWindow then
+                self:StyleWindow(damageMeterWindow.SourceWindow)
+                self:TextureEntries(damageMeterWindow.SourceWindow)
             end
         end
     end
