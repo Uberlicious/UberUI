@@ -129,6 +129,9 @@ local function Register()
             value = gsub(value, " ", "_");
             uuidb.general.texture = value;
             UberUI.misc:AllFramesHealthManaTexture();
+            if UberUI.damageMeter then
+                UberUI.damageMeter:ForceTexture();
+            end
         end
 
         local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "texture", uuidb.general,
