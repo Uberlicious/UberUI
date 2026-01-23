@@ -483,7 +483,7 @@ local function Register()
         local function ddsetValue(self, value)
             value = gsub(value, " ", "_");
             uuidb.general.nameplatebartexture = value;
-            UberUI.misc:ForceNameplateTexture();
+            UberUI.nameplates:ForceNameplateTexture(value);
         end
 
         local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "nameplatebartexture", uuidb.general,

@@ -12,7 +12,7 @@ local MASK_OPTS = {
     insetL = 0, -- left crop
     insetT = 0, -- top crop (raise top edge)
     insetR = 0, -- right crop (pull right edge inward more)
-    insetB = 0, -- bottom crop
+    insetB = -1, -- bottom crop
     shiftX = 0, -- whole mask shift on X
     shiftY = 0, -- whole mask shift on Y (raise mask slightly)
 }
