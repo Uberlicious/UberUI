@@ -5,6 +5,7 @@ cuf = UberUI:CreateFrame("Frame");
 cuf:RegisterEvent("ADDON_LOADED")
 cuf:SetScript("OnEvent", function(self)
     self:set_hook();
+    self:HideRaidFrameTitles();
 end)
 
 local default_hook = false
@@ -68,8 +69,26 @@ cuf.default = function(self)
 end
 function cuf:set_hook()
     if not default_hook then
-        hooksecurefunc("CompactUnitFrame_UpdateHealthColor", UberUI.cuf.default)
+        if CompactUnitFrame_UpdateHealthColor then
+            hooksecurefunc("CompactUnitFrame_UpdateHealthColor", cuf.default)
+        end
+        if CompactUnitFrame_UpdateAll then
+            hooksecurefunc("CompactUnitFrame_UpdateAll", cuf.HideRaidFrameTitles)
+        end
         default_hook = true
+    end
+end
+
+function cuf:HideRaidFrameTitles()
+    for i = 1, 8 do
+        local frame = _G["CompactRaidGroup" .. i]
+        if frame and frame.title then
+            if uuidb.cuf.hideRaidTitle then
+                frame.title:Hide()
+            else
+                frame.title:Show()
+            end
+        end
     end
 end
 
@@ -140,7 +159,9 @@ end
 
 -- Hook the secure function that Blizzard uses to update auras on all compact unit frames
 -- (which includes party and raid frames).
-hooksecurefunc("CompactUnitFrame_UpdateAuras", ColorCompactFrameAuras)
+if CompactUnitFrame_UpdateAuras then
+    hooksecurefunc("CompactUnitFrame_UpdateAuras", ColorCompactFrameAuras)
+end
 
 function cuf:ForceZoom()
     if CompactRaidFrameContainer then
