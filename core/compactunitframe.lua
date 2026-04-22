@@ -5,6 +5,7 @@ cuf = UberUI:CreateFrame("Frame");
 cuf:RegisterEvent("ADDON_LOADED")
 cuf:SetScript("OnEvent", function(self)
     self:set_hook();
+    self:HideRaidFrameTitles();
 end)
 
 local default_hook = false
@@ -68,8 +69,31 @@ cuf.default = function(self)
 end
 function cuf:set_hook()
     if not default_hook then
-        hooksecurefunc("CompactUnitFrame_UpdateHealthColor", UberUI.cuf.default)
+        if type(CompactUnitFrame_UpdateHealthColor) == "function" then
+            hooksecurefunc("CompactUnitFrame_UpdateHealthColor", cuf.default)
+        elseif CompactUnitFrameMixin and type(CompactUnitFrameMixin.UpdateHealthColor) == "function" then
+            hooksecurefunc(CompactUnitFrameMixin, "UpdateHealthColor", cuf.default)
+        end
+        if type(CompactUnitFrame_UpdateAll) == "function" then
+            hooksecurefunc("CompactUnitFrame_UpdateAll", cuf.HideRaidFrameTitles)
+        elseif CompactUnitFrameMixin and type(CompactUnitFrameMixin.UpdateAll) == "function" then
+            hooksecurefunc(CompactUnitFrameMixin, "UpdateAll", cuf.HideRaidFrameTitles)
+        end
         default_hook = true
+    end
+end
+
+function cuf:HideRaidFrameTitles()
+    if not uuidb or not uuidb.cuf then return end
+    for i = 1, 8 do
+        local frame = _G["CompactRaidGroup" .. i]
+        if frame and frame.title then
+            if uuidb.cuf.hideRaidTitle then
+                frame.title:Hide()
+            else
+                frame.title:Show()
+            end
+        end
     end
 end
 
@@ -140,7 +164,11 @@ end
 
 -- Hook the secure function that Blizzard uses to update auras on all compact unit frames
 -- (which includes party and raid frames).
-hooksecurefunc("CompactUnitFrame_UpdateAuras", ColorCompactFrameAuras)
+if type(CompactUnitFrame_UpdateAuras) == "function" then
+    hooksecurefunc("CompactUnitFrame_UpdateAuras", ColorCompactFrameAuras)
+elseif CompactUnitFrameMixin and type(CompactUnitFrameMixin.UpdateAuras) == "function" then
+    hooksecurefunc(CompactUnitFrameMixin, "UpdateAuras", ColorCompactFrameAuras)
+end
 
 function cuf:ForceZoom()
     if CompactRaidFrameContainer then

@@ -10,9 +10,9 @@ function damageMeter:StyleWindow(window)
     end
 
     if uuidb.damagemeters.background then
-        window.Background:SetAlpha(uuidb.damagemeters.alpha)
+        if window.Background then window.Background:SetAlpha(uuidb.damagemeters.alpha) end
     else
-        window.Background:SetAlpha(0)
+        if window.Background then window.Background:SetAlpha(0) end
     end
 
     window:HookScript("OnEnter", function(self)
@@ -30,9 +30,9 @@ function damageMeter:StyleWindow(window)
                     self.EmphasizeScrollBar:Play();
 
                     if uuidb.damagemeters.background then
-                        window.Background:SetAlpha(uuidb.damagemeters.alpha)
+                        if window.Background then window.Background:SetAlpha(uuidb.damagemeters.alpha) end
                     else
-                        window.ShowBackground:Play()
+                        if window.ShowBackground then window.ShowBackground:Play() end
                     end
                 elseif not shouldResizeButtonBeShown and resizeButton:GetAlpha() > 0 then
                     self:SetScript("OnUpdate", nil);
@@ -42,9 +42,9 @@ function damageMeter:StyleWindow(window)
                     self.EmphasizeScrollBar:Play(reverse);
 
                     if uuidb.damagemeters.background then
-                        window.Background:SetAlpha(uuidb.damagemeters.alpha)
+                        if window.Background then window.Background:SetAlpha(uuidb.damagemeters.alpha) end
                     else
-                        window.ShowBackground:Play(reverse)
+                        if window.ShowBackground then window.ShowBackground:Play(reverse) end
                     end
                 end
             end);

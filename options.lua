@@ -1,5 +1,5 @@
 --[[--------------------------------------------------------------------
-	Uber UI
+	Uber mUI
 	Darkens default UI
 	Created and Maintained by Uberlicious
 ----------------------------------------------------------------------]]
@@ -1124,6 +1124,32 @@ local function Register()
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Raid Frames"));
+
+    -- Hide Raid Frame Titles
+    do
+        local variable, name = "HideRaidFrameTitles", "Hide Raid Frame Titles";
+        local tooltip = "Hide the title text on raid frames e.g. 'Group 1'"
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.cuf) then
+                return uuidb.cuf.hideRaidTitle;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.cuf.hideRaidTitle = value;
+            UberUI.cuf:HideRaidFrameTitles();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "hideRaidTitle", uuidb.cuf,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Action Bars"));
 
     -- Hide HotKeys
@@ -1227,6 +1253,8 @@ local function Register()
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Nameplates"));
+
     -- Hide Nameplate Selection Glow
     do
         local variable, name = "HideNPSelctionGlow", "Hide Nameplate Selection Glow";
@@ -1251,7 +1279,7 @@ local function Register()
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
-    -- Hide Nameplate Selection Glow
+    -- Small Friendly Nameplates
     do
         local variable, name = "SmallFriendlyNampelates", "Small Friendly Nameplates";
         local tooltip = "Make friendly nameplates half the size\n\n|cffff0000Requires reload on disable"
@@ -1270,6 +1298,60 @@ local function Register()
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "smallfriendlynameplate", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue);
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Friendly Nameplate Raid Target Scale
+    do
+        local variable, name, tooltip = "FriendlyNameplateRaidTargetScale", "Friendly Nameplate Raid Target Scale",
+            "Scale of the raid target icon on friendly nameplates";
+        local minValue, maxValue, step = 0.5, 10, 0.1;
+        local options = Settings.CreateSliderOptions(minValue, maxValue, step);
+        options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(value)
+            return string.format("%.1f", value)
+        end);
+        local defaultValue = 1;
+
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.nameplateraidtargetscale or defaultValue;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.nameplateraidtargetscale = value;
+            UberUI.nameplates:UpdateAllNameplateRaidTargetScale();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "nameplateraidtargetscale", uuidb.general,
+            Settings.VarType.Number, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateSlider(category, setting, options, tooltip);
+    end
+
+    -- Anchor Friendly Raid Icon Top
+    do
+        local variable, name = "AnchorFriendlyRaidIconTop", "Anchor Friendly Raid Icon Top";
+        local tooltip = "Anchor the raid icon to the top center of the nameplate";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.nameplateraidtargettopanchor;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.nameplateraidtargettopanchor = value;
+            UberUI.nameplates:UpdateAllNameplateRaidTargetScale();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "nameplateraidtargettopanchor", uuidb.general,
             Settings.VarType.Boolean, name, defaultValue);
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
@@ -1465,7 +1547,6 @@ local function Register()
             UberUI.misc:AllFramesHealthColor();
         end
 
-        -- Class Color Enemy Nameplates
         local setting = Settings.RegisterAddOnSetting(category, variable, cvar, uuidb.general,
             Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
@@ -1477,7 +1558,7 @@ local function Register()
         local variable, name = "ccEnemyNameplate", "Class Color Enemy Nameplates";
         local tooltip = "Class color enemy nameplates"
         local defaultValue = true;
-        local cvar = "nameplateShowClassColor";
+        local cvar = "nameplateShowEnemyClassColor";
         local function getValue()
             return strtobool[GetCVar(cvar)];
         end
@@ -1487,8 +1568,7 @@ local function Register()
             UberUI.misc:AllFramesHealthColor();
         end
 
-        -- Class Color Friendly Nameplates
-        local setting = Settings.RegisterAddOnSetting(category, variable, "ShowClassColorInNameplate", uuidb.general,
+        local setting = Settings.RegisterAddOnSetting(category, variable, cvar, uuidb.general,
             Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
