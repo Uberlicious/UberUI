@@ -1,5 +1,5 @@
 --[[--------------------------------------------------------------------
-	Uber UI
+	Uber mUI
 	Darkens default UI
 	Created and Maintained by Uberlicious
 ----------------------------------------------------------------------]]
@@ -1027,28 +1027,7 @@ local function Register()
     end
 
     -- Compact Frames (Raid/Party)
-    do
-        local variable, name = "zoomIconCompact", "Compact Frames (Raid/Party)";
-        local tooltip = "Zoom in on compact party/raid auras icons";
-        local defaultValue = false;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.zoomiconcompact;
-            else
-                return defaultValue;
-            end
-        end
 
-        local function setValue(self, value)
-            uuidb.general.zoomiconcompact = value;
-            UberUI.cuf:ForceZoom();
-        end
-
-        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconcompact", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
 
     -- Standard Party Frames
     do

@@ -10,46 +10,10 @@ function damageMeter:StyleWindow(window)
     end
 
     if uuidb.damagemeters.background then
-        window.Background:SetAlpha(uuidb.damagemeters.alpha)
+        if window.Background then window.Background:SetAlpha(uuidb.damagemeters.alpha) end
     else
-        window.Background:SetAlpha(0)
+        if window.Background then window.Background:SetAlpha(0) end
     end
-
-    window:HookScript("OnEnter", function(self)
-        local onUpdate = self:GetScript("OnUpdate")
-        if onUpdate then
-            self:SetScript("OnUpdate", function()
-                local resizeButton = self:GetResizeButton();
-                local shouldResizeButtonBeShown = (self:IsMouseOver() or resizeButton:IsMouseOver() or self:IsResizing());
-                if self.CanMoveOrResize then
-                    shouldResizeButtonBeShown = shouldResizeButtonBeShown and self:CanMoveOrResize()
-                end
-
-                if shouldResizeButtonBeShown and resizeButton:GetAlpha() == 0 then
-                    self.ShowResizeButton:Play();
-                    self.EmphasizeScrollBar:Play();
-
-                    if uuidb.damagemeters.background then
-                        window.Background:SetAlpha(uuidb.damagemeters.alpha)
-                    else
-                        window.ShowBackground:Play()
-                    end
-                elseif not shouldResizeButtonBeShown and resizeButton:GetAlpha() > 0 then
-                    self:SetScript("OnUpdate", nil);
-
-                    local reverse = true;
-                    self.ShowResizeButton:Play(reverse);
-                    self.EmphasizeScrollBar:Play(reverse);
-
-                    if uuidb.damagemeters.background then
-                        window.Background:SetAlpha(uuidb.damagemeters.alpha)
-                    else
-                        window.ShowBackground:Play(reverse)
-                    end
-                end
-            end);
-        end
-    end)
 end
 
 function damageMeter:StyleEntry(frame)
