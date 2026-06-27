@@ -12,3 +12,8 @@
 
 12.0.0.1:
     - Fix nameplate texture overriding call in options menu
+
+12.0.7:
+    - Updated for WoW Patch 12.0.7.
+    - Added new customization options to independently texture the Personal Resource Display bar.
+    - Added an option to darken the Personal Resource Display border texture.

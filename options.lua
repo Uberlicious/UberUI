@@ -1027,8 +1027,28 @@ local function Register()
     end
 
     -- Compact Frames (Raid/Party)
+    do
+        local variable, name = "zoomIconCompact", "Compact Raid/Party Frames";
+        local tooltip = "Zoom in on compact raid/party auras icons";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.zoomiconcompact;
+            else
+                return defaultValue;
+            end
+        end
 
+        local function setValue(self, value)
+            uuidb.general.zoomiconcompact = value;
+            UberUI.cuf:ForceZoom();
+        end
 
+        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconcompact", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
     -- Standard Party Frames
     do
         local variable, name = "zoomIconParty", "Standard Party Frames";
@@ -1249,7 +1269,7 @@ local function Register()
 
         local function setValue(self, value)
             uuidb.general.hidenameplateglow = value;
-            UberUI.misc:NameplateTexture();
+            if UberUI.nameplates then UberUI.nameplates:ForceNameplateTexture() end
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "hidenameplateglow", uuidb.general,
@@ -1360,6 +1380,116 @@ local function Register()
             Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Personal Resource Display"));
+
+    -- Darken Personal Resource Border
+    do
+        local variable, name = "darkenpersonalresourceborder", "Darken Personal Resource Border";
+        local tooltip = "Darkens the border texture of the Personal Resource Display\n\n|cffff0000Requires reload";
+        local defaultValue = true;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.darkenpersonalresourceborder;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.darkenpersonalresourceborder = value;
+            if UberUI.personalresource then UberUI.personalresource:ForceTexture() end
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "darkenpersonalresourceborder", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
+    -- Personal Resource Bar Textures
+    do
+        local cbvariable, cbname = "PersonalResourceBarTextures", "Personal Resource Bar Textures";
+        local cbtooltip = "Retexture Personal Resource Display Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.personalresourcebartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.personalresourcebartextures = value;
+            if UberUI.personalresource then UberUI.personalresource:ForceTexture() end
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "personalresourcebartextures",
+            uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "PersonalResourceTexture", "Personal Resource Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Personal Resource Display\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                return gsub(uuidb.general.personalresourcebartexture, "_", " ");
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.personalresourcebartexture = value;
+            if UberUI.personalresource then UberUI.personalresource:ForceTexture() end
+        end
+
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "personalresourcebartexture", uuidb
+            .general,
+            Settings.VarType.Number,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        -- REMOVED predicate so it's always visible
+        layout:AddInitializer(cbdd);
     end
 
     -- Color options
@@ -1553,29 +1683,7 @@ local function Register()
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
-    -- Class Color Personal Resource
-    do
-        local variable, name = "ccPersonalResource", "Class Color Personal Resource";
-        local tooltip = "Class colors the personal resource health bar\n\n|cffff0000Requires reload";
-        local defaultValue = true;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.ccpersonalresource;
-            else
-                return defaultValue;
-            end
-        end
 
-        local function setValue(self, value)
-            uuidb.general.ccpersonalresource = value;
-            UberUI.misc:NameplateTexture();
-        end
-
-        local setting = Settings.RegisterAddOnSetting(category, variable, "ccpersonalresource", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
 
     -- Class Color Arena
     do

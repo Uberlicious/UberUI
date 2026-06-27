@@ -7,15 +7,6 @@ function buffsandauras:StyleAuraButton(button)
     end
 
     if uuidb.general.buffauraborders and button:IsShown() then
-        -- local dc = uuidb.general.darkencolor
-        -- if button.auraType == "Buff" and not button.DebuffBorder:IsShown() then
-        --     button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        --     button.DebuffBorder:Show()
-        -- elseif button.auraType == "Debuff" and not button.buttonInfo.debuffType then
-        --     button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        --     button.DebuffBorder:Show()
-        -- end
-
         local inset = 0.07
         for _, region in pairs({ button:GetRegions() }) do
             -- Check if the region is a Texture object

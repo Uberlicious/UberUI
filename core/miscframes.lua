@@ -130,6 +130,7 @@ function misc:AllFramesHealthManaTexture()
     if UberUI.partyframes then UberUI.partyframes:HealthManaBarTexture() end
     if UberUI.playerframes then UberUI.playerframes:ColorAlternatePower() end
     if UberUI.arenaframes then UberUI.arenaframes:LoopFrames() end
+    if UberUI.personalresource then UberUI.personalresource:ForceTexture() end
 end
 
 UberUI.misc = misc
