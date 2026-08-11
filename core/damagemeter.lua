@@ -73,12 +73,6 @@ function damageMeter:HookDamageMeter(damageMeterWindow)
     if damageMeterWindow.SourceWindow then
         self:StyleWindow(damageMeterWindow.SourceWindow)
     end
-
-    -- We are hooking the SetupEntry function of the damage meter window frame.
-    -- This function is called for each row in the damage meter when it's created or updated.
-    hooksecurefunc(damageMeterWindow, "SetupEntry", function(self, frame)
-        damageMeter:StyleEntry(frame)
-    end)
 end
 
 function damageMeter:HookAllDamageMeters()
@@ -92,6 +86,12 @@ function damageMeter:HookAllDamageMeters()
     end
 
     if not self.mixinsHooked then
+        if DamageMeterSessionWindowMixin then
+            hooksecurefunc(DamageMeterSessionWindowMixin, "SetupEntry", function(self, frame)
+                damageMeter:StyleEntry(frame)
+            end)
+        end
+
         if DamageMeterSpellEntryMixin then
             hooksecurefunc(DamageMeterSpellEntryMixin, "Init", function(self)
                 damageMeter:StyleEntry(self)

@@ -17,3 +17,7 @@
     - Updated for WoW Patch 12.0.7.
     - Added new customization options to independently texture the Personal Resource Display bar.
     - Added an option to darken the Personal Resource Display border texture.
+
+12.1.0:
+    - Fixed UI taint and errors during combat by deferring frame updates until combat ends (arena, party, player, and target frames).
+    - Updated class color retrieval methods for improved compatibility.

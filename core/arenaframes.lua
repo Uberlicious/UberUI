@@ -6,6 +6,13 @@ arenaframes:RegisterEvent("PLAYER_ENTERING_WORLD")
 arenaframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 arenaframes:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 arenaframes:SetScript("OnEvent", function(self, event, addon)
+    if InCombatLockdown() then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    if event == "PLAYER_REGEN_ENABLED" then
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
     arenaframes:LoopFrames();
     arenaframes:NameplateNumbers();
     arenaframes:SetVisibility();

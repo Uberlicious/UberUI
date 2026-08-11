@@ -12,8 +12,9 @@ local function ApplyDarkenColor(region)
     region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
 end
 
-local class = UnitClass("player")
-local classcolor = RAID_CLASS_COLORS[select(2, UnitClass("player"))]
+local localizedClass, englishClass = UnitClass("player")
+local classcolor = englishClass and ((C_ClassColor and C_ClassColor.GetClassColor(englishClass)) or (GetClassColorObj and GetClassColorObj(englishClass)) or RAID_CLASS_COLORS[englishClass])
+local class = localizedClass
 local pvphook = false;
 
 playerframes = UberUI:CreateFrame("frame")
@@ -31,7 +32,14 @@ playerframes:RegisterEvent("PLAYER_GAINS_VEHICLE_DATA")
 playerframes:RegisterEvent("PVP_MATCH_ACTIVE")
 playerframes:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 playerframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-playerframes:SetScript("OnEvent", function(self)
+playerframes:SetScript("OnEvent", function(self, event)
+    if InCombatLockdown() then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    if event == "PLAYER_REGEN_ENABLED" then
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
     playerframes:Color();
     playerframes:HealthBarColor();
     playerframes:HealthManaBarTexture();

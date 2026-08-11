@@ -7,6 +7,13 @@ partyframes:RegisterEvent("PLAYER_ENTERING_WORLD")
 partyframes:RegisterEvent("GROUP_ROSTER_UPDATE")
 
 partyframes:SetScript("OnEvent", function(self, event)
+    if InCombatLockdown() then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    if event == "PLAYER_REGEN_ENABLED" then
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
     partyframes:Color();
     partyframes:HealthBarColor();
     partyframes:HealthManaBarTexture();
@@ -28,7 +35,8 @@ function partyframes:HealthBarColor()
         if (p.HealthBarContainer and p.HealthBarContainer.HealthBar) then
             local idx = p.unit;
             if (UnitIsConnected(idx)) then
-                local classColor = RAID_CLASS_COLORS[select(2, UnitClass(idx))];
+                local _, class = UnitClass(idx)
+                local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class]);
                 if (classColor ~= nil) then
                     p.HealthBarContainer.HealthBar:SetStatusBarDesaturated(true);
                     p.HealthBarContainer.HealthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b,

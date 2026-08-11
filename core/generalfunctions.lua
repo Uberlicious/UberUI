@@ -32,7 +32,7 @@ function general:SetHealthColor(healthBar, unit, db)
 
     if canUseClassColor then
         local _, class = UnitClass(unit)
-        local classColor = RAID_CLASS_COLORS[class]
+        local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class])
         if classColor then
             if (db.classcolorenemy and not isFriendly) or (db.classcolorfriendly and isFriendly) then
                 healthBar:SetStatusBarDesaturated(true)

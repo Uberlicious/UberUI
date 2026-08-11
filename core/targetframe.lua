@@ -25,6 +25,13 @@ targetframes:RegisterUnitEvent("UNIT_DISPLAYPOWER", "target")
 targetframes:RegisterUnitEvent("UNIT_POWER_UPDATE", "target")
 targetframes:RegisterUnitEvent("UNIT_MAXPOWER", "target")
 targetframes:SetScript("OnEvent", function(self, event)
+    if InCombatLockdown() then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    if event == "PLAYER_REGEN_ENABLED" then
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
     targetframes:Color();
     targetframes:HealthBarColor();
     targetframes:HealthManaBarTexture();

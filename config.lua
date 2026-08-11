@@ -10,7 +10,8 @@ local addon, ns = ...
 UberUI = {}
 uuidb = {}
 
-local classcolor = RAID_CLASS_COLORS[select(2, UnitClass("player"))]
+local _, class = UnitClass("player")
+local classcolor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class])
 -----------------------------
 -- DEFAULTS
 -----------------------------
