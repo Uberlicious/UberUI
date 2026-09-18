@@ -53,17 +53,20 @@ function cdManager:Texture()
     if not BuffBarCooldownViewer:IsShown() then return end
     if not uuidb or not uuidb.statusbars or not uuidb.general then return end
 
-    local texture
-    if uuidb.cooldown.bartextures then
-        if uuidb.cooldown.bartexture ~= "Blizzard" then
-            texture = uuidb.statusbars[uuidb.cooldown.bartexture]
-        end
+    local applyCustomLook = false
+    local texture = nil
+
+    if uuidb.general.cooldownbartextures and uuidb.general.cooldownbartexture ~= "Blizzard" then
+        applyCustomLook = true
+        texture = uuidb.statusbars[uuidb.general.cooldownbartexture]
     elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+        applyCustomLook = true
         texture = uuidb.statusbars[uuidb.general.texture]
     end
 
     if not texture then return end
 
+    if not BuffBarCooldownViewer then return end
     local children = { BuffBarCooldownViewer:GetChildren() }
     if #children == 0 then return end
 
@@ -123,15 +126,15 @@ function cdManager:Color()
                 end
             end
         end
-        DestroyBorders(BuffBarCooldownViewer)
-        DestroyBorders(BuffIconCooldownViewer)
-        DestroyBorders(UtilityCooldownViewer)
-        DestroyBorders(EssentialCooldownViewer)
+        if BuffBarCooldownViewer then DestroyBorders(BuffBarCooldownViewer) end
+        if BuffIconCooldownViewer then DestroyBorders(BuffIconCooldownViewer) end
+        if UtilityCooldownViewer then DestroyBorders(UtilityCooldownViewer) end
+        if EssentialCooldownViewer then DestroyBorders(EssentialCooldownViewer) end
         return
     end
 
     local dc = uuidb.general.darkencolor
-    local tx = MultiBarBottomRightButton1NormalTexture:GetAtlas()
+    local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
     local function CreateBorder(parent, anchor, tl, br)
         local holder
@@ -144,7 +147,7 @@ function cdManager:Color()
         local borderTexture = holder:CreateTexture(nil, "OVERLAY", nil, -8)
         borderTexture:SetPoint("TOPLEFT", anchor, "TOPLEFT", tl, -tl)
         borderTexture:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", br, -br)
-        borderTexture:SetAtlas(tx)
+        if tx then borderTexture:SetAtlas(tx) end
         borderTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         return borderTexture
     end

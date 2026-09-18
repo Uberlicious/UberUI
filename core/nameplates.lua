@@ -184,9 +184,11 @@ function nameplates:UpdateNameplateSize()
     end
 end
 
-hooksecurefunc(NamePlateUnitFrameMixin, "OnLoad", function(self)
-    UberUI.nameplates:OnNamePlateLoad(self)
-end)
+if NamePlateUnitFrameMixin then
+    hooksecurefunc(NamePlateUnitFrameMixin, "OnLoad", function(self)
+        UberUI.nameplates:OnNamePlateLoad(self)
+    end)
+end
 
 local f = CreateFrame("Frame")
 f:RegisterEvent("NAME_PLATE_UNIT_ADDED")

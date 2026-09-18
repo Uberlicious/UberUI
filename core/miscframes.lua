@@ -29,8 +29,13 @@ end)
 
 function misc:EndCaps()
     local dc = uuidb.general.darkencolor;
-    MainActionBar.EndCaps.RightEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-    MainActionBar.EndCaps.LeftEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    if MainActionBar and MainActionBar.EndCaps then
+        MainActionBar.EndCaps.RightEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        MainActionBar.EndCaps.LeftEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    else
+        if MainMenuBarLeftEndCap then MainMenuBarLeftEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
+        if MainMenuBarRightEndCap then MainMenuBarRightEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
+    end
 end
 
 function misc:StatusTrackingBars()
@@ -39,25 +44,34 @@ function misc:StatusTrackingBars()
     local containers = { MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }
     for _, container in ipairs(containers) do
         if container then
-            container.BarFrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            if container.BarFrameTexture then container.BarFrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
 
-            -- Also find the XP bar to darken its exhaustion tick
             for _, bar in ipairs({ container:GetChildren() }) do
-                if bar.barIndex and bar.barIndex == StatusTrackingBarInfo.BarsEnum.Experience and bar.ExhaustionTick and bar.ExhaustionTick.Normal then
+                if bar.barIndex and StatusTrackingBarInfo and bar.barIndex == StatusTrackingBarInfo.BarsEnum.Experience and bar.ExhaustionTick and bar.ExhaustionTick.Normal then
                     bar.ExhaustionTick.Normal:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
                 end
             end
         end
     end
+    
+    if MainMenuExpBar and MainMenuExpBar.Texture then
+        -- Handle classic exp bar if needed
+    end
+    if ReputationWatchBar and ReputationWatchBar.StatusBar then
+        -- Handle classic rep bar if needed
+    end
 end
 
 function misc:ObjectiveTrackerFrames()
     local dc = uuidb.general.darkencolor
-    ObjectiveTrackerFrame.Header.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-
-    for _, frame in ipairs({ ObjectiveTrackerFrame:GetChildren() }) do
-        if frame.Header then
-            frame.Header.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    if ObjectiveTrackerFrame then
+        if ObjectiveTrackerFrame.Header and ObjectiveTrackerFrame.Header.Background then
+            ObjectiveTrackerFrame.Header.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        end
+        for _, frame in ipairs({ ObjectiveTrackerFrame:GetChildren() }) do
+            if frame.Header and frame.Header.Background then
+                frame.Header.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            end
         end
     end
 end
@@ -90,16 +104,33 @@ function misc:BagSlots()
         misc.hookedBags = true
     end
 
-    for _, bag in ipairs({ BagsBar:GetChildren() }) do
-        local r, g, b = dc.r, dc.g, dc.b
-        if bag:GetName() == "MainMenuBarBackpackButton" then
-            r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
-        end
+    if BagsBar then
+        for _, bag in ipairs({ BagsBar:GetChildren() }) do
+            local r, g, b = dc.r, dc.g, dc.b
+            if bag:GetName() == "MainMenuBarBackpackButton" then
+                r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
+            end
 
-        if bag:GetName() and _G[bag:GetName() .. "NormalTexture"] then
-            _G[bag:GetName() .. "NormalTexture"]:SetVertexColor(r, g, b, dc.a)
-        elseif bag.NormalTexture then
-            bag.NormalTexture:SetVertexColor(r, g, b, dc.a)
+            if bag:GetName() and _G[bag:GetName() .. "NormalTexture"] then
+                _G[bag:GetName() .. "NormalTexture"]:SetVertexColor(r, g, b, dc.a)
+            elseif bag.NormalTexture then
+                bag.NormalTexture:SetVertexColor(r, g, b, dc.a)
+            end
+        end
+    else
+        for i = 0, 3 do
+            local bag = _G["CharacterBag"..i.."Slot"]
+            if bag then
+                local r, g, b = dc.r, dc.g, dc.b
+                if _G[bag:GetName() .. "NormalTexture"] then
+                    _G[bag:GetName() .. "NormalTexture"]:SetVertexColor(r, g, b, dc.a)
+                end
+            end
+        end
+        local backpack = MainMenuBarBackpackButton
+        if backpack and _G["MainMenuBarBackpackButtonNormalTexture"] then
+            local r, g, b = (dc.r + 1) / 2, (dc.g + 1) / 2, (dc.b + 1) / 2
+            _G["MainMenuBarBackpackButtonNormalTexture"]:SetVertexColor(r, g, b, dc.a)
         end
     end
 end

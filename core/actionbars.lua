@@ -39,26 +39,40 @@ function actionbars:Color()
         end
     end
 
-    MainActionBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    if MainActionBar and MainActionBar.BorderArt then
+        MainActionBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    else
+        for i = 0, 3 do
+            local tex = _G["MainMenuBarTexture"..i]
+            if tex then tex:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
+        end
+    end
 
     local function modButton(button, secondaryBar)
+        if not button then return end
         local action = button.action;
         local texture = nil;
         if (action) then
             texture = GetActionTexture(action);
         end
 
-        button.NormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-        if (uuidb.general.hidehotkeys) then
-            button.HotKey:Hide();
-        elseif (texture or secondaryBar) then
-            button.HotKey:Show();
+        if button.NormalTexture then
+            button.NormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        end
+        if button.HotKey then
+            if (uuidb.general.hidehotkeys) then
+                button.HotKey:Hide();
+            elseif (texture or secondaryBar) then
+                button.HotKey:Show();
+            end
         end
 
-        if (uuidb.general.hidemacros) then
-            button.Name:Hide();
-        else
-            button.Name:Show();
+        if button.Name then
+            if (uuidb.general.hidemacros) then
+                button.Name:Hide();
+            else
+                button.Name:Show();
+            end
         end
     end
 

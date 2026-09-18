@@ -29,27 +29,53 @@ focusframes:SetScript("OnEvent", function(self, event)
 end)
 
 function focusframes:Color()
-    ApplyDarkenColor(FocusFrame.TargetFrameContainer.FrameTexture)
-    ApplyDarkenColor(FocusFrameSpellBar.Border)
-    ApplyDarkenColor(FocusFrameToT.FrameTexture)
+    if not FocusFrame then return end
+    if FocusFrame.TargetFrameContainer then
+        ApplyDarkenColor(FocusFrame.TargetFrameContainer.FrameTexture)
+    elseif FocusFrameTextureFrameTexture then
+        ApplyDarkenColor(FocusFrameTextureFrameTexture)
+    end
+    
+    if FocusFrameSpellBar and FocusFrameSpellBar.Border then
+        ApplyDarkenColor(FocusFrameSpellBar.Border)
+    end
+    
+    if FocusFrameToT and FocusFrameToT.FrameTexture then
+        ApplyDarkenColor(FocusFrameToT.FrameTexture)
+    elseif FocusFrameToTTextureFrameTexture then
+        ApplyDarkenColor(FocusFrameToTTextureFrameTexture)
+    end
 
-    if uuidb.general.hiderepcolor then
-        FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide()
-    else
-        FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show()
+    if FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentMain and FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor then
+        if uuidb.general.hiderepcolor then
+            FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide()
+        else
+            FocusFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show()
+        end
     end
 end
 
 function focusframes:HealthBarColor()
-    local healthBar = FocusFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar;
-    UberUI.general:SetHealthColor(healthBar, "focus", uuidb.focusframes);
+    if not FocusFrame then return end
+    local healthBar = (FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentMain and FocusFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar) or FocusFrameHealthBar;
+    if healthBar then
+        UberUI.general:SetHealthColor(healthBar, "focus", uuidb.focusframes);
+    end
 
-    local healthBar = FocusFrameToT.HealthBar;
-    UberUI.general:SetHealthColor(healthBar, "focustarget", uuidb.focusframes);
+    local totHealthBar = (FocusFrameToT and FocusFrameToT.HealthBar) or FocusFrameToTHealthBar;
+    if totHealthBar then
+        UberUI.general:SetHealthColor(totHealthBar, "focustarget", uuidb.focusframes);
+    end
 end
 
 function focusframes:HealthManaBarTexture()
-    local focusFrame = FocusFrame.TargetFrameContent.TargetFrameContentMain;
+    if not FocusFrame then return end
+    local focusFrameMain = FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentMain;
+    local healthBar = (focusFrameMain and focusFrameMain.HealthBarsContainer.HealthBar) or FocusFrameHealthBar;
+    local manaBar = (focusFrameMain and focusFrameMain.ManaBar) or FocusFrameManaBar;
+    
+    local totHealthBar = (FocusFrameToT and FocusFrameToT.HealthBar) or FocusFrameToTHealthBar;
+    local totManaBar = (FocusFrameToT and FocusFrameToT.ManaBar) or FocusFrameToTManaBar;
 
     local textureToApply
     if uuidb.general.focusbartextures then
@@ -61,25 +87,23 @@ function focusframes:HealthManaBarTexture()
     end
 
     if textureToApply then
-        focusFrame.HealthBarsContainer.HealthBar:SetStatusBarTexture(textureToApply);
-        FocusFrameToT.HealthBar:SetStatusBarTexture(textureToApply);
+        if healthBar then healthBar:SetStatusBarTexture(textureToApply); end
+        if totHealthBar then totHealthBar:SetStatusBarTexture(textureToApply); end
 
-        -- Color bar accordingly
-        -- https://wowpedia.fandom.com/wiki/API_UnitPowerDisplayMod
         local focusPowerType = UnitPowerType("focus");
-        if (focusPowerType and focusPowerType < 4) then
-            focusFrame.ManaBar:SetStatusBarTexture(textureToApply);
+        if (focusPowerType and focusPowerType < 4) and manaBar then
+            manaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[focusPowerType];
-            focusFrame.ManaBar:SetStatusBarDesaturated(true)
-            focusFrame.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+            manaBar:SetStatusBarDesaturated(true)
+            manaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
 
         local focusTotPowerType = UnitPowerType("focustarget");
-        if (focusTotPowerType and focusTotPowerType < 4) then
-            FocusFrameToT.ManaBar:SetStatusBarTexture(textureToApply);
+        if (focusTotPowerType and focusTotPowerType < 4) and totManaBar then
+            totManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[focusTotPowerType];
-            FocusFrameToT.ManaBar:SetStatusBarDesaturated(true)
-            FocusFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+            totManaBar:SetStatusBarDesaturated(true)
+            totManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
     end
     local secondaryTextureToApply
@@ -91,17 +115,24 @@ function focusframes:HealthManaBarTexture()
         secondaryTextureToApply = textureToApply -- Fallback to the main texture decision
     end
 
-    if secondaryTextureToApply then
-        focusFrame.HealthBarsContainer.HealthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
-        focusFrame.HealthBarsContainer.HealthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
-        focusFrame.HealthBarsContainer.HealthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
-        focusFrame.HealthBarsContainer.HealthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
-        focusFrame.HealthBarsContainer.HealthBar.TotalAbsorbBar.Fill:SetVertexColor(.6, .9, .9, 1);
+    if secondaryTextureToApply and healthBar then
+        if healthBar.HealAbsorbBar then healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply); end
+        if healthBar.MyHealPredictionBar then healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply); end
+        if healthBar.OtherHealPredictionBar then healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply); end
+        if healthBar.TotalAbsorbBar then
+            healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
+            healthBar.TotalAbsorbBar.Fill:SetVertexColor(.6, .9, .9, 1);
+        end
     end
 end
 
 function focusframes:PvPIcon()
-    UberUI.general:PvPIcon(FocusFrame.TargetFrameContent.TargetFrameContentContextual);
+    if not FocusFrame then return end
+    if FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentContextual then
+        UberUI.general:PvPIcon(FocusFrame.TargetFrameContent.TargetFrameContentContextual);
+    elseif FocusFrameTextureFramePVPIcon then
+        UberUI.general:PvPIcon(FocusFrameTextureFramePVPIcon);
+    end
 end
 
 UberUI.focusframes = focusframes

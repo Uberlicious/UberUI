@@ -33,14 +33,28 @@ end
 
 function buffsandauras:Refresh()
     if BuffFrame then
-        for _, button in ipairs(BuffFrame.auraFrames) do
-            self:StyleAuraButton(button)
+        if BuffFrame.auraFrames then
+            for _, button in ipairs(BuffFrame.auraFrames) do
+                self:StyleAuraButton(button)
+            end
+        else
+            for i = 1, 32 do
+                local btn = _G["BuffButton"..i]
+                if btn then self:StyleAuraButton(btn) end
+            end
         end
     end
 
     if DebuffFrame then
-        for _, button in ipairs(DebuffFrame.auraFrames) do
-            self:StyleAuraButton(button)
+        if DebuffFrame.auraFrames then
+            for _, button in ipairs(DebuffFrame.auraFrames) do
+                self:StyleAuraButton(button)
+            end
+        else
+            for i = 1, 16 do
+                local btn = _G["DebuffButton"..i]
+                if btn then self:StyleAuraButton(btn) end
+            end
         end
     end
 
@@ -49,9 +63,10 @@ end
 
 function buffsandauras:ColorAuras(force)
     local dc = uuidb.general.darkencolor;
-    local tx = MultiBarBottomRightButton1NormalTexture:GetAtlas()
+    local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
     local function HandleAuras(frame)
+        if not frame then return end
         local frameName = frame:GetName();
         for _, v in pairs({ frame:GetChildren() }) do
             if (force) then
@@ -71,15 +86,17 @@ function buffsandauras:ColorAuras(force)
 
     HandleAuras(TargetFrame);
 
-    if (not FocusFrame.smallSize) then
+    if FocusFrame and (not FocusFrame.smallSize) then
         HandleAuras(FocusFrame);
     end
 end
 
-hooksecurefunc(AuraFrameMixin, "UpdateAuraButtons", function(self)
-    for _, button in ipairs(self.auraFrames) do
-        UberUI.buffsandauras:StyleAuraButton(button)
-    end
-end)
+if AuraFrameMixin then
+    hooksecurefunc(AuraFrameMixin, "UpdateAuraButtons", function(self)
+        for _, button in ipairs(self.auraFrames) do
+            UberUI.buffsandauras:StyleAuraButton(button)
+        end
+    end)
+end
 
 UberUI.buffsandauras = buffsandauras

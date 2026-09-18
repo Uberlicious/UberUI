@@ -39,27 +39,50 @@ targetframes:SetScript("OnEvent", function(self, event)
 end)
 
 function targetframes:Color()
-    ApplyDarkenColor(TargetFrame.TargetFrameContainer.FrameTexture)
-    ApplyDarkenColor(TargetFrameSpellBar.Border)
-    ApplyDarkenColor(TargetFrameToT.FrameTexture)
+    if TargetFrame.TargetFrameContainer then
+        ApplyDarkenColor(TargetFrame.TargetFrameContainer.FrameTexture)
+    elseif TargetFrameTextureFrameTexture then
+        ApplyDarkenColor(TargetFrameTextureFrameTexture)
+    end
+    
+    if TargetFrameSpellBar and TargetFrameSpellBar.Border then
+        ApplyDarkenColor(TargetFrameSpellBar.Border)
+    end
+    
+    if TargetFrameToT and TargetFrameToT.FrameTexture then
+        ApplyDarkenColor(TargetFrameToT.FrameTexture)
+    elseif TargetFrameToTTextureFrameTexture then
+        ApplyDarkenColor(TargetFrameToTTextureFrameTexture)
+    end
 
-    if uuidb.general.hiderepcolor then
-        TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide()
-    else
-        TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show()
+    if TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain and TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor then
+        if uuidb.general.hiderepcolor then
+            TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Hide()
+        else
+            TargetFrame.TargetFrameContent.TargetFrameContentMain.ReputationColor:Show()
+        end
     end
 end
 
 function targetframes:HealthBarColor()
-    local healthBar = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar;
-    UberUI.general:SetHealthColor(healthBar, "target", uuidb.targetframes);
+    local healthBar = (TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain and TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar) or TargetFrameHealthBar;
+    if healthBar then
+        UberUI.general:SetHealthColor(healthBar, "target", uuidb.targetframes);
+    end
 
-    local healthBar = TargetFrameToT.HealthBar;
-    UberUI.general:SetHealthColor(healthBar, "targettarget", uuidb.targetframes);
+    local totHealthBar = (TargetFrameToT and TargetFrameToT.HealthBar) or TargetFrameToTHealthBar;
+    if totHealthBar then
+        UberUI.general:SetHealthColor(totHealthBar, "targettarget", uuidb.targetframes);
+    end
 end
 
 function targetframes:HealthManaBarTexture()
-    local targetFrame = TargetFrame.TargetFrameContent.TargetFrameContentMain;
+    local targetFrameMain = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain;
+    local healthBar = (targetFrameMain and targetFrameMain.HealthBarsContainer.HealthBar) or TargetFrameHealthBar;
+    local manaBar = (targetFrameMain and targetFrameMain.ManaBar) or TargetFrameManaBar;
+    
+    local totHealthBar = (TargetFrameToT and TargetFrameToT.HealthBar) or TargetFrameToTHealthBar;
+    local totManaBar = (TargetFrameToT and TargetFrameToT.ManaBar) or TargetFrameToTManaBar;
 
     local textureToApply
     if uuidb.general.targetbartextures then
@@ -71,25 +94,25 @@ function targetframes:HealthManaBarTexture()
     end
 
     if textureToApply then
-        targetFrame.HealthBarsContainer.HealthBar:SetStatusBarTexture(textureToApply);
-        TargetFrameToT.HealthBar:SetStatusBarTexture(textureToApply);
+        if healthBar then healthBar:SetStatusBarTexture(textureToApply); end
+        if totHealthBar then totHealthBar:SetStatusBarTexture(textureToApply); end
 
         -- Color bar accordingly
         -- https://wowpedia.fandom.com/wiki/API_UnitPowerDisplayMod
         local targetPowerType = UnitPowerType("target");
-        if (targetPowerType and targetPowerType < 4) then
-            targetFrame.ManaBar:SetStatusBarTexture(textureToApply);
+        if (targetPowerType and targetPowerType < 4) and manaBar then
+            manaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[targetPowerType];
-            targetFrame.ManaBar:SetStatusBarDesaturated(true)
-            targetFrame.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+            manaBar:SetStatusBarDesaturated(true)
+            manaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
 
         local totPowerType = UnitPowerType("targettarget");
-        if (totPowerType and totPowerType < 4) then
-            TargetFrameToT.ManaBar:SetStatusBarTexture(textureToApply);
+        if (totPowerType and totPowerType < 4) and totManaBar then
+            totManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[totPowerType];
-            TargetFrameToT.ManaBar:SetStatusBarDesaturated(true)
-            TargetFrameToT.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+            totManaBar:SetStatusBarDesaturated(true)
+            totManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
         end
     end
     local secondaryTextureToApply
@@ -101,12 +124,14 @@ function targetframes:HealthManaBarTexture()
         secondaryTextureToApply = textureToApply -- Fallback to the main texture decision
     end
 
-    if secondaryTextureToApply then
-        targetFrame.HealthBarsContainer.HealthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
-        targetFrame.HealthBarsContainer.HealthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
-        targetFrame.HealthBarsContainer.HealthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
-        targetFrame.HealthBarsContainer.HealthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
-        targetFrame.HealthBarsContainer.HealthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
+    if secondaryTextureToApply and healthBar then
+        if healthBar.HealAbsorbBar then healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply); end
+        if healthBar.MyHealPredictionBar then healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply); end
+        if healthBar.OtherHealPredictionBar then healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply); end
+        if healthBar.TotalAbsorbBar then
+            healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
+            healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
+        end
     end
 end
 
@@ -136,7 +161,11 @@ hooksecurefunc(TargetFrame, "UpdateAuras", function(aura)
 end)
 
 function targetframes:PvPIcon()
-    UberUI.general:PvPIcon(TargetFrame.TargetFrameContent.TargetFrameContentContextual);
+    if TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual then
+        UberUI.general:PvPIcon(TargetFrame.TargetFrameContent.TargetFrameContentContextual);
+    elseif TargetFrameTextureFramePVPIcon then
+        UberUI.general:PvPIcon(TargetFrameTextureFramePVPIcon);
+    end
 end
 
 UberUI.targetframes = targetframes

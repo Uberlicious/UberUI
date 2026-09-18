@@ -20,27 +20,43 @@ partyframes:SetScript("OnEvent", function(self, event)
     partyframes:ZoomAuras();
 end)
 
+function partyframes:IteratePartyFrames()
+    local frames = {}
+    if PartyFrame then
+        for _, p in pairs({ PartyFrame:GetChildren() }) do
+            table.insert(frames, p)
+        end
+    else
+        for i = 1, 4 do
+            local p = _G["PartyMemberFrame"..i]
+            if p then table.insert(frames, p) end
+        end
+    end
+    return frames
+end
+
 function partyframes:Color()
     local dc = uuidb.general.darkencolor;
-    for _, p in pairs({ PartyFrame:GetChildren() }) do
-        if (p.Texture ~= nil) then
-            p.Texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+    for _, p in pairs(self:IteratePartyFrames()) do
+        local tex = p.Texture or _G[p:GetName().."Texture"]
+        if (tex ~= nil) then
+            tex:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
         end
     end
 end
 
 function partyframes:HealthBarColor()
     if (not uuidb.partyframes.classcolor) then return end
-    for _, p in pairs({ PartyFrame:GetChildren() }) do
-        if (p.HealthBarContainer and p.HealthBarContainer.HealthBar) then
-            local idx = p.unit;
-            if (UnitIsConnected(idx)) then
+    for _, p in pairs(self:IteratePartyFrames()) do
+        local healthBar = (p.HealthBarContainer and p.HealthBarContainer.HealthBar) or _G[p:GetName().."HealthBar"]
+        if healthBar then
+            local idx = p.unit or p:GetAttribute("unit") or "party"..p:GetID();
+            if (idx and UnitIsConnected(idx)) then
                 local _, class = UnitClass(idx)
                 local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class]);
                 if (classColor ~= nil) then
-                    p.HealthBarContainer.HealthBar:SetStatusBarDesaturated(true);
-                    p.HealthBarContainer.HealthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b,
-                        classColor.a);
+                    healthBar:SetStatusBarDesaturated(true);
+                    healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, classColor.a);
                 end
             end
         end
@@ -55,17 +71,21 @@ function partyframes:HealthManaBarTexture()
         textureToApply = uuidb.statusbars[uuidb.general.texture]
     end
 
-    for _, p in pairs({ PartyFrame:GetChildren() }) do
-        if (p.HealthBarContainer and p.HealthBarContainer.HealthBar) then
-            local idx = p.unit;
+    for _, p in pairs(self:IteratePartyFrames()) do
+        local healthBar = (p.HealthBarContainer and p.HealthBarContainer.HealthBar) or _G[p:GetName().."HealthBar"]
+        local manaBar = p.ManaBar or _G[p:GetName().."ManaBar"]
+        if healthBar then
+            local idx = p.unit or p:GetAttribute("unit") or "party"..p:GetID();
             if textureToApply then
-                p.HealthBarContainer.HealthBar:SetStatusBarTexture(textureToApply);
-                local partyPowerType = UnitPowerType(idx);
-                if (partyPowerType ~= nil and partyPowerType < 4) then
-                    if p.ManaBar then
-                        p.ManaBar:SetStatusBarTexture(textureToApply);
-                        local pc = PowerBarColor[partyPowerType];
-                        p.ManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+                healthBar:SetStatusBarTexture(textureToApply);
+                if idx then
+                    local partyPowerType = UnitPowerType(idx);
+                    if (partyPowerType ~= nil and partyPowerType < 4) then
+                        if manaBar then
+                            manaBar:SetStatusBarTexture(textureToApply);
+                            local pc = PowerBarColor[partyPowerType];
+                            manaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+                        end
                     end
                 end
             end
@@ -75,23 +95,32 @@ end
 
 function partyframes:ZoomAuras()
     local enable = uuidb.general.zoomiconparty
-    if not PartyFrame then return end
+    local frames = self:IteratePartyFrames()
+    if #frames == 0 then return end
 
-    for _, p in pairs({ PartyFrame:GetChildren() }) do
+    for _, p in pairs(frames) do
         -- Main party member debuffs
         if p.AuraFrameContainer then
             for _, child in pairs({ p.AuraFrameContainer:GetChildren() }) do
-                if child.Icon then
-                    UberUI.general:ApplyIconZoom(child.Icon, enable)
-                end
+                if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
+            end
+        else
+            for i = 1, 4 do
+                local debuff = _G[p:GetName().."Debuff"..i]
+                if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
             end
         end
 
         -- Pet debuffs
-        if p.PetFrame and p.PetFrame.AuraFrameContainer then
-            for _, child in pairs({ p.PetFrame.AuraFrameContainer:GetChildren() }) do
-                if child.Icon then
-                    UberUI.general:ApplyIconZoom(child.Icon, enable)
+        if p.PetFrame then
+            if p.PetFrame.AuraFrameContainer then
+                for _, child in pairs({ p.PetFrame.AuraFrameContainer:GetChildren() }) do
+                    if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
+                end
+            else
+                for i = 1, 4 do
+                    local debuff = _G[p.PetFrame:GetName().."Debuff"..i]
+                    if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
                 end
             end
         end
@@ -99,15 +128,17 @@ function partyframes:ZoomAuras()
 
     if PartyMemberBuffTooltip then
         local dc = uuidb.general.darkencolor
-        PartyMemberBuffTooltip.NineSlice:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        for _, child in pairs({ PartyMemberBuffTooltip.BuffContainer:GetChildren() }) do
-            if child.Icon then
-                UberUI.general:ApplyIconZoom(child.Icon, enable)
+        if PartyMemberBuffTooltip.NineSlice then
+            PartyMemberBuffTooltip.NineSlice:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        end
+        if PartyMemberBuffTooltip.BuffContainer then
+            for _, child in pairs({ PartyMemberBuffTooltip.BuffContainer:GetChildren() }) do
+                if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
             end
         end
-        for _, child in pairs({ PartyMemberBuffTooltip.DebuffContainer:GetChildren() }) do
-            if child.Icon then
-                UberUI.general:ApplyIconZoom(child.Icon, enable)
+        if PartyMemberBuffTooltip.DebuffContainer then
+            for _, child in pairs({ PartyMemberBuffTooltip.DebuffContainer:GetChildren() }) do
+                if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
             end
         end
     end

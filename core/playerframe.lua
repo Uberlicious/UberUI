@@ -46,11 +46,26 @@ playerframes:SetScript("OnEvent", function(self, event)
 end)
 
 function playerframes:Color()
-    ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.FrameTexture)
-    ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.AlternatePowerFrameTexture)
-    ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.VehicleFrameTexture)
-    ApplyDarkenColor(PlayerCastingBarFrame.Border)
-    ApplyDarkenColor(PetFrameTexture)
+    if PlayerFrame.PlayerFrameContainer then
+        ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.FrameTexture)
+        ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.AlternatePowerFrameTexture)
+        ApplyDarkenColor(PlayerFrame.PlayerFrameContainer.VehicleFrameTexture)
+    elseif PlayerFrameTexture then
+        ApplyDarkenColor(PlayerFrameTexture)
+        if PlayerFrameAlternateManaBar and PlayerFrameAlternateManaBar.Border then
+            ApplyDarkenColor(PlayerFrameAlternateManaBar.Border)
+        end
+    end
+    
+    if PlayerCastingBarFrame and PlayerCastingBarFrame.Border then
+        ApplyDarkenColor(PlayerCastingBarFrame.Border)
+    elseif CastingBarFrame and CastingBarFrame.Border then
+        ApplyDarkenColor(CastingBarFrame.Border)
+    end
+    
+    if PetFrameTexture then
+        ApplyDarkenColor(PetFrameTexture)
+    end
 
     if (class == "Shaman") then
         self:ColorTotems();
@@ -96,7 +111,9 @@ function playerframes:HealthManaBarTexture(force)
 
     if textureToApply then
         healthBar:SetStatusBarTexture(textureToApply);
-        healthBar.AnimatedLossBar:SetStatusBarTexture(textureToApply);
+        if healthBar.AnimatedLossBar then
+            healthBar.AnimatedLossBar:SetStatusBarTexture(textureToApply);
+        end
 
         local playerPowerType = UnitPowerType("player");
         if (playerPowerType and playerPowerType < 4) then
@@ -107,9 +124,11 @@ function playerframes:HealthManaBarTexture(force)
         end
         healthBar.styled = true;
 
-        PetFrameHealthBar:SetStatusBarTexture(textureToApply);
+        if PetFrameHealthBar then
+            PetFrameHealthBar:SetStatusBarTexture(textureToApply);
+        end
         local petPowerType = UnitPowerType("pet");
-        if (petPowerType and petPowerType < 4) then
+        if (petPowerType and petPowerType < 4) and PetFrameManaBar then
             PetFrameManaBar:SetStatusBarTexture(textureToApply);
             local pc = PowerBarColor[petPowerType];
             PetFrameManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
@@ -125,32 +144,52 @@ function playerframes:HealthManaBarTexture(force)
     end
 
     if secondaryTextureToApply then
-        healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
-        healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
-        healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
-        healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
-        healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
-        manaBar.ManaCostPredictionBar.Fill:SetTexture(secondaryTextureToApply);
-        manaBar.FeedbackFrame.BarTexture:SetTexture(secondaryTextureToApply);
+        if healthBar.HealAbsorbBar then
+            healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
+        end
+        if healthBar.MyHealPredictionBar then
+            healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
+        end
+        if healthBar.OtherHealPredictionBar then
+            healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply);
+        end
+        if healthBar.TotalAbsorbBar then
+            healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
+            healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
+        end
+        if manaBar.ManaCostPredictionBar then
+            manaBar.ManaCostPredictionBar.Fill:SetTexture(secondaryTextureToApply);
+        end
+        if manaBar.FeedbackFrame and manaBar.FeedbackFrame.BarTexture then
+            manaBar.FeedbackFrame.BarTexture:SetTexture(secondaryTextureToApply);
+        end
     end
 end
 
 function playerframes:PvPIcon()
-    UberUI.general:PvPIcon(PlayerFrame.PlayerFrameContent.PlayerFrameContentContextual);
+    if PlayerFrame.PlayerFrameContent and PlayerFrame.PlayerFrameContent.PlayerFrameContentContextual then
+        UberUI.general:PvPIcon(PlayerFrame.PlayerFrameContent.PlayerFrameContentContextual);
+    elseif PlayerPVPIcon then
+        UberUI.general:PvPIcon(PlayerPVPIcon);
+    end
 end
 
 function playerframes:ColorTotems()
-    for _, totems in pairs({ TotemFrame:GetChildren() }) do
-        ApplyDarkenColor(totems.Border)
+    if TotemFrame then
+        for _, totems in pairs({ TotemFrame:GetChildren() }) do
+            if totems.Border then
+                ApplyDarkenColor(totems.Border)
+            end
+        end
     end
 end
 
 function playerframes:ColorAlternatePower()
     local applyCustomLook = (uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard")
-    if applyCustomLook then
+    if applyCustomLook and AlternatePowerBar then
         local dc = uuidb.general.darkencolor;
         local texture = uuidb.statusbars[uuidb.general.texture];
-        local pc = PowerBarColor[0];
+        local pc = PowerBarColor[0] or {r=1, g=1, b=1};
         AlternatePowerBar:SetStatusBarTexture(texture);
         AlternatePowerBar:SetStatusBarDesaturated(true);
         AlternatePowerBar:SetStatusBarColor(pc.r, pc.g, pc.b);
@@ -158,27 +197,35 @@ function playerframes:ColorAlternatePower()
 end
 
 function playerframes:ColorHolyPower()
-    ApplyDarkenColor(PaladinPowerBarFrame.Background)
-    ApplyDarkenColor(PaladinPowerBarFrame.ActiveTexture)
+    if PaladinPowerBarFrame then
+        if PaladinPowerBarFrame.Background then ApplyDarkenColor(PaladinPowerBarFrame.Background) end
+        if PaladinPowerBarFrame.ActiveTexture then ApplyDarkenColor(PaladinPowerBarFrame.ActiveTexture) end
+    end
 end
 
 function playerframes:ColorComboPoints()
-    for _, cp in pairs({ RogueComboPointBarFrame:GetChildren() }) do
-        ApplyDarkenColor(cp.BGInactive)
-        ApplyDarkenColor(cp.BGActive)
+    if RogueComboPointBarFrame then
+        for _, cp in pairs({ RogueComboPointBarFrame:GetChildren() }) do
+            if cp.BGInactive then ApplyDarkenColor(cp.BGInactive) end
+            if cp.BGActive then ApplyDarkenColor(cp.BGActive) end
+        end
     end
 end
 
 function playerframes:ColorSoulShards()
-    for _, ss in pairs({ WarlockPowerFrame:GetChildren() }) do
-        ApplyDarkenColor(ss.Background)
+    if WarlockPowerFrame then
+        for _, ss in pairs({ WarlockPowerFrame:GetChildren() }) do
+            if ss.Background then ApplyDarkenColor(ss.Background) end
+        end
     end
 end
 
 function playerframes:ColorMonkChi()
-    for _, chi in pairs({ MonkHarmonyBarFrame:GetChildren() }) do
-        ApplyDarkenColor(chi.Chi_BG)
-        ApplyDarkenColor(chi.Chi_BG_Active)
+    if MonkHarmonyBarFrame then
+        for _, chi in pairs({ MonkHarmonyBarFrame:GetChildren() }) do
+            if chi.Chi_BG then ApplyDarkenColor(chi.Chi_BG) end
+            if chi.Chi_BG_Active then ApplyDarkenColor(chi.Chi_BG_Active) end
+        end
     end
 end
 

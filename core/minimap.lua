@@ -10,7 +10,12 @@ minimap:SetScript("OnEvent", function(self, event)
 end)
 function minimap.Color()
     local dc = uuidb.general.darkencolor
-    MinimapCompassTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    if MinimapCompassTexture then
+        MinimapCompassTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
+    if MinimapBorder then
+        MinimapBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
 end
 
 UberUI.minimap = minimap
