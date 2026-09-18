@@ -121,6 +121,9 @@ function misc:BagSlots()
     end
 
     if BagsBar then
+        if BagsBar.BorderArt then
+            BagsBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        end
         for _, bag in ipairs({ BagsBar:GetChildren() }) do
             local r, g, b = dc.r, dc.g, dc.b
             if bag:GetName() == "MainMenuBarBackpackButton" then
@@ -148,6 +151,26 @@ function misc:BagSlots()
             local r, g, b = (dc.r + 1) / 2, (dc.g + 1) / 2, (dc.b + 1) / 2
             _G["MainMenuBarBackpackButtonNormalTexture"]:SetVertexColor(r, g, b, dc.a)
         end
+    end
+
+    -- Forever-specific and Classic bag extras
+    if MicroMenu and MicroMenu.BorderArt then
+        MicroMenu.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
+    
+    -- Reagent bag slots (Retail / Custom)
+    for i = 0, 3 do
+        local rBag = _G["CharacterReagentBag"..i.."Slot"]
+        if rBag and rBag:GetName() and _G[rBag:GetName() .. "NormalTexture"] then
+            _G[rBag:GetName() .. "NormalTexture"]:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        end
+    end
+    
+    -- Keyring (Classic / Forever)
+    if KeyRingButton and _G["KeyRingButtonNormalTexture"] then
+        _G["KeyRingButtonNormalTexture"]:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    elseif KeyRingButton and KeyRingButton.NormalTexture then
+        KeyRingButton.NormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 end
 
