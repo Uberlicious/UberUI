@@ -1750,8 +1750,12 @@ hooksecurefunc(SettingsPanel, "DisplayCategory", function(self, category)
         header.UUI_Reload:SetText("Reload UI");
 
         header.UUI_Reload:SetScript("OnClick", function(self, button, down)
-            SettingsPanel:Hide();
-            ReloadUI();
+            if SettingsPanel then SettingsPanel:Hide() end
+            if C_UI and C_UI.Reload then
+                C_UI.Reload()
+            else
+                ReloadUI()
+            end
         end)
     elseif ((category:GetID() == Settings.UBERUI_CATEGORY_ID or
                 (category:HasParentCategory() and category:GetParentCategory():GetID() == Settings.UBERUI_CATEGORY_ID))
