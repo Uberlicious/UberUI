@@ -29,12 +29,28 @@ end)
 
 function misc:EndCaps()
     local dc = uuidb.general.darkencolor;
+    
+    local function ColorEndCap(endCap)
+        if not endCap then return end
+        if type(endCap.SetVertexColor) == "function" then
+            endCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        elseif endCap.Texture and type(endCap.Texture.SetVertexColor) == "function" then
+            endCap.Texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        elseif endCap.GetRegions then
+            for _, region in ipairs({endCap:GetRegions()}) do
+                if region:IsObjectType("Texture") then
+                    region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                end
+            end
+        end
+    end
+
     if MainActionBar and MainActionBar.EndCaps then
-        MainActionBar.EndCaps.RightEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
-        MainActionBar.EndCaps.LeftEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        ColorEndCap(MainActionBar.EndCaps.RightEndCap)
+        ColorEndCap(MainActionBar.EndCaps.LeftEndCap)
     else
-        if MainMenuBarLeftEndCap then MainMenuBarLeftEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
-        if MainMenuBarRightEndCap then MainMenuBarRightEndCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
+        ColorEndCap(MainMenuBarLeftEndCap)
+        ColorEndCap(MainMenuBarRightEndCap)
     end
 end
 
