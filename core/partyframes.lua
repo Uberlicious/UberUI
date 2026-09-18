@@ -24,7 +24,10 @@ function partyframes:IteratePartyFrames()
     local frames = {}
     if PartyFrame then
         for _, p in pairs({ PartyFrame:GetChildren() }) do
-            table.insert(frames, p)
+            -- Filter out EditMode selection frames and other non-unit frames
+            if p.unit or p.layoutIndex or (p.GetName and p:GetName() and p:GetName():find("MemberFrame")) then
+                table.insert(frames, p)
+            end
         end
     else
         for i = 1, 4 do
@@ -38,7 +41,10 @@ end
 function partyframes:Color()
     local dc = uuidb.general.darkencolor;
     for _, p in pairs(self:IteratePartyFrames()) do
-        local tex = p.Texture or _G[p:GetName().."Texture"]
+        local tex = p.Texture
+        if not tex and p.GetName and p:GetName() then
+            tex = _G[p:GetName().."Texture"]
+        end
         if (tex ~= nil) then
             tex:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
         end
@@ -48,9 +54,12 @@ end
 function partyframes:HealthBarColor()
     if (not uuidb.partyframes.classcolor) then return end
     for _, p in pairs(self:IteratePartyFrames()) do
-        local healthBar = (p.HealthBarContainer and p.HealthBarContainer.HealthBar) or _G[p:GetName().."HealthBar"]
+        local healthBar = p.HealthBarContainer and p.HealthBarContainer.HealthBar
+        if not healthBar and p.GetName and p:GetName() then
+            healthBar = _G[p:GetName().."HealthBar"]
+        end
         if healthBar then
-            local idx = p.unit or p:GetAttribute("unit") or "party"..p:GetID();
+            local idx = p.unit or p:GetAttribute("unit") or (p.GetID and p:GetID() and "party"..p:GetID());
             if (idx and UnitIsConnected(idx)) then
                 local _, class = UnitClass(idx)
                 local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class]);
@@ -72,10 +81,16 @@ function partyframes:HealthManaBarTexture()
     end
 
     for _, p in pairs(self:IteratePartyFrames()) do
-        local healthBar = (p.HealthBarContainer and p.HealthBarContainer.HealthBar) or _G[p:GetName().."HealthBar"]
-        local manaBar = p.ManaBar or _G[p:GetName().."ManaBar"]
+        local healthBar = p.HealthBarContainer and p.HealthBarContainer.HealthBar
+        if not healthBar and p.GetName and p:GetName() then
+            healthBar = _G[p:GetName().."HealthBar"]
+        end
+        local manaBar = p.ManaBar
+        if not manaBar and p.GetName and p:GetName() then
+            manaBar = _G[p:GetName().."ManaBar"]
+        end
         if healthBar then
-            local idx = p.unit or p:GetAttribute("unit") or "party"..p:GetID();
+            local idx = p.unit or p:GetAttribute("unit") or (p.GetID and p:GetID() and "party"..p:GetID());
             if textureToApply then
                 healthBar:SetStatusBarTexture(textureToApply);
                 if idx then
@@ -106,8 +121,10 @@ function partyframes:ZoomAuras()
             end
         else
             for i = 1, 4 do
-                local debuff = _G[p:GetName().."Debuff"..i]
-                if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
+                if p.GetName and p:GetName() then
+                    local debuff = _G[p:GetName().."Debuff"..i]
+                    if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
+                end
             end
         end
 
@@ -119,8 +136,10 @@ function partyframes:ZoomAuras()
                 end
             else
                 for i = 1, 4 do
-                    local debuff = _G[p.PetFrame:GetName().."Debuff"..i]
-                    if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
+                    if p.PetFrame.GetName and p.PetFrame:GetName() then
+                        local debuff = _G[p.PetFrame:GetName().."Debuff"..i]
+                        if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
+                    end
                 end
             end
         end
