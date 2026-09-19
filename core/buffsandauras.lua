@@ -41,8 +41,8 @@ function buffsandauras:StyleAuraButton(button)
         -- Create a custom border if one doesn't exist
         if not button.UberUIBorderFrame then
             button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
-            button.UberUIBorderFrame:SetSize(button.Icon:GetWidth() + 10, button.Icon:GetHeight() + 10)
-            button.UberUIBorderFrame:SetPoint("CENTER", button.Icon or button, "CENTER", 0, 0)
+            button.UberUIBorderFrame:SetPoint("TOPLEFT", button.Icon or button, "TOPLEFT", -5, 5)
+            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", button.Icon or button, "BOTTOMRIGHT", 5, -5)
             button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
             
             local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
@@ -140,8 +140,8 @@ function buffsandauras:ColorAuras(force)
                     local dc = uuidb.general.darkencolor
                     if not v.UberUIBorderFrame then
                         v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
-                        v.UberUIBorderFrame:SetSize(v.Icon:GetWidth() + 10, v.Icon:GetHeight() + 10)
-                        v.UberUIBorderFrame:SetPoint("CENTER", v.Icon or v, "CENTER", 0, 0)
+                        v.UberUIBorderFrame:SetPoint("TOPLEFT", v.Icon or v, "TOPLEFT", -5, 5)
+                        v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v.Icon or v, "BOTTOMRIGHT", 5, -5)
                         v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
                         
                         local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
