@@ -105,11 +105,8 @@ function misc:BagSlots()
                     r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
                 end
 
-                if self:GetName() and _G[self:GetName() .. "NormalTexture"] then
-                    _G[self:GetName() .. "NormalTexture"]:SetVertexColor(r, g, b, dc.a)
-                elseif self.NormalTexture then
-                    self.NormalTexture:SetVertexColor(r, g, b, dc.a)
-                end
+                local nt = (self.GetName and self:GetName() and _G[self:GetName() .. "NormalTexture"]) or self.NormalTexture or (self.GetNormalTexture and self:GetNormalTexture())
+                if nt then nt:SetVertexColor(r, g, b, dc.a) end
             end)
         end
 
@@ -131,26 +128,23 @@ function misc:BagSlots()
                 r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
             end
 
-            if bag:GetName() and _G[bag:GetName() .. "NormalTexture"] then
-                _G[bag:GetName() .. "NormalTexture"]:SetVertexColor(r, g, b, dc.a)
-            elseif bag.NormalTexture then
-                bag.NormalTexture:SetVertexColor(r, g, b, dc.a)
-            end
+            local nt = (bag.GetName and bag:GetName() and _G[bag:GetName() .. "NormalTexture"]) or bag.NormalTexture or (bag.GetNormalTexture and bag:GetNormalTexture())
+            if nt then nt:SetVertexColor(r, g, b, dc.a) end
         end
     else
         for i = 0, 3 do
             local bag = _G["CharacterBag"..i.."Slot"]
             if bag then
                 local r, g, b = dc.r, dc.g, dc.b
-                if _G[bag:GetName() .. "NormalTexture"] then
-                    _G[bag:GetName() .. "NormalTexture"]:SetVertexColor(r, g, b, dc.a)
-                end
+                local nt = (bag.GetName and bag:GetName() and _G[bag:GetName() .. "NormalTexture"]) or bag.NormalTexture or (bag.GetNormalTexture and bag:GetNormalTexture())
+                if nt then nt:SetVertexColor(r, g, b, dc.a) end
             end
         end
         local backpack = MainMenuBarBackpackButton
-        if backpack and _G["MainMenuBarBackpackButtonNormalTexture"] then
+        if backpack then
             local r, g, b = (dc.r + 1) / 2, (dc.g + 1) / 2, (dc.b + 1) / 2
-            _G["MainMenuBarBackpackButtonNormalTexture"]:SetVertexColor(r, g, b, dc.a)
+            local nt = (backpack.GetName and backpack:GetName() and _G[backpack:GetName() .. "NormalTexture"]) or backpack.NormalTexture or (backpack.GetNormalTexture and backpack:GetNormalTexture())
+            if nt then nt:SetVertexColor(r, g, b, dc.a) end
         end
     end
 
@@ -162,16 +156,16 @@ function misc:BagSlots()
     -- Reagent bag slots (Retail / Custom)
     for i = 0, 3 do
         local rBag = _G["CharacterReagentBag"..i.."Slot"]
-        if rBag and rBag:GetName() and _G[rBag:GetName() .. "NormalTexture"] then
-            _G[rBag:GetName() .. "NormalTexture"]:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        if rBag then
+            local nt = (rBag.GetName and rBag:GetName() and _G[rBag:GetName() .. "NormalTexture"]) or rBag.NormalTexture or (rBag.GetNormalTexture and rBag:GetNormalTexture())
+            if nt then nt:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
         end
     end
     
     -- Keyring (Classic / Forever)
-    if KeyRingButton and _G["KeyRingButtonNormalTexture"] then
-        _G["KeyRingButtonNormalTexture"]:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-    elseif KeyRingButton and KeyRingButton.NormalTexture then
-        KeyRingButton.NormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    if KeyRingButton then
+        local nt = (KeyRingButton.GetName and KeyRingButton:GetName() and _G[KeyRingButton:GetName() .. "NormalTexture"]) or KeyRingButton.NormalTexture or (KeyRingButton.GetNormalTexture and KeyRingButton:GetNormalTexture())
+        if nt then nt:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
     end
 end
 
