@@ -133,12 +133,13 @@ function buffsandauras:ColorAuras(force)
         if not frame or depth > 5 then return end
         for _, v in pairs({ frame:GetChildren() }) do
             if v and v.GetObjectType then
+                local isAura = false
                 local objType = v:GetObjectType()
                 if objType == "Frame" or objType == "Button" then
-                    local isAura = false
                     if v.Icon and v.Icon.GetObjectType and v.Icon:GetObjectType() == "Texture" then
-                    if v.Count or v.Border or v.Cooldown or (v.GetName and not v:GetName()) or v.DebuffBorder then
-                        isAura = true
+                        if v.Count or v.Border or v.Cooldown or (v.GetName and not v:GetName()) or v.DebuffBorder then
+                            isAura = true
+                        end
                     end
                 end
                 
