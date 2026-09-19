@@ -118,34 +118,36 @@ function misc:BagSlots()
         misc.hookedBags = true
     end
 
+    local function DarkenBag(bag, isBackpack)
+        if not bag then return end
+        local r, g, b = dc.r, dc.g, dc.b
+        if isBackpack then
+            r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
+        end
+        local nt = (bag.GetName and bag:GetName() and _G[bag:GetName() .. "NormalTexture"]) or bag.NormalTexture or (bag.GetNormalTexture and bag:GetNormalTexture())
+        if nt then nt:SetVertexColor(r, g, b, dc.a) end
+        if bag.IconBorder then bag.IconBorder:SetVertexColor(r, g, b, dc.a) end
+        if bag.SlotHighlightTexture then bag.SlotHighlightTexture:SetVertexColor(r, g, b, dc.a) end
+    end
+
     if BagsBar then
         if BagsBar.BorderArt then
             BagsBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         end
         for _, bag in ipairs({ BagsBar:GetChildren() }) do
-            local r, g, b = dc.r, dc.g, dc.b
-            if bag:GetName() == "MainMenuBarBackpackButton" then
-                r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
+            local isBackpack = bag:GetName() == "MainMenuBarBackpackButton"
+            DarkenBag(bag, isBackpack)
+            if not bag._uberHooked and bag.UpdateTextures then
+                hooksecurefunc(bag, "UpdateTextures", function(self) DarkenBag(self, isBackpack) end)
+                bag._uberHooked = true
             end
-
-            local nt = (bag.GetName and bag:GetName() and _G[bag:GetName() .. "NormalTexture"]) or bag.NormalTexture or (bag.GetNormalTexture and bag:GetNormalTexture())
-            if nt then nt:SetVertexColor(r, g, b, dc.a) end
         end
     else
         for i = 0, 3 do
             local bag = _G["CharacterBag"..i.."Slot"]
-            if bag then
-                local r, g, b = dc.r, dc.g, dc.b
-                local nt = (bag.GetName and bag:GetName() and _G[bag:GetName() .. "NormalTexture"]) or bag.NormalTexture or (bag.GetNormalTexture and bag:GetNormalTexture())
-                if nt then nt:SetVertexColor(r, g, b, dc.a) end
-            end
+            DarkenBag(bag, false)
         end
-        local backpack = MainMenuBarBackpackButton
-        if backpack then
-            local r, g, b = (dc.r + 1) / 2, (dc.g + 1) / 2, (dc.b + 1) / 2
-            local nt = (backpack.GetName and backpack:GetName() and _G[backpack:GetName() .. "NormalTexture"]) or backpack.NormalTexture or (backpack.GetNormalTexture and backpack:GetNormalTexture())
-            if nt then nt:SetVertexColor(r, g, b, dc.a) end
-        end
+        DarkenBag(MainMenuBarBackpackButton, true)
     end
 
     -- Forever-specific and Classic bag extras
