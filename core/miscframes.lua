@@ -19,6 +19,7 @@ misc:SetScript("OnEvent", function(self, event, ...)
         C_Timer.After(1, function()
             misc:StatusTrackingBars()
             misc:BagSlots()
+            misc:MicroButtons()
         end)
         misc:ObjectiveTrackerFrames()
     elseif event == "ADDON_LOADED" then
@@ -174,15 +175,58 @@ function misc:BagSlots()
     end
 end
 
+function misc:MicroButtons()
+    local dc = uuidb.general.darkencolor
+    local buttons = {
+        "CharacterMicroButton",
+        "SpellbookMicroButton",
+        "TalentMicroButton",
+        "AchievementMicroButton",
+        "QuestLogMicroButton",
+        "GuildMicroButton",
+        "LFDMicroButton",
+        "CollectionsMicroButton",
+        "EJMicroButton",
+        "StoreMicroButton",
+        "MainMenuMicroButton",
+        "HelpMicroButton",
+    }
+    
+    if MicroMenu then
+        for _, child in pairs({MicroMenu:GetChildren()}) do
+            table.insert(buttons, child:GetName() or "")
+            if not child:GetName() then
+                if child.Background then child.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
+                if child.NormalTexture then child.NormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
+            end
+        end
+    end
+
+    for _, name in ipairs(buttons) do
+        if name ~= "" then
+            local btn = _G[name]
+            if btn then
+                if btn.Background then btn.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
+                -- MicroButton backgrounds are sometimes just a texture called "...MicroButton-BG"
+                local bgTexture = _G[name .. "-BG"] or _G[name .. "BG"]
+                if bgTexture and type(bgTexture.SetVertexColor) == "function" then
+                    bgTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                end
+            end
+        end
+    end
+end
+
 function misc:AllFramesColor()
     self:EndCaps();
+    self:MicroButtons();
     UberUI.playerframes:Color();
     UberUI.targetframes:Color();
-    UberUI.focusframes:Color();
-    UberUI.minimap:Color();
-    UberUI.actionbars:Color();
-    UberUI.cdManager:Color();
-    UberUI.damageMeter:ForceTexture()
+    if UberUI.focusframes then UberUI.focusframes:Color() end
+    if UberUI.minimap then UberUI.minimap:Color() end
+    if UberUI.actionbars then UberUI.actionbars:Color() end
+    if UberUI.cdManager then UberUI.cdManager:Color() end
+    if UberUI.damageMeter then UberUI.damageMeter:ForceTexture() end
 end
 
 function misc:AllFramesHealthColor()
