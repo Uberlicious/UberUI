@@ -153,33 +153,40 @@ function buffsandauras:ColorAuras(force)
                     
                     local r, g, b, a = dc.r, dc.g, dc.b, dc.a
                     local frameName = v.GetName and v:GetName() or ""
+                    local showCustomBorder = false
                     
                     if (frameName:find("Debuff")) then
                         local dtype = v.debuffType or "none"
+                        dtype = string.lower(dtype)
                         local color = DebuffTypeColor and DebuffTypeColor[dtype]
-                        if dtype == "Magic" then
-                            -- Dispellable magic buffs are white?
-                            r, g, b, a = 1, 1, 1, 1
-                            v.UberUIBorderFrame.texture:SetDesaturated(true)
-                        elseif dtype ~= "none" and dtype ~= "" and color then
-                            r, g, b, a = color.r, color.g, color.b, 1
-                            v.UberUIBorderFrame.texture:SetDesaturated(false)
-                        else
-                            -- Typeless debuff: desaturate and darken
-                            v.UberUIBorderFrame.texture:SetDesaturated(true)
+                        
+                        if v.Border then
+                            if dtype == "none" or dtype == "" or not color then
+                                -- Typeless debuff: desaturate the native border and tint it custom dark
+                                v.Border:SetDesaturated(true)
+                                v.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                            else
+                                -- Typed debuff: let Blizzard color the native border!
+                                v.Border:SetDesaturated(false)
+                                if color then
+                                    v.Border:SetVertexColor(color.r, color.g, color.b, 1)
+                                end
+                            end
                         end
                     elseif (frameName:find("Buff")) then
-                        if v.isStealable then
-                            -- Stealable buffs are white or special?
+                        showCustomBorder = true
+                        if v.isStealable or v.Stealable and v.Stealable:IsShown() then
+                            -- Stealable buffs are highlighted white
                             r, g, b, a = 1, 1, 1, 1
-                            v.UberUIBorderFrame.texture:SetDesaturated(true)
-                        else
-                            v.UberUIBorderFrame.texture:SetDesaturated(true)
                         end
                     end
                     
-                    v.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
-                    v.UberUIBorderFrame:Show()
+                    if showCustomBorder then
+                        v.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
+                        v.UberUIBorderFrame:Show()
+                    else
+                        v.UberUIBorderFrame:Hide()
+                    end
                 else
                     if v.UberUIBorderFrame then
                         v.UberUIBorderFrame:Hide()
