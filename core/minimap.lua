@@ -17,31 +17,40 @@ function minimap.Color()
         MinimapBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
     
-    -- WoW Forever 1.6 / Retail
-    if MinimapCluster and MinimapCluster.IndicatorFrame then
-        if MinimapCluster.IndicatorFrame:GetRegions() then
-            for _, region in pairs({MinimapCluster.IndicatorFrame:GetRegions()}) do
-                if region:IsObjectType("Texture") then
+    local function ColorBorderRegion(frame)
+        if not frame then return end
+        if frame.Border and type(frame.Border.SetVertexColor) == "function" then
+            frame.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            return
+        end
+        for _, region in pairs({frame:GetRegions()}) do
+            if region:IsObjectType("Texture") then
+                local isBorder = false
+                local atlas = region.GetAtlas and region:GetAtlas()
+                local tex = region.GetTexture and region:GetTexture()
+                
+                if atlas and string.find(string.lower(atlas), "border") then
+                    isBorder = true
+                elseif type(tex) == "string" and string.find(string.lower(tex), "border") then
+                    isBorder = true
+                elseif region:GetDrawLayer() == "BORDER" or region:GetDrawLayer() == "OVERLAY" then
+                    -- If no name matches, assume the border/overlay layer contains the ring
+                    isBorder = true
+                end
+
+                if isBorder then
                     region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
                 end
             end
         end
     end
-    -- Also try to catch DielFrame if it exists
-    if MinimapCluster and MinimapCluster.DielFrame then
-        for _, region in pairs({MinimapCluster.DielFrame:GetRegions()}) do
-            if region:IsObjectType("Texture") then
-                region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-            end
-        end
+
+    if MinimapCluster then
+        ColorBorderRegion(MinimapCluster.IndicatorFrame)
+        ColorBorderRegion(MinimapCluster.DielFrame)
     end
-    -- Classic GameTimeFrame
     if GameTimeFrame then
-        for _, region in pairs({GameTimeFrame:GetRegions()}) do
-            if region:IsObjectType("Texture") then
-                region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-            end
-        end
+        ColorBorderRegion(GameTimeFrame)
     end
 end
 
