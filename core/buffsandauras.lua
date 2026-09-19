@@ -6,8 +6,9 @@ function buffsandauras:StyleAuraButton(button)
         return
     end
 
+    if button.isAuraAnchor then return end
+
     if uuidb.general.buffauraborders and button:IsShown() then
-        local inset = 0.07
         local iconTexture = button.Icon
         if not iconTexture then
             for _, region in pairs({ button:GetRegions() }) do
@@ -22,17 +23,19 @@ function buffsandauras:StyleAuraButton(button)
         end
 
         local dc = uuidb.general.darkencolor
+        
+        -- In modern WoW, AuraButtonTemplate is used for both buffs and debuffs.
+        -- We must let Blizzard natively manage the visibility of DebuffBorder and TempEnchantBorder.
         if button.DebuffBorder then
             local r, g, b, a = button.DebuffBorder:GetVertexColor()
             local noneColor = DebuffTypeColor and DebuffTypeColor["none"] or {r=0, g=0, b=0}
+            -- If it is a generic debuff (natively colored red), we tint it to the darkencolor
             if r == noneColor.r and g == noneColor.g and b == noneColor.b then
                 button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
             end
-            button.DebuffBorder:Show()
         end
         if button.TempEnchantBorder then
             button.TempEnchantBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-            button.TempEnchantBorder:Show()
         end
 
         -- Create a custom border if one doesn't exist
@@ -55,12 +58,7 @@ function buffsandauras:StyleAuraButton(button)
         button.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         button.UberUIBorderFrame:Show()
     else
-        if button.DebuffBorder then
-            button.DebuffBorder:Hide()
-        end
-        if button.TempEnchantBorder then
-            button.TempEnchantBorder:Hide()
-        end
+        -- Only hide our custom additions, let Blizzard manage its own borders natively
         if button.NormalTexture then
             button.NormalTexture:Hide()
         end
