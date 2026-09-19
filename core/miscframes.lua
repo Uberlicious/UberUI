@@ -130,24 +130,29 @@ function misc:BagSlots()
         if bag.SlotHighlightTexture then bag.SlotHighlightTexture:SetVertexColor(r, g, b, dc.a) end
     end
 
-    if BagsBar then
-        if BagsBar.BorderArt then
-            BagsBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        end
-        for _, bag in ipairs({ BagsBar:GetChildren() }) do
-            local isBackpack = bag:GetName() == "MainMenuBarBackpackButton"
+    if BagsBar and BagsBar.BorderArt then
+        BagsBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
+
+    local bagNames = {
+        "CharacterBag0Slot",
+        "CharacterBag1Slot",
+        "CharacterBag2Slot",
+        "CharacterBag3Slot",
+        "CharacterReagentBag0Slot",
+        "MainMenuBarBackpackButton",
+    }
+
+    for _, bagName in ipairs(bagNames) do
+        local bag = _G[bagName]
+        if bag then
+            local isBackpack = (bagName == "MainMenuBarBackpackButton")
             DarkenBag(bag, isBackpack)
             if not bag._uberHooked and bag.UpdateTextures then
                 hooksecurefunc(bag, "UpdateTextures", function(self) DarkenBag(self, isBackpack) end)
                 bag._uberHooked = true
             end
         end
-    else
-        for i = 0, 3 do
-            local bag = _G["CharacterBag"..i.."Slot"]
-            DarkenBag(bag, false)
-        end
-        DarkenBag(MainMenuBarBackpackButton, true)
     end
 
     -- Forever-specific and Classic bag extras
