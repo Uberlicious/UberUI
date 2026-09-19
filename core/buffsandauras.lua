@@ -45,6 +45,17 @@ function buffsandauras:StyleAuraButton(button)
         local showCustomBorder = false
         -- Modern WoW templates use button.debuffType or button.auraData.dispelName
         local dtype = button.debuffType or (button.auraData and button.auraData.dispelName)
+        if not dtype and button.auraInstanceID then
+            local p = button:GetParent()
+            local unit = button.unit or (p and p.GetUnit and p:GetUnit()) or "target"
+            if unit then
+                local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, button.auraInstanceID)
+                if aura then
+                    dtype = aura.dispelName
+                end
+            end
+        end
+        
         local isDebuff = button.auraType == "Debuff" or dtype ~= nil or (button.Border and button.Border:IsShown()) or (button.DebuffBorder and button.DebuffBorder:IsShown())
         
         if isDebuff then
@@ -174,7 +185,17 @@ function buffsandauras:ColorAuras(force)
                         local showCustomBorder = false
                         
                         if isDebuff then
-                            local dtype = v.debuffType
+                            local dtype = v.debuffType or (v.auraData and v.auraData.dispelName)
+                            if not dtype and v.auraInstanceID then
+                                local p = v:GetParent()
+                                local unit = v.unit or (p and p.GetUnit and p:GetUnit())
+                                if unit then
+                                    local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, v.auraInstanceID)
+                                    if aura then
+                                        dtype = aura.dispelName
+                                    end
+                                end
+                            end
                             
                             local borderObj = v.Border or v.DebuffBorder
                             if borderObj then
