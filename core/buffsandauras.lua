@@ -132,9 +132,11 @@ function buffsandauras:ColorAuras(force)
     local function HandleAuras(frame, depth)
         if not frame or depth > 5 then return end
         for _, v in pairs({ frame:GetChildren() }) do
-            if v and type(v) == "table" and v.GetObjectType and v:GetObjectType() == "Frame" or v:GetObjectType() == "Button" then
-                local isAura = false
-                if v.Icon and v.GetObjectType and v.Icon.GetObjectType and v.Icon:GetObjectType() == "Texture" then
+            if v and v.GetObjectType then
+                local objType = v:GetObjectType()
+                if objType == "Frame" or objType == "Button" then
+                    local isAura = false
+                    if v.Icon and v.Icon.GetObjectType and v.Icon:GetObjectType() == "Texture" then
                     if v.Count or v.Border or v.Cooldown or (v.GetName and not v:GetName()) or v.DebuffBorder then
                         isAura = true
                     end
@@ -159,7 +161,7 @@ function buffsandauras:ColorAuras(force)
                         
                         local r, g, b, a = dc.r, dc.g, dc.b, dc.a
                         local frameName = v.GetName and v:GetName() or ""
-                        local isDebuff = frameName:find("Debuff") ~= nil or v.Border ~= nil or v.DebuffBorder ~= nil
+                        local isDebuff = frameName:find("Debuff") ~= nil or (v.Border and v.Border:IsShown()) or (v.DebuffBorder and v.DebuffBorder:IsShown())
                         local isBuff = frameName:find("Buff") ~= nil or (not isDebuff)
                         local showCustomBorder = false
                         
@@ -221,6 +223,16 @@ if AuraFrameMixin then
     hooksecurefunc(AuraFrameMixin, "UpdateAuraButtons", function(self)
         for _, button in ipairs(self.auraFrames) do
             UberUI.buffsandauras:StyleAuraButton(button)
+        end
+    end)
+end
+
+if AuraContainerMixin then
+    hooksecurefunc(AuraContainerMixin, "UpdateGridLayout", function(self, auras)
+        if type(auras) == "table" then
+            for _, button in ipairs(auras) do
+                UberUI.buffsandauras:StyleAuraButton(button)
+            end
         end
     end)
 end

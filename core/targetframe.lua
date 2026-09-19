@@ -182,12 +182,34 @@ function targetframes:ForceZoom()
     self:ZoomAuras()
 end
 
-hooksecurefunc(TargetFrame, "UpdateAuras", function(aura)
-    targetframes:ZoomAuras()
-    if UberUI.buffsandauras then
-        UberUI.buffsandauras:ColorAuras(false)
+if TargetFrame and TargetFrame.UpdateAuras then
+    hooksecurefunc(TargetFrame, "UpdateAuras", function(aura)
+        targetframes:ZoomAuras()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:ColorAuras(false)
+        end
+    end)
+end
+
+local aurasContainer = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
+if aurasContainer then
+    local function HandleAuraUpdate()
+        targetframes:ZoomAuras()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:ColorAuras(false)
+        end
     end
-end)
+    
+    if aurasContainer.Update then
+        hooksecurefunc(aurasContainer, "Update", HandleAuraUpdate)
+    end
+    if aurasContainer.UpdateAllAuras then
+        hooksecurefunc(aurasContainer, "UpdateAllAuras", HandleAuraUpdate)
+    end
+    if aurasContainer.UpdateAuras then
+        hooksecurefunc(aurasContainer, "UpdateAuras", HandleAuraUpdate)
+    end
+end
 
 function targetframes:PvPIcon()
     if TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual then
