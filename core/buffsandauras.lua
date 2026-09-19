@@ -66,8 +66,8 @@ function buffsandauras:StyleAuraButton(button)
             local dtype = button.auraData and button.auraData.dispelName or button.debuffType
             if button.DebuffBorder then
                 button.DebuffBorder:ClearAllPoints()
-                button.DebuffBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -2, 2)
-                button.DebuffBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 2, -2)
+                button.DebuffBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -5, 5)
+                button.DebuffBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 5, -5)
             end
         else
             -- It's a Buff! Show our custom desaturated dark border
@@ -163,8 +163,8 @@ function buffsandauras:ColorAuras(force)
                         
                         if v.Border then
                             v.Border:ClearAllPoints()
-                            v.Border:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -2, 2)
-                            v.Border:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 2, -2)
+                            v.Border:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -5, 5)
+                            v.Border:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 5, -5)
                         end
                     elseif (frameName:find("Buff")) then
                         showCustomBorder = true
