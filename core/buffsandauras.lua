@@ -55,7 +55,13 @@ function buffsandauras:StyleAuraButton(button)
         local showCustomBorder = false
 
         if button.auraType == "TempEnchant" then
-            -- Native purple border is handled by Blizzard
+            -- Native purple border is handled by Blizzard, but it's natively too tight (32x32)
+            -- We stretch it out to cover the sharp square corners of the zoomed icon
+            if button.TempEnchantBorder then
+                button.TempEnchantBorder:ClearAllPoints()
+                button.TempEnchantBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -5, 5)
+                button.TempEnchantBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 5, -5)
+            end
         elseif button.auraType == "Debuff" then
             local dtype = button.auraData and button.auraData.dispelName or button.debuffType or "none"
             dtype = string.lower(dtype)
