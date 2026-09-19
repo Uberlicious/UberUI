@@ -196,7 +196,7 @@ local function HandleAuras(container)
     
     if container.GetAuraGroupFrameCount then
         -- This is a 12.1 Intrinsic AuraContainer!
-        for _, groupKey in ipairs({"HELPFUL", "HARMFUL"}) do
+        for _, groupKey in ipairs({"HELPFUL", "HARMFUL", "Buffs", "Debuffs", "buffs", "debuffs"}) do
             local count = container:GetAuraGroupFrameCount(groupKey) or 0
             for i = 1, count do
                 local auraFrame = container:GetAuraGroupFrame(groupKey, i)

@@ -230,6 +230,19 @@ function buffsandauras:ColorAuras(force)
         end
     end
     
+    local aurasContainer = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
+    if aurasContainer and aurasContainer.GetAuraGroupFrameCount then
+        for _, groupKey in ipairs({"HELPFUL", "HARMFUL", "Buffs", "Debuffs", "buffs", "debuffs"}) do
+            local count = aurasContainer:GetAuraGroupFrameCount(groupKey) or 0
+            for i = 1, count do
+                local auraFrame = aurasContainer:GetAuraGroupFrame(groupKey, i)
+                if auraFrame then
+                    self:StyleAuraButton(auraFrame)
+                end
+            end
+        end
+    end
+    
     if FocusFrame and (not FocusFrame.smallSize) then
         HandleAuras(FocusFrame, 1);
         if FocusFrame.auraPools then
