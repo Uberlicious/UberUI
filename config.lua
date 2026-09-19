@@ -22,13 +22,19 @@ UberUI:RegisterEvent("VARIABLES_LOADED")
 UberUI:RegisterEvent("ADDON_LOADED")
 UberUI:RegisterEvent("PLAYER_LOGIN")
 UberUI:RegisterEvent("PLAYER_LOGOUT")
-UberUI:SetScript("OnEvent", function(self, event)
-    if (event == "ADDON_LOADED" or event == "VARIABLES_LOADED") then
-        self:Init();
-    end
-
-    if (event == "PLAYER_LOGOUT") then
-        self:Save();
+UberUI:SetScript("OnEvent", function(self, event, arg1)
+    if event == "ADDON_LOADED" and arg1 == "Uber UI" then
+        if not self.initialized then
+            self:Init()
+            self.initialized = true
+        end
+    elseif event == "VARIABLES_LOADED" then
+        if not self.initialized then
+            self:Init()
+            self.initialized = true
+        end
+    elseif event == "PLAYER_LOGOUT" then
+        self:Save()
     end
 end)
 

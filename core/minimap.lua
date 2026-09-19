@@ -49,9 +49,6 @@ function minimap.Color()
         ColorBorderRegion(MinimapCluster.IndicatorFrame)
         ColorBorderRegion(MinimapCluster.DielFrame)
     end
-    if GameTimeFrame then
-        ColorBorderRegion(GameTimeFrame)
-    end
 end
 
 UberUI.minimap = minimap
