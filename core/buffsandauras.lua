@@ -6,14 +6,15 @@ function buffsandauras:StyleAuraButton(button)
         return
     end
 
-    if not button.Icon then
+    local iconTex = button.Icon or button.icon
+    if not iconTex then
         return
     end
 
     if button.isAuraAnchor then return end
 
     if uuidb.general.buffauraborders and button:IsShown() then
-        local iconTexture = button.Icon
+        local iconTexture = iconTex
         if not iconTexture then
             for _, region in pairs({ button:GetRegions() }) do
                 if region:IsObjectType("Texture") then
@@ -88,9 +89,10 @@ function buffsandauras:StyleAuraButton(button)
         if button.UberUIBorderFrame then
             button.UberUIBorderFrame:Hide()
         end
-        if button.Icon then
-            button.Icon:SetTexCoord(0, 1, 0, 1)
-            UberUI.general:ApplyIconZoom(button.Icon, uuidb.general.zoomiconbuffs)
+        local iconTex = button.Icon or button.icon
+        if iconTex then
+            iconTex:SetTexCoord(0, 1, 0, 1)
+            UberUI.general:ApplyIconZoom(iconTex, uuidb.general.zoomiconbuffs)
         end
         local borderObj = button.DebuffBorder or button.Border
         if borderObj then
@@ -140,8 +142,9 @@ function buffsandauras:ColorAuras(force)
                 local isAura = false
                 local objType = v:GetObjectType()
                 if objType == "Frame" or objType == "Button" then
-                    if v.Icon and v.Icon.GetObjectType and v.Icon:GetObjectType() == "Texture" then
-                        if v.Count or v.Border or v.Cooldown or (v.GetName and not v:GetName()) or v.DebuffBorder then
+                    local iconObj = v.Icon or v.icon
+                    if iconObj and iconObj.GetObjectType and iconObj:GetObjectType() == "Texture" then
+                        if v.Count or v.count or v.Border or v.border or v.Cooldown or v.cooldown or (v.GetName and not v:GetName()) or v.DebuffBorder then
                             isAura = true
                         end
                     end
@@ -256,5 +259,11 @@ if AuraContainerMixin then
         end
     end)
 end
+
+local ticker = C_Timer.NewTicker(1, function()
+    if UberUI.buffsandauras then
+        UberUI.buffsandauras:ColorAuras(false)
+    end
+end)
 
 UberUI.buffsandauras = buffsandauras
