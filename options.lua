@@ -70,7 +70,8 @@ local function Register()
             UberUI.misc:AllFramesColor()
         end
 
-        local setting = Settings.RegisterAddOnSetting(category, variable, "darkencolor", uuidb.general,
+        local proxy = { darkencolor = getValue() }
+        local setting = Settings.RegisterAddOnSetting(category, variable, "darkencolor", proxy,
             Settings.VarType.Number, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateSlider(category, setting, options, tooltip);
@@ -134,8 +135,9 @@ local function Register()
             end
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "texture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["texture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "texture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -241,8 +243,9 @@ local function Register()
             UberUI.playerframes:HealthManaBarTexture(true);
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "playerbartexture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["playerbartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "playerbartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -322,8 +325,9 @@ local function Register()
             UberUI.targetframes:HealthManaBarTexture();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "targetbartexture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["targetbartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "targetbartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -405,8 +409,9 @@ local function Register()
             UberUI.partyframes:HealthManaBarTexture();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "partybartexture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["partybartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "partybartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -486,8 +491,9 @@ local function Register()
             UberUI.nameplates:ForceNameplateTexture(value);
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "nameplatebartexture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["nameplatebartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "nameplatebartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -567,8 +573,9 @@ local function Register()
             UberUI.misc:AllFramesHealthManaTexture();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "raidbartexture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["raidbartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "raidbartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -648,8 +655,9 @@ local function Register()
             UberUI.misc:AllFramesHealthManaTexture();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "secondarybartexture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["secondarybartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "secondarybartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -734,8 +742,9 @@ local function Register()
             end
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "damagemetertexture", uuidb.general,
-            Settings.VarType.Number,
+        local proxy = { ["damagemetertexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "damagemetertexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -818,8 +827,9 @@ local function Register()
             UberUI.cdManager:Refresh();
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "cooldownbartexture", uuidb.cooldown,
-            Settings.VarType.Number,
+        local proxy = { ["cooldownbartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "cooldownbartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 
@@ -1468,9 +1478,9 @@ if PersonalResourceDisplayMixin then
             if UberUI.personalresource then UberUI.personalresource:ForceTexture() end
         end
 
-        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "personalresourcebartexture", uuidb
-            .general,
-            Settings.VarType.Number,
+        local proxy = { ["personalresourcebartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "personalresourcebartexture", proxy,
+            Settings.VarType.String,
             ddname, dddefaultValue)
         ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
 

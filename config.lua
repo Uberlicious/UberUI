@@ -23,7 +23,7 @@ UberUI:RegisterEvent("ADDON_LOADED")
 UberUI:RegisterEvent("PLAYER_LOGIN")
 UberUI:RegisterEvent("PLAYER_LOGOUT")
 UberUI:SetScript("OnEvent", function(self, event, arg1)
-    if event == "ADDON_LOADED" and arg1 == "Uber UI" then
+    if event == "ADDON_LOADED" and arg1 == addon then
         if not self.initialized then
             self:Init()
             self.initialized = true
@@ -159,6 +159,5 @@ function UberUI:Init()
 end
 
 function UberUI:Save()
-    -- No longer needed because uuidb references UberuiDB directly.
-    -- Settings are applied live and automatically saved by the client.
+    _G["UberuiDB"] = uuidb
 end
