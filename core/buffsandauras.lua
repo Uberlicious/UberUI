@@ -8,16 +8,52 @@ function buffsandauras:StyleAuraButton(button)
 
     if uuidb.general.buffauraborders and button:IsShown() then
         local inset = 0.07
-        for _, region in pairs({ button:GetRegions() }) do
-            -- Check if the region is a Texture object
-            if region:IsObjectType("Texture") then
-                -- This is the object we need!
-                local iconTexture = region
-
-                UberUI.general:ApplyIconZoom(iconTexture, uuidb.general.zoomiconbuffs)
-                break
+        local iconTexture = button.Icon
+        if not iconTexture then
+            for _, region in pairs({ button:GetRegions() }) do
+                if region:IsObjectType("Texture") then
+                    iconTexture = region
+                    break
+                end
             end
         end
+        if iconTexture then
+            UberUI.general:ApplyIconZoom(iconTexture, uuidb.general.zoomiconbuffs)
+        end
+
+        local dc = uuidb.general.darkencolor
+        if button.DebuffBorder then
+            local r, g, b, a = button.DebuffBorder:GetVertexColor()
+            local noneColor = DebuffTypeColor and DebuffTypeColor["none"] or {r=0, g=0, b=0}
+            if r == noneColor.r and g == noneColor.g and b == noneColor.b then
+                button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            end
+            button.DebuffBorder:Show()
+        end
+        if button.TempEnchantBorder then
+            button.TempEnchantBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            button.TempEnchantBorder:Show()
+        end
+
+        -- Create a custom border if one doesn't exist
+        if not button.UberUIBorderFrame then
+            button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
+            button.UberUIBorderFrame:SetPoint("TOPLEFT", button, "TOPLEFT", -2, 2)
+            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 2, -2)
+            button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
+            
+            local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
+            tex:SetAllPoints()
+            local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
+            if tx then
+                tex:SetAtlas(tx)
+            else
+                tex:SetTexture("Interface\\\\Buttons\\\\UI-Quickslot2")
+            end
+            button.UberUIBorderFrame.texture = tex
+        end
+        button.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        button.UberUIBorderFrame:Show()
     else
         if button.DebuffBorder then
             button.DebuffBorder:Hide()
@@ -27,6 +63,9 @@ function buffsandauras:StyleAuraButton(button)
         end
         if button.NormalTexture then
             button.NormalTexture:Hide()
+        end
+        if button.UberUIBorderFrame then
+            button.UberUIBorderFrame:Hide()
         end
     end
 end
@@ -75,9 +114,29 @@ function buffsandauras:ColorAuras(force)
 
             if not v.styled and v.Icon then
                 if uuidb.general.buffauraborders then
-                    -- v.Icon:SetTexCoord(.05, .95, .05, .95);
+                    local dc = uuidb.general.darkencolor
+                    if not v.UberUIBorderFrame then
+                        v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
+                        v.UberUIBorderFrame:SetPoint("TOPLEFT", v, "TOPLEFT", -1, 1)
+                        v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v, "BOTTOMRIGHT", 1, -1)
+                        v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
+                        
+                        local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
+                        tex:SetAllPoints()
+                        local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
+                        if tx then
+                            tex:SetAtlas(tx)
+                        else
+                            tex:SetTexture("Interface\\\\Buttons\\\\UI-Quickslot2")
+                        end
+                        v.UberUIBorderFrame.texture = tex
+                    end
+                    v.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                    v.UberUIBorderFrame:Show()
                 else
-                    -- v.Icon:SetTexCoord(0, 1, 0, 1);
+                    if v.UberUIBorderFrame then
+                        v.UberUIBorderFrame:Hide()
+                    end
                 end
                 v.styled = true;
             end

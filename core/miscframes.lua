@@ -223,6 +223,7 @@ function misc:AllFramesColor()
     if UberUI.actionbars then UberUI.actionbars:Color() end
     if UberUI.cdManager then UberUI.cdManager:Color() end
     if UberUI.damageMeter then UberUI.damageMeter:ForceTexture() end
+    if UberUI.buffsandauras then UberUI.buffsandauras:Refresh() end
 end
 
 function misc:AllFramesHealthColor()
