@@ -1758,9 +1758,12 @@ hooksecurefunc(SettingsPanel, "DisplayCategory", function(self, category)
         header.UUI_Reload:SetText("Reload UI");
 
         header.UUI_Reload:SetScript("OnClick", function(self, button, down)
-            if SettingsPanel then SettingsPanel:Hide() end
+            print("|cff00ffffUber UI:|r Reloading...")
+            if SettingsPanel and SettingsPanel.Hide then SettingsPanel:Hide() end
             if C_UI and C_UI.Reload then
                 C_UI.Reload()
+            elseif ConsoleExec then
+                ConsoleExec("reloadui")
             else
                 ReloadUI()
             end
