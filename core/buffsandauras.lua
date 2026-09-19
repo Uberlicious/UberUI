@@ -217,9 +217,15 @@ function buffsandauras:ColorAuras(force)
     end
 
     HandleAuras(TargetFrame);
-
+    if TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
+        HandleAuras(TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
+    end
+    
     if FocusFrame and (not FocusFrame.smallSize) then
         HandleAuras(FocusFrame);
+        if FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentContextual and FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
+            HandleAuras(FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
+        end
     end
 end
 
