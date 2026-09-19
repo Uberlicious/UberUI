@@ -147,7 +147,7 @@ function buffsandauras:ColorAuras(force)
     local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
     local function HandleAuras(frame, depth)
-        if not frame or depth > 5 then return end
+        if not frame or depth > 10 then return end
         for _, v in pairs({ frame:GetChildren() }) do
             if v and v.GetObjectType then
                 local isAura = false
@@ -264,6 +264,14 @@ function buffsandauras:ColorAuras(force)
         end
     end
     
+    -- Fallback for global frames (Classic/Older retail)
+    for i = 1, 40 do
+        local b = _G["TargetFrameBuff"..i]
+        if b then self:StyleAuraButton(b) end
+        local d = _G["TargetFrameDebuff"..i]
+        if d then self:StyleAuraButton(d) end
+    end
+    
     if FocusFrame and (not FocusFrame.smallSize) then
         HandleAuras(FocusFrame, 1);
         if FocusFrame.auraPools then
@@ -299,5 +307,33 @@ local ticker = C_Timer.NewTicker(1, function()
         UberUI.buffsandauras:ColorAuras(false)
     end
 end)
+
+-- Catch any elusive buffs when the user hovers over them for a tooltip
+hooksecurefunc(GameTooltip, "SetUnitBuff", function(self, unit)
+    local owner = self:GetOwner()
+    if owner and UberUI.buffsandauras then
+        UberUI.buffsandauras:StyleAuraButton(owner)
+    end
+end)
+hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit)
+    local owner = self:GetOwner()
+    if owner and UberUI.buffsandauras then
+        UberUI.buffsandauras:StyleAuraButton(owner)
+    end
+end)
+if GameTooltip.SetUnitBuffByAuraInstanceID then
+    hooksecurefunc(GameTooltip, "SetUnitBuffByAuraInstanceID", function(self, unit)
+        local owner = self:GetOwner()
+        if owner and UberUI.buffsandauras then
+            UberUI.buffsandauras:StyleAuraButton(owner)
+        end
+    end)
+    hooksecurefunc(GameTooltip, "SetUnitDebuffByAuraInstanceID", function(self, unit)
+        local owner = self:GetOwner()
+        if owner and UberUI.buffsandauras then
+            UberUI.buffsandauras:StyleAuraButton(owner)
+        end
+    end)
+end
 
 UberUI.buffsandauras = buffsandauras
