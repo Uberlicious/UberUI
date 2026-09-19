@@ -172,6 +172,10 @@ function buffsandauras:ColorAuras(force)
                         local color = DebuffTypeColor and DebuffTypeColor[dtype]
                         
                         if v.Border then
+                            v.Border:ClearAllPoints()
+                            v.Border:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -2, 2)
+                            v.Border:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 2, -2)
+                            
                             if dtype == "none" or dtype == "" or not color then
                                 -- Typeless debuff: desaturate the native border and tint it custom dark
                                 v.Border:SetDesaturated(true)
