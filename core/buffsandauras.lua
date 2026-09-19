@@ -24,25 +24,10 @@ function buffsandauras:StyleAuraButton(button)
 
         local dc = uuidb.general.darkencolor
         
-        -- In modern WoW, AuraButtonTemplate is used for both buffs and debuffs.
-        -- We must let Blizzard natively manage the visibility of DebuffBorder and TempEnchantBorder.
-        if button.DebuffBorder then
-            local r, g, b, a = button.DebuffBorder:GetVertexColor()
-            local noneColor = DebuffTypeColor and DebuffTypeColor["none"] or {r=0, g=0, b=0}
-            -- If it is a generic debuff (natively colored red), we tint it to the darkencolor
-            if r == noneColor.r and g == noneColor.g and b == noneColor.b then
-                button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-            end
-        end
-        if button.TempEnchantBorder then
-            button.TempEnchantBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        end
-
-        -- Create a custom border if one doesn't exist
         if not button.UberUIBorderFrame then
             button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
-            button.UberUIBorderFrame:SetPoint("TOPLEFT", button.Icon or button, "TOPLEFT", -5, 5)
-            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", button.Icon or button, "BOTTOMRIGHT", 5, -5)
+            button.UberUIBorderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -5, 5)
+            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 5, -5)
             button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
             
             local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
@@ -51,49 +36,51 @@ function buffsandauras:StyleAuraButton(button)
             tex:SetDesaturated(true)
             button.UberUIBorderFrame.texture = tex
         end
-
+        
         local showCustomBorder = false
-
-        if button.auraType == "TempEnchant" then
-            -- Native purple border is handled by Blizzard, but it's natively too tight (32x32)
-            -- We stretch it out to cover the sharp square corners of the zoomed icon
-            if button.TempEnchantBorder then
-                button.TempEnchantBorder:ClearAllPoints()
-                button.TempEnchantBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -2, 2)
-                button.TempEnchantBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 2, -2)
-            end
-        elseif button.auraType == "Debuff" then
-            local dtype = button.auraData and button.auraData.dispelName or button.debuffType
-            if button.DebuffBorder then
-                button.DebuffBorder:ClearAllPoints()
-                button.DebuffBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -5, 5)
-                button.DebuffBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 5, -5)
+        -- Modern WoW templates use button.debuffType or button.auraData.dispelName
+        local dtype = button.debuffType or (button.auraData and button.auraData.dispelName)
+        local isDebuff = button.auraType == "Debuff" or dtype ~= nil or (button.Border and button.Border:IsShown()) or (button.DebuffBorder and button.DebuffBorder:IsShown())
+        
+        if isDebuff then
+            local borderObj = button.DebuffBorder or button.Border
+            if borderObj then
+                borderObj:ClearAllPoints()
+                borderObj:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -5, 5)
+                borderObj:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 5, -5)
                 
                 if not dtype or dtype == "" or string.lower(dtype) == "none" then
-                    -- Typeless debuff: Hide native red border, show our custom black border
-                    button.DebuffBorder:SetAlpha(0)
+                    borderObj:SetAlpha(0)
                     showCustomBorder = true
                 else
-                    -- Typed debuff: Show native colored border
-                    button.DebuffBorder:SetAlpha(1)
+                    borderObj:SetAlpha(1)
                 end
+            else
+                showCustomBorder = true
+            end
+        elseif button.auraType == "TempEnchant" then
+            if button.TempEnchantBorder then
+                button.TempEnchantBorder:ClearAllPoints()
+                button.TempEnchantBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -2, 2)
+                button.TempEnchantBorder:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 2, -2)
+                button.TempEnchantBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
             end
         else
-            -- It's a Buff! Show our custom desaturated dark border
+            -- It's a buff
             showCustomBorder = true
-            button.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         end
-
+        
         if showCustomBorder then
+            local r, g, b, a = dc.r, dc.g, dc.b, dc.a
+            if button.isStealable or (button.Stealable and button.Stealable:IsShown()) then
+                r, g, b, a = 1, 1, 1, 1
+            end
+            button.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
             button.UberUIBorderFrame:Show()
         else
             button.UberUIBorderFrame:Hide()
         end
     else
-        -- Only hide our custom additions, let Blizzard manage its own borders natively
-        if button.NormalTexture then
-            button.NormalTexture:Show()
-        end
         if button.UberUIBorderFrame then
             button.UberUIBorderFrame:Hide()
         end
@@ -101,8 +88,9 @@ function buffsandauras:StyleAuraButton(button)
             button.Icon:SetTexCoord(0, 1, 0, 1)
             UberUI.general:ApplyIconZoom(button.Icon, uuidb.general.zoomiconbuffs)
         end
-        if button.DebuffBorder then
-            button.DebuffBorder:SetAlpha(1)
+        local borderObj = button.DebuffBorder or button.Border
+        if borderObj then
+            borderObj:SetAlpha(1)
         end
     end
 end
@@ -141,108 +129,91 @@ function buffsandauras:ColorAuras(force)
     local dc = uuidb.general.darkencolor;
     local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
-    local function HandleAuras(frame)
-        if not frame then return end
-        local frameName = frame:GetName();
+    local function HandleAuras(frame, depth)
+        if not frame or depth > 5 then return end
         for _, v in pairs({ frame:GetChildren() }) do
-            local isAura = false
-            if v.Icon and v.GetObjectType and v.Icon.GetObjectType and v.Icon:GetObjectType() == "Texture" then
-                if v.Count or v.Border or v.Cooldown or (v.GetName and not v:GetName()) then
-                    isAura = true
-                end
-            end
-            
-            if isAura then
-                if uuidb.general.buffauraborders then
-                    v.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                    local dc = uuidb.general.darkencolor
-                    if not v.UberUIBorderFrame then
-                        v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
-                        v.UberUIBorderFrame:SetPoint("TOPLEFT", v.Icon or v, "TOPLEFT", -5, 5)
-                        v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v.Icon or v, "BOTTOMRIGHT", 5, -5)
-                        v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
-                        
-                        local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
-                        tex:SetAllPoints()
-                        tex:SetAtlas("ui-debuff-border-default-noicon")
-                        tex:SetDesaturated(true)
-                        v.UberUIBorderFrame.texture = tex
+            if v and type(v) == "table" and v.GetObjectType and v:GetObjectType() == "Frame" or v:GetObjectType() == "Button" then
+                local isAura = false
+                if v.Icon and v.GetObjectType and v.Icon.GetObjectType and v.Icon:GetObjectType() == "Texture" then
+                    if v.Count or v.Border or v.Cooldown or (v.GetName and not v:GetName()) or v.DebuffBorder then
+                        isAura = true
                     end
-                    
-                    local r, g, b, a = dc.r, dc.g, dc.b, dc.a
-                    local frameName = v.GetName and v:GetName() or ""
-                    local isDebuff = frameName:find("Debuff") ~= nil or v.Border ~= nil
-                    local isBuff = frameName:find("Buff") ~= nil or (not v.Border)
-                    local showCustomBorder = false
-                    
-                    if isDebuff then
-                        local dtype = v.debuffType
-                        
-                        if v.Border then
-                            v.Border:ClearAllPoints()
-                            v.Border:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -5, 5)
-                            v.Border:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 5, -5)
+                end
+                
+                if isAura then
+                    if uuidb.general.buffauraborders then
+                        v.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                        local dc = uuidb.general.darkencolor
+                        if not v.UberUIBorderFrame then
+                            v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
+                            v.UberUIBorderFrame:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -5, 5)
+                            v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 5, -5)
+                            v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
                             
-                            if not dtype or dtype == "" or string.lower(dtype) == "none" then
-                                v.Border:SetAlpha(0)
-                                showCustomBorder = true
-                            else
-                                v.Border:SetAlpha(1)
+                            local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
+                            tex:SetAllPoints()
+                            tex:SetAtlas("ui-debuff-border-default-noicon")
+                            tex:SetDesaturated(true)
+                            v.UberUIBorderFrame.texture = tex
+                        end
+                        
+                        local r, g, b, a = dc.r, dc.g, dc.b, dc.a
+                        local frameName = v.GetName and v:GetName() or ""
+                        local isDebuff = frameName:find("Debuff") ~= nil or v.Border ~= nil or v.DebuffBorder ~= nil
+                        local isBuff = frameName:find("Buff") ~= nil or (not isDebuff)
+                        local showCustomBorder = false
+                        
+                        if isDebuff then
+                            local dtype = v.debuffType
+                            
+                            local borderObj = v.Border or v.DebuffBorder
+                            if borderObj then
+                                borderObj:ClearAllPoints()
+                                borderObj:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -5, 5)
+                                borderObj:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 5, -5)
+                                
+                                if not dtype or dtype == "" or string.lower(dtype) == "none" then
+                                    borderObj:SetAlpha(0)
+                                    showCustomBorder = true
+                                else
+                                    borderObj:SetAlpha(1)
+                                end
+                            end
+                        elseif isBuff then
+                            showCustomBorder = true
+                            if v.isStealable or v.Stealable and v.Stealable:IsShown() then
+                                r, g, b, a = 1, 1, 1, 1
                             end
                         end
-                    elseif isBuff then
-                        showCustomBorder = true
-                        if v.isStealable or v.Stealable and v.Stealable:IsShown() then
-                            -- Stealable buffs are highlighted white
-                            r, g, b, a = 1, 1, 1, 1
+                        
+                        if showCustomBorder then
+                            v.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
+                            v.UberUIBorderFrame:Show()
+                        else
+                            v.UberUIBorderFrame:Hide()
+                        end
+                    else
+                        if v.UberUIBorderFrame then
+                            v.UberUIBorderFrame:Hide()
+                        end
+                        if v.Icon then
+                            v.Icon:SetTexCoord(0, 1, 0, 1)
+                            UberUI.general:ApplyIconZoom(v.Icon, uuidb.general.zoomicontarget)
+                        end
+                        if v.Border then
+                            v.Border:SetAlpha(1)
                         end
                     end
-                    
-                    if showCustomBorder then
-                        v.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
-                        v.UberUIBorderFrame:Show()
-                    else
-                        v.UberUIBorderFrame:Hide()
-                    end
                 else
-                    if v.UberUIBorderFrame then
-                        v.UberUIBorderFrame:Hide()
-                    end
-                    if v.Icon then
-                        v.Icon:SetTexCoord(0, 1, 0, 1)
-                        UberUI.general:ApplyIconZoom(v.Icon, uuidb.general.zoomicontarget)
-                    end
-                    if v.Border then
-                        v.Border:SetAlpha(1)
-                    end
+                    HandleAuras(v, depth + 1)
                 end
-                v.styled = true;
             end
         end
     end
 
-    HandleAuras(TargetFrame);
-    if TargetFrame and TargetFrame.TargetFrameContent then
-        HandleAuras(TargetFrame.TargetFrameContent)
-        if TargetFrame.TargetFrameContent.TargetFrameContentContextual then
-            HandleAuras(TargetFrame.TargetFrameContent.TargetFrameContentContextual)
-            if TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
-                HandleAuras(TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
-            end
-        end
-    end
-    
+    HandleAuras(TargetFrame, 1);
     if FocusFrame and (not FocusFrame.smallSize) then
-        HandleAuras(FocusFrame);
-        if FocusFrame.TargetFrameContent then
-            HandleAuras(FocusFrame.TargetFrameContent)
-            if FocusFrame.TargetFrameContent.TargetFrameContentContextual then
-                HandleAuras(FocusFrame.TargetFrameContent.TargetFrameContentContextual)
-                if FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
-                    HandleAuras(FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
-                end
-            end
-        end
+        HandleAuras(FocusFrame, 1);
     end
 end
 
