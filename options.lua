@@ -872,6 +872,7 @@ local function Register()
     end
 
     -- Damage Meters
+if DamageMeterSessionWindowMixin then
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Damage Meters"));
 
     -- Background
@@ -974,6 +975,7 @@ local function Register()
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
+end
 
     -- Icon Zoom
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Icon Zoom"));
@@ -1073,6 +1075,7 @@ local function Register()
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
+if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Arena"));
 
     -- Arena Nameplate Numbers
@@ -1122,6 +1125,7 @@ local function Register()
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
+end
 
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Raid Frames"));
 
@@ -1382,6 +1386,7 @@ local function Register()
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
+if PersonalResourceDisplayMixin then
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Personal Resource Display"));
 
     -- Darken Personal Resource Border
@@ -1491,6 +1496,7 @@ local function Register()
         -- REMOVED predicate so it's always visible
         layout:AddInitializer(cbdd);
     end
+end
 
     -- Color options
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Health Bar Color Options"));
@@ -1593,6 +1599,7 @@ local function Register()
     end
 
 
+if FocusFrame then
     -- Class Color Enemy Focus
     do
         local variable, name = "ccEnemyFocus", "Class Color Enemy Focus";
@@ -1640,6 +1647,7 @@ local function Register()
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
+end
 
     -- Class Color Friendly Nameplates
     do
