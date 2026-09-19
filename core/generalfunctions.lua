@@ -22,6 +22,14 @@ function general:PvPIcon(frame)
             frame.HonorIcon:Show()
         end
     end
+    if frame then
+        if frame.PvpBackgroundCircle then
+            UberUI.general:ApplyDarkenColor(frame.PvpBackgroundCircle)
+        end
+        if frame.PvPBackgroundCircle then
+            UberUI.general:ApplyDarkenColor(frame.PvPBackgroundCircle)
+        end
+    end
 end
 
 function general:SetHealthColor(healthBar, unit, db)

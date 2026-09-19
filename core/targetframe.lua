@@ -184,6 +184,9 @@ end
 
 hooksecurefunc(TargetFrame, "UpdateAuras", function(aura)
     targetframes:ZoomAuras()
+    if UberUI.buffsandauras then
+        UberUI.buffsandauras:ColorAuras(false)
+    end
 end)
 
 function targetframes:PvPIcon()
