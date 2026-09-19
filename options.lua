@@ -1752,22 +1752,13 @@ hooksecurefunc(SettingsPanel, "DisplayCategory", function(self, category)
     if ((category:GetID() == Settings.UBERUI_CATEGORY_ID or
                 (category:HasParentCategory() and category:GetParentCategory():GetID() == Settings.UBERUI_CATEGORY_ID))
             and not header.UUI_Reload) then
-        header.UUI_Reload = UberUI:CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+        header.UUI_Reload = UberUI:CreateFrame("Button", nil, header, "UIPanelButtonTemplate, SecureActionButtonTemplate")
         header.UUI_Reload:SetPoint("RIGHT", header.DefaultsButton, "LEFT", -5, 0);
         header.UUI_Reload:SetSize(header.DefaultsButton:GetSize()); header.UUI_Reload:SetFrameStrata("HIGH");
         header.UUI_Reload:SetText("Reload UI");
 
-        header.UUI_Reload:SetScript("OnClick", function(self, button, down)
-            print("|cff00ffffUber UI:|r Reloading...")
-            if SettingsPanel and SettingsPanel.Hide then SettingsPanel:Hide() end
-            if C_UI and C_UI.Reload then
-                C_UI.Reload()
-            elseif ConsoleExec then
-                ConsoleExec("reloadui")
-            else
-                ReloadUI()
-            end
-        end)
+        header.UUI_Reload:SetAttribute("type", "macro")
+        header.UUI_Reload:SetAttribute("macrotext", "/reload")
     elseif ((category:GetID() == Settings.UBERUI_CATEGORY_ID or
                 (category:HasParentCategory() and category:GetParentCategory():GetID() == Settings.UBERUI_CATEGORY_ID))
             and header.UUI_Reload) then
