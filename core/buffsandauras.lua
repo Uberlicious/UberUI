@@ -64,22 +64,10 @@ function buffsandauras:StyleAuraButton(button)
             end
         elseif button.auraType == "Debuff" then
             local dtype = button.auraData and button.auraData.dispelName or button.debuffType
-            
             if button.DebuffBorder then
-                if not dtype or dtype == "" or string.lower(dtype) == "none" then
-                    -- Typeless debuff: desaturate the native border and tint it custom dark
-                    button.DebuffBorder:SetDesaturated(true)
-                    button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                else
-                    -- Typed debuff: restore saturation so Blizzard's native color works
-                    button.DebuffBorder:SetDesaturated(false)
-                    local color = DebuffTypeColor and DebuffTypeColor[dtype]
-                    if color then
-                        button.DebuffBorder:SetVertexColor(color.r, color.g, color.b, 1)
-                    else
-                        button.DebuffBorder:SetVertexColor(1, 1, 1, 1)
-                    end
-                end
+                button.DebuffBorder:ClearAllPoints()
+                button.DebuffBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -2, 2)
+                button.DebuffBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 2, -2)
             end
         else
             -- It's a Buff! Show our custom desaturated dark border
@@ -177,21 +165,6 @@ function buffsandauras:ColorAuras(force)
                             v.Border:ClearAllPoints()
                             v.Border:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -2, 2)
                             v.Border:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 2, -2)
-                            
-                            if not dtype or dtype == "" or string.lower(dtype) == "none" then
-                                -- Typeless debuff: desaturate the native border and tint it custom dark
-                                v.Border:SetDesaturated(true)
-                                v.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                            else
-                                -- Typed debuff: let Blizzard color the native border!
-                                v.Border:SetDesaturated(false)
-                                local color = DebuffTypeColor and DebuffTypeColor[dtype]
-                                if color then
-                                    v.Border:SetVertexColor(color.r, color.g, color.b, 1)
-                                else
-                                    v.Border:SetVertexColor(1, 1, 1, 1)
-                                end
-                            end
                         end
                     elseif (frameName:find("Buff")) then
                         showCustomBorder = true
