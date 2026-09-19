@@ -46,13 +46,22 @@ function targetframes:Color()
     end
     
     if TargetFrame then
-        if TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain and TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame then
-            if TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame.LevelBackgroundCircle then
+        if TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain then
+            if TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame and TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame.LevelBackgroundCircle then
                 ApplyDarkenColor(TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame.LevelBackgroundCircle)
+            end
+            if TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelBackground then
+                ApplyDarkenColor(TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelBackground)
             end
         end
         if TargetFrame.LevelBackgroundCircle then
             ApplyDarkenColor(TargetFrame.LevelBackgroundCircle)
+        end
+        if TargetFrame.LevelBackground then
+            ApplyDarkenColor(TargetFrame.LevelBackground)
+        end
+        if _G["TargetFrameLevelBackground"] then
+            ApplyDarkenColor(_G["TargetFrameLevelBackground"])
         end
     end
     

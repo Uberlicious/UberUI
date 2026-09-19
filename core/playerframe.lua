@@ -58,13 +58,22 @@ function playerframes:Color()
     end
     
     if PlayerFrame then
-        if PlayerFrame.PlayerFrameContent and PlayerFrame.PlayerFrameContent.PlayerFrameContentMain and PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelTextFrame then
-            if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelTextFrame.LevelBackgroundCircle then
+        if PlayerFrame.PlayerFrameContent and PlayerFrame.PlayerFrameContent.PlayerFrameContentMain then
+            if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelTextFrame and PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelTextFrame.LevelBackgroundCircle then
                 ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelTextFrame.LevelBackgroundCircle)
+            end
+            if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelBackground then
+                ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelBackground)
             end
         end
         if PlayerFrame.LevelBackgroundCircle then
             ApplyDarkenColor(PlayerFrame.LevelBackgroundCircle)
+        end
+        if PlayerFrame.LevelBackground then
+            ApplyDarkenColor(PlayerFrame.LevelBackground)
+        end
+        if _G["PlayerFrameLevelBackground"] then
+            ApplyDarkenColor(_G["PlayerFrameLevelBackground"])
         end
     end
     
