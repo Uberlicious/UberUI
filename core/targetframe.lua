@@ -191,17 +191,44 @@ if TargetFrame and TargetFrame.UpdateAuras then
     end)
 end
 
+local function HandleAuras(container)
+    if not container then return end
+    
+    if container.GetAuraGroupFrameCount then
+        -- This is a 12.1 Intrinsic AuraContainer!
+        for _, groupKey in ipairs({"HELPFUL", "HARMFUL"}) do
+            local count = container:GetAuraGroupFrameCount(groupKey) or 0
+            for i = 1, count do
+                local auraFrame = container:GetAuraGroupFrame(groupKey, i)
+                if auraFrame and UberUI.buffsandauras then
+                    UberUI.buffsandauras:StyleAuraButton(auraFrame)
+                end
+            end
+        end
+    elseif container.GetChildren then
+        -- Fallback for standard frames
+        for _, child in pairs({container:GetChildren()}) do
+            if UberUI.buffsandauras then
+                UberUI.buffsandauras:StyleAuraButton(child)
+            end
+        end
+    elseif container.auraFrames then
+        -- Fallback for arrays of auraFrames
+        for _, btn in ipairs(container.auraFrames) do
+            if UberUI.buffsandauras then
+                UberUI.buffsandauras:StyleAuraButton(btn)
+            end
+        end
+    end
+end
+
 local aurasContainer = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
 if aurasContainer then
     local function HandleAuraUpdate(self)
         targetframes:ZoomAuras()
         if UberUI.buffsandauras then
             UberUI.buffsandauras:ColorAuras(false)
-            if self and self.auraFrames then
-                for _, btn in ipairs(self.auraFrames) do
-                    UberUI.buffsandauras:StyleAuraButton(btn)
-                end
-            end
+            HandleAuras(self)
         end
     end
     
