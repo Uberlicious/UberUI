@@ -120,7 +120,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.texture, "_", " ");
+                local val = uuidb.general.texture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -231,7 +232,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.playerbartexture, "_", " ");
+                local val = uuidb.general.playerbartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -313,7 +315,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.targetbartexture, "_", " ");
+                local val = uuidb.general.targetbartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -397,7 +400,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.partybartexture, "_", " ");
+                local val = uuidb.general.partybartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -479,7 +483,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.nameplatebartexture, "_", " ");
+                local val = uuidb.general.nameplatebartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -561,7 +566,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.raidbartexture, "_", " ");
+                local val = uuidb.general.raidbartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -643,7 +649,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.secondarybartexture, "_", " ");
+                local val = uuidb.general.secondarybartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -728,7 +735,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.damagemetertexture, "_", " ");
+                local val = uuidb.general.damagemetertexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -815,7 +823,8 @@ local function Register()
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.cooldown) then
-                return gsub(uuidb.cooldown.bartexture, "_", " ");
+                local val = uuidb.cooldown.bartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
@@ -1466,7 +1475,8 @@ if PersonalResourceDisplayMixin then
         local dddefaultValue = "Blizzard";
         local function ddgetValue()
             if (uuidb.general) then
-                return gsub(uuidb.general.personalresourcebartexture, "_", " ");
+                local val = uuidb.general.personalresourcebartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
             else
                 return dddefaultValue;
             end
