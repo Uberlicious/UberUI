@@ -65,6 +65,12 @@ function playerframes:Color()
             if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelBackground then
                 ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelBackground)
             end
+            if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelBackgroundCircle then
+                ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.LevelBackgroundCircle)
+            end
+            if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvPBackgroundCircle then
+                ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvPBackgroundCircle)
+            end
         end
         if PlayerFrame.LevelBackgroundCircle then
             ApplyDarkenColor(PlayerFrame.LevelBackgroundCircle)

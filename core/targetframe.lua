@@ -53,6 +53,12 @@ function targetframes:Color()
             if TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelBackground then
                 ApplyDarkenColor(TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelBackground)
             end
+            if TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelBackgroundCircle then
+                ApplyDarkenColor(TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelBackgroundCircle)
+            end
+            if TargetFrame.TargetFrameContent.TargetFrameContentMain.PvPBackgroundCircle then
+                ApplyDarkenColor(TargetFrame.TargetFrameContent.TargetFrameContentMain.PvPBackgroundCircle)
+            end
         end
         if TargetFrame.LevelBackgroundCircle then
             ApplyDarkenColor(TargetFrame.LevelBackgroundCircle)

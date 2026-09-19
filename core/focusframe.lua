@@ -44,6 +44,12 @@ function focusframes:Color()
             if FocusFrame.TargetFrameContent.TargetFrameContentMain.LevelBackground then
                 ApplyDarkenColor(FocusFrame.TargetFrameContent.TargetFrameContentMain.LevelBackground)
             end
+            if FocusFrame.TargetFrameContent.TargetFrameContentMain.LevelBackgroundCircle then
+                ApplyDarkenColor(FocusFrame.TargetFrameContent.TargetFrameContentMain.LevelBackgroundCircle)
+            end
+            if FocusFrame.TargetFrameContent.TargetFrameContentMain.PvPBackgroundCircle then
+                ApplyDarkenColor(FocusFrame.TargetFrameContent.TargetFrameContentMain.PvPBackgroundCircle)
+            end
         end
         if FocusFrame.LevelBackgroundCircle then
             ApplyDarkenColor(FocusFrame.LevelBackgroundCircle)
