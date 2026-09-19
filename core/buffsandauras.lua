@@ -41,13 +41,18 @@ function buffsandauras:StyleAuraButton(button)
         -- Create a custom border if one doesn't exist
         if not button.UberUIBorderFrame then
             button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
-            button.UberUIBorderFrame:SetSize(button.Icon:GetWidth() + 10, button.Icon:GetHeight() + 10)
-            button.UberUIBorderFrame:SetPoint("CENTER", button.Icon or button, "CENTER", 0, 0)
+            button.UberUIBorderFrame:SetPoint("TOPLEFT", button.Icon or button, "TOPLEFT", 0, 0)
+            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", button.Icon or button, "BOTTOMRIGHT", 2, -2)
             button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
             
             local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
-            tex:SetAtlas("ui-debuff-border-default-noicon")
+            local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
+            if tx then
+                tex:SetAtlas(tx)
+            else
+                tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+            end
             button.UberUIBorderFrame.texture = tex
         end
 
@@ -133,13 +138,18 @@ function buffsandauras:ColorAuras(force)
                     local dc = uuidb.general.darkencolor
                     if not v.UberUIBorderFrame then
                         v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
-                        v.UberUIBorderFrame:SetSize(v.Icon:GetWidth() + 10, v.Icon:GetHeight() + 10)
-                        v.UberUIBorderFrame:SetPoint("CENTER", v.Icon or v, "CENTER", 0, 0)
+                        v.UberUIBorderFrame:SetPoint("TOPLEFT", v.Icon or v, "TOPLEFT", 0, 0)
+                        v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v.Icon or v, "BOTTOMRIGHT", 2, -2)
                         v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
                         
                         local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
                         tex:SetAllPoints()
-                        tex:SetAtlas("ui-debuff-border-default-noicon")
+                        local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
+                        if tx then
+                            tex:SetAtlas(tx)
+                        else
+                            tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+                        end
                         v.UberUIBorderFrame.texture = tex
                     end
                     
