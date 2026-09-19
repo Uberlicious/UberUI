@@ -135,56 +135,30 @@ function UberUI:GetDefaults()
 end
 
 function UberUI:Init()
-    local function initDB(def, tbl, saved)
-        if type(def) ~= "table" then return {} end
-        if type(tbl) ~= "table" then tbl = {} end
-        if type(saved) ~= "table" then saved = {} end
-        for k, v in pairs(def) do
-            if type(v) == "table" then
-                tbl[k] = initDB(v, tbl[k], saved[k])
-            elseif type(tbl[k]) ~= "table" and saved[k] ~= nil then -- If saved value exists use it
-                tbl[k] = saved[k]
-            elseif type(tbl[k]) ~= "table" and saved[k] == nil then -- If saved value does not exist use default
-                tbl[k] = v
-            end
-        end
-        return tbl
+    if type(UberuiDB) ~= "table" then
+        UberuiDB = {}
     end
 
-    uuidb = initDB(defaults, uuidb, UberuiDB)
+    local function mergeDefaults(def, saved)
+        for k, v in pairs(def) do
+            if type(v) == "table" then
+                if type(saved[k]) ~= "table" then
+                    saved[k] = {}
+                end
+                mergeDefaults(v, saved[k])
+            else
+                if saved[k] == nil then
+                    saved[k] = v
+                end
+            end
+        end
+    end
+
+    mergeDefaults(defaults, UberuiDB)
+    uuidb = UberuiDB
 end
 
 function UberUI:Save()
-    local function updateSave(def, tbl, saved)
-        if type(def) ~= "table" then return {} end
-        if type(tbl) ~= "table" then tbl = {} end
-        if type(saved) ~= "table" then saved = {} end
-        for k, v in pairs(tbl) do
-            if type(v) == "table" then
-                saved[k] = updateSave(def[k], v, saved[k])
-            elseif type(saved[k]) ~= "table" and v ~= def[k] then                        -- If temp value does not equal the default, save it
-                saved[k] = v
-            elseif type(saved[k]) ~= "table" and v == def[k] and saved[k] ~= def[k] then -- Unset saved value if temp == default and saved value exists
-                saved[k] = nil
-            elseif type(saved[k]) ~= "table" and saved[k] == def[k] then                 -- Cleanup if save value happens to == default
-                saved[k] = nil
-            end
-        end
-        return saved
-    end
-
-    UberuiDB = updateSave(defaults, uuidb, UberuiDB)
-
-    local function cleanupSave(saved)
-        for k, v in pairs(saved) do
-            if type(v) == "table" and next(v) then
-                cleanupSave(v)
-            elseif type(v) == "table" and not next(v) then
-                saved[k] = nil
-            end
-        end
-        return saved
-    end
-
-    UberuiDB = cleanupSave(UberuiDB)
+    -- No longer needed because uuidb references UberuiDB directly.
+    -- Settings are applied live and automatically saved by the client.
 end
