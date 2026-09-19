@@ -59,8 +59,8 @@ function buffsandauras:StyleAuraButton(button)
             -- We stretch it out to cover the sharp square corners of the zoomed icon
             if button.TempEnchantBorder then
                 button.TempEnchantBorder:ClearAllPoints()
-                button.TempEnchantBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -5, 5)
-                button.TempEnchantBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 5, -5)
+                button.TempEnchantBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -2, 2)
+                button.TempEnchantBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 2, -2)
             end
         elseif button.auraType == "Debuff" then
             local dtype = button.auraData and button.auraData.dispelName or button.debuffType or "none"
