@@ -19,7 +19,7 @@ function buffsandauras:StyleAuraButton(button)
             end
         end
         if iconTexture then
-            UberUI.general:ApplyIconZoom(iconTexture, uuidb.general.zoomiconbuffs)
+            iconTexture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         end
 
         local dc = uuidb.general.darkencolor
@@ -85,10 +85,14 @@ function buffsandauras:StyleAuraButton(button)
     else
         -- Only hide our custom additions, let Blizzard manage its own borders natively
         if button.NormalTexture then
-            button.NormalTexture:Hide()
+            button.NormalTexture:Show()
         end
         if button.UberUIBorderFrame then
             button.UberUIBorderFrame:Hide()
+        end
+        if button.Icon then
+            button.Icon:SetTexCoord(0, 1, 0, 1)
+            UberUI.general:ApplyIconZoom(button.Icon, uuidb.general.zoomiconbuffs)
         end
     end
 end
@@ -137,6 +141,7 @@ function buffsandauras:ColorAuras(force)
 
             if not v.styled and v.Icon then
                 if uuidb.general.buffauraborders then
+                    v.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
                     local dc = uuidb.general.darkencolor
                     if not v.UberUIBorderFrame then
                         v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
@@ -190,6 +195,10 @@ function buffsandauras:ColorAuras(force)
                 else
                     if v.UberUIBorderFrame then
                         v.UberUIBorderFrame:Hide()
+                    end
+                    if v.Icon then
+                        v.Icon:SetTexCoord(0, 1, 0, 1)
+                        UberUI.general:ApplyIconZoom(v.Icon, uuidb.general.zoomicontarget)
                     end
                 end
                 v.styled = true;
