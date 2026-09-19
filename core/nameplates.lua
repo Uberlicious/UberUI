@@ -1,6 +1,10 @@
 local addon, ns = ...
 local nameplates = {}
 
+local _uberMasks = setmetatable({}, {__mode = "k"})
+local _maskedFills = setmetatable({}, {__mode = "k"})
+local _uberOriginalPoints = setmetatable({}, {__mode = "k"})
+
 local function GetMaskTexture()
     if uuidb and uuidb.masks and uuidb.masks.cdm_mask then
         return uuidb.masks.cdm_mask
@@ -42,7 +46,7 @@ function nameplates:OnNamePlateLoad(unitFrame)
         local L, T, R, B = opts.insetL or 0, opts.insetT or 0, opts.insetR or 0, opts.insetB or 0
         local SX, SY = opts.shiftX or 0, opts.shiftY or 0
 
-        if not healthBar._uberMask then
+        if not _uberMasks[healthBar] then
             local m = healthBar:CreateMaskTexture(nil, "OVERLAY")
             if m and m.SetTexture then
                 m:SetTexture(GetMaskTexture(), "CLAMPTOBLACK", "CLAMPTOBLACK")
@@ -50,10 +54,10 @@ function nameplates:OnNamePlateLoad(unitFrame)
                 if m.SetTexelSnappingBias then m:SetTexelSnappingBias(0) end
                 if m.SetHorizTile then m:SetHorizTile(false) end
                 if m.SetVertTile then m:SetVertTile(false) end
-                healthBar._uberMask = m
+                _uberMasks[healthBar] = m
             end
         end
-        local m = healthBar._uberMask
+        local m = _uberMasks[healthBar]
 
         if m and m.ClearAllPoints and m.SetPoint then
             m:ClearAllPoints()
@@ -63,9 +67,9 @@ function nameplates:OnNamePlateLoad(unitFrame)
 
         -- Apply the mask to the fill texture
         local fill = healthBar:GetStatusBarTexture()
-        if fill and m and fill.AddMaskTexture and not fill._masked then
+        if fill and m and fill.AddMaskTexture and not _maskedFills[fill] then
             fill:AddMaskTexture(m)
-            fill._masked = true
+            _maskedFills[fill] = true
         end
     end
 
@@ -108,17 +112,17 @@ function nameplates:UpdateRaidTargetScale(unitFrame)
     if unitFrame and unitFrame.RaidTargetFrame and not unitFrame:IsForbidden() then
         local raidTargetFrame = unitFrame.RaidTargetFrame
 
-        if not raidTargetFrame.uberOriginalPoints and raidTargetFrame:GetNumPoints() > 0 then
-            raidTargetFrame.uberOriginalPoints = {}
+        if not _uberOriginalPoints[raidTargetFrame] and raidTargetFrame:GetNumPoints() > 0 then
+            _uberOriginalPoints[raidTargetFrame] = {}
             for i = 1, raidTargetFrame:GetNumPoints() do
                 local success, p1, p2, p3, p4, p5 = pcall(raidTargetFrame.GetPoint, raidTargetFrame, i)
                 if success and p1 then
-                    raidTargetFrame.uberOriginalPoints[#raidTargetFrame.uberOriginalPoints + 1] = { p1, p2, p3, p4, p5 }
+                    _uberOriginalPoints[raidTargetFrame][#_uberOriginalPoints[raidTargetFrame] + 1] = { p1, p2, p3, p4, p5 }
                 end
             end
-            if #raidTargetFrame.uberOriginalPoints == 0 then
+            if #_uberOriginalPoints[raidTargetFrame] == 0 then
                 local fallbackAnchor = unitFrame.name or unitFrame
-                raidTargetFrame.uberOriginalPoints[1] = { "RIGHT", fallbackAnchor, "LEFT", -5, 0 }
+                _uberOriginalPoints[raidTargetFrame][1] = { "RIGHT", fallbackAnchor, "LEFT", -5, 0 }
             end
         end
 
@@ -133,7 +137,7 @@ function nameplates:UpdateRaidTargetScale(unitFrame)
             end
         end
 
-        if raidTargetFrame.uberOriginalPoints then
+        if _uberOriginalPoints[raidTargetFrame] then
             if isFriendly and isSimplified and not isTarget and uuidb.general.nameplateraidtargettopanchor then
                 raidTargetFrame:ClearAllPoints()
                 if unitFrame.healthBar then
@@ -143,7 +147,7 @@ function nameplates:UpdateRaidTargetScale(unitFrame)
                 end
             else
                 raidTargetFrame:ClearAllPoints()
-                for _, point in ipairs(raidTargetFrame.uberOriginalPoints) do
+                for _, point in ipairs(_uberOriginalPoints[raidTargetFrame]) do
                     raidTargetFrame:SetPoint(unpack(point))
                 end
             end
@@ -200,12 +204,12 @@ f:SetScript("OnEvent", function(self, event, unit)
         local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
         if nameplate and nameplate.UnitFrame then
             if nameplate.UnitFrame.RaidTargetFrame then
-                if nameplate.UnitFrame.RaidTargetFrame.uberOriginalPoints then
+                if _uberOriginalPoints[nameplate.UnitFrame.RaidTargetFrame] then
                     nameplate.UnitFrame.RaidTargetFrame:ClearAllPoints()
-                    for _, point in ipairs(nameplate.UnitFrame.RaidTargetFrame.uberOriginalPoints) do
+                    for _, point in ipairs(_uberOriginalPoints[nameplate.UnitFrame.RaidTargetFrame]) do
                         nameplate.UnitFrame.RaidTargetFrame:SetPoint(unpack(point))
                     end
-                    nameplate.UnitFrame.RaidTargetFrame.uberOriginalPoints = nil
+                    _uberOriginalPoints[nameplate.UnitFrame.RaidTargetFrame] = nil
                 end
             end
             UberUI.nameplates:UpdateRaidTargetScale(nameplate.UnitFrame)
