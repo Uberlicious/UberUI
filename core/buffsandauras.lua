@@ -41,13 +41,14 @@ function buffsandauras:StyleAuraButton(button)
         -- Create a custom border if one doesn't exist
         if not button.UberUIBorderFrame then
             button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
-            button.UberUIBorderFrame:SetSize(button.Icon:GetWidth() + 4, button.Icon:GetHeight() + 4)
-            button.UberUIBorderFrame:SetPoint("CENTER", button.Icon or button, "CENTER", 0, 0)
+            button.UberUIBorderFrame:SetPoint("TOPLEFT", button.Icon or button, "TOPLEFT", -1, 1)
+            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", button.Icon or button, "BOTTOMRIGHT", 1, -1)
             button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
             
             local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
-            tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+            tex:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
+            tex:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
             button.UberUIBorderFrame.texture = tex
         end
         button.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
@@ -110,13 +111,14 @@ function buffsandauras:ColorAuras(force)
                     local dc = uuidb.general.darkencolor
                     if not v.UberUIBorderFrame then
                         v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
-                        v.UberUIBorderFrame:SetSize(v.Icon:GetWidth() + 4, v.Icon:GetHeight() + 4)
-                        v.UberUIBorderFrame:SetPoint("CENTER", v.Icon or v, "CENTER", 0, 0)
+                        v.UberUIBorderFrame:SetPoint("TOPLEFT", v.Icon or v, "TOPLEFT", -1, 1)
+                        v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v.Icon or v, "BOTTOMRIGHT", 1, -1)
                         v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
                         
                         local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
                         tex:SetAllPoints()
-                        tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+                        tex:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
+                        tex:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
                         v.UberUIBorderFrame.texture = tex
                     end
                     v.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
