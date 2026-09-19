@@ -41,12 +41,13 @@ function buffsandauras:StyleAuraButton(button)
         -- Create a custom border if one doesn't exist
         if not button.UberUIBorderFrame then
             button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
-            button.UberUIBorderFrame:SetAllPoints(button.Icon or button)
+            button.UberUIBorderFrame:SetSize(button.Icon:GetWidth() + 4, button.Icon:GetHeight() + 4)
+            button.UberUIBorderFrame:SetPoint("CENTER", button.Icon or button, "CENTER", 0, 0)
             button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
             
             local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
-            tex:SetTexture(uuidb.general.border or "Interface\\\\AddOns\\\\Uber UI\\\\textures\\\\border")
+            tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
             button.UberUIBorderFrame.texture = tex
         end
         button.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
@@ -109,12 +110,13 @@ function buffsandauras:ColorAuras(force)
                     local dc = uuidb.general.darkencolor
                     if not v.UberUIBorderFrame then
                         v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
-                        v.UberUIBorderFrame:SetAllPoints(v.Icon or v)
+                        v.UberUIBorderFrame:SetSize(v.Icon:GetWidth() + 4, v.Icon:GetHeight() + 4)
+                        v.UberUIBorderFrame:SetPoint("CENTER", v.Icon or v, "CENTER", 0, 0)
                         v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
                         
                         local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
                         tex:SetAllPoints()
-                        tex:SetTexture(uuidb.general.border or "Interface\\\\AddOns\\\\Uber UI\\\\textures\\\\border")
+                        tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
                         v.UberUIBorderFrame.texture = tex
                     end
                     v.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
