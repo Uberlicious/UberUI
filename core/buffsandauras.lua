@@ -68,6 +68,15 @@ function buffsandauras:StyleAuraButton(button)
                 button.DebuffBorder:ClearAllPoints()
                 button.DebuffBorder:SetPoint("TOPLEFT", button.Icon, "TOPLEFT", -5, 5)
                 button.DebuffBorder:SetPoint("BOTTOMRIGHT", button.Icon, "BOTTOMRIGHT", 5, -5)
+                
+                if not dtype or dtype == "" or string.lower(dtype) == "none" then
+                    -- Typeless debuff: Hide native red border, show our custom black border
+                    button.DebuffBorder:SetAlpha(0)
+                    showCustomBorder = true
+                else
+                    -- Typed debuff: Show native colored border
+                    button.DebuffBorder:SetAlpha(1)
+                end
             end
         else
             -- It's a Buff! Show our custom desaturated dark border
@@ -91,6 +100,9 @@ function buffsandauras:StyleAuraButton(button)
         if button.Icon then
             button.Icon:SetTexCoord(0, 1, 0, 1)
             UberUI.general:ApplyIconZoom(button.Icon, uuidb.general.zoomiconbuffs)
+        end
+        if button.DebuffBorder then
+            button.DebuffBorder:SetAlpha(1)
         end
     end
 end
@@ -165,6 +177,13 @@ function buffsandauras:ColorAuras(force)
                             v.Border:ClearAllPoints()
                             v.Border:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -5, 5)
                             v.Border:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 5, -5)
+                            
+                            if not dtype or dtype == "" or string.lower(dtype) == "none" then
+                                v.Border:SetAlpha(0)
+                                showCustomBorder = true
+                            else
+                                v.Border:SetAlpha(1)
+                            end
                         end
                     elseif (frameName:find("Buff")) then
                         showCustomBorder = true
@@ -187,6 +206,9 @@ function buffsandauras:ColorAuras(force)
                     if v.Icon then
                         v.Icon:SetTexCoord(0, 1, 0, 1)
                         UberUI.general:ApplyIconZoom(v.Icon, uuidb.general.zoomicontarget)
+                    end
+                    if v.Border then
+                        v.Border:SetAlpha(1)
                     end
                 end
                 v.styled = true;
