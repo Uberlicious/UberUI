@@ -50,8 +50,31 @@ function buffsandauras:StyleAuraButton(button)
             tex:SetAtlas("ui-debuff-border-default-noicon")
             button.UberUIBorderFrame.texture = tex
         end
-        button.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        button.UberUIBorderFrame:Show()
+
+        local r, g, b, a = dc.r, dc.g, dc.b, dc.a
+        local showBorder = true
+
+        if button.auraType == "TempEnchant" then
+            showBorder = false -- Let Blizzard show the native purple TempEnchantBorder
+        elseif button.auraType == "Debuff" then
+            local dtype = button.auraData and button.auraData.dispelName or button.debuffType or "none"
+            local color = DebuffTypeColor and DebuffTypeColor[dtype]
+            if dtype == "none" or dtype == "" or not color then
+                r, g, b, a = dc.r, dc.g, dc.b, dc.a
+                if button.DebuffBorder then button.DebuffBorder:SetVertexColor(r, g, b, a) end
+                showBorder = false -- Let the native DebuffBorder show it, we tinted it black!
+            else
+                -- It's a typed debuff (e.g. Magic, Poison). Let Blizzard color the native border!
+                showBorder = false
+            end
+        end
+
+        if showBorder then
+            button.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
+            button.UberUIBorderFrame:Show()
+        else
+            button.UberUIBorderFrame:Hide()
+        end
     else
         -- Only hide our custom additions, let Blizzard manage its own borders natively
         if button.NormalTexture then
@@ -119,7 +142,27 @@ function buffsandauras:ColorAuras(force)
                         tex:SetAtlas("ui-debuff-border-default-noicon")
                         v.UberUIBorderFrame.texture = tex
                     end
-                    v.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                    
+                    local r, g, b, a = dc.r, dc.g, dc.b, dc.a
+                    local frameName = v.GetName and v:GetName() or ""
+                    
+                    if (frameName:find("Debuff")) then
+                        local dtype = v.debuffType or "none"
+                        local color = DebuffTypeColor and DebuffTypeColor[dtype]
+                        if dtype == "Magic" then
+                            -- Dispellable magic buffs are white?
+                            r, g, b, a = 1, 1, 1, 1
+                        elseif dtype ~= "none" and dtype ~= "" and color then
+                            r, g, b, a = color.r, color.g, color.b, 1
+                        end
+                    elseif (frameName:find("Buff")) then
+                        if v.isStealable then
+                            -- Stealable buffs are white or special?
+                            r, g, b, a = 1, 1, 1, 1
+                        end
+                    end
+                    
+                    v.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
                     v.UberUIBorderFrame:Show()
                 else
                     if v.UberUIBorderFrame then
