@@ -193,10 +193,15 @@ end
 
 local aurasContainer = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
 if aurasContainer then
-    local function HandleAuraUpdate()
+    local function HandleAuraUpdate(self)
         targetframes:ZoomAuras()
         if UberUI.buffsandauras then
             UberUI.buffsandauras:ColorAuras(false)
+            if self and self.auraFrames then
+                for _, btn in ipairs(self.auraFrames) do
+                    UberUI.buffsandauras:StyleAuraButton(btn)
+                end
+            end
         end
     end
     

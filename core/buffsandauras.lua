@@ -2,7 +2,11 @@ local addon, ns = ...
 local buffsandauras = {}
 
 function buffsandauras:StyleAuraButton(button)
-    if not button or not button.Icon then
+    if not button or type(button) ~= "table" or not button.GetObjectType or button:GetObjectType() ~= "Button" and button:GetObjectType() ~= "Frame" then
+        return
+    end
+
+    if not button.Icon then
         return
     end
 
@@ -215,8 +219,23 @@ function buffsandauras:ColorAuras(force)
     end
 
     HandleAuras(TargetFrame, 1);
+    if TargetFrame and TargetFrame.auraPools then
+        for pool in TargetFrame.auraPools:EnumeratePools() do
+            for frame in pool:EnumerateActive() do
+                self:StyleAuraButton(frame)
+            end
+        end
+    end
+    
     if FocusFrame and (not FocusFrame.smallSize) then
         HandleAuras(FocusFrame, 1);
+        if FocusFrame.auraPools then
+            for pool in FocusFrame.auraPools:EnumeratePools() do
+                for frame in pool:EnumerateActive() do
+                    self:StyleAuraButton(frame)
+                end
+            end
+        end
     end
 end
 
