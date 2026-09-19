@@ -168,9 +168,11 @@ function buffsandauras:ColorAuras(force)
                     
                     local r, g, b, a = dc.r, dc.g, dc.b, dc.a
                     local frameName = v.GetName and v:GetName() or ""
+                    local isDebuff = frameName:find("Debuff") ~= nil or v.Border ~= nil
+                    local isBuff = frameName:find("Buff") ~= nil or (not v.Border)
                     local showCustomBorder = false
                     
-                    if (frameName:find("Debuff")) then
+                    if isDebuff then
                         local dtype = v.debuffType
                         
                         if v.Border then
@@ -185,7 +187,7 @@ function buffsandauras:ColorAuras(force)
                                 v.Border:SetAlpha(1)
                             end
                         end
-                    elseif (frameName:find("Buff")) then
+                    elseif isBuff then
                         showCustomBorder = true
                         if v.isStealable or v.Stealable and v.Stealable:IsShown() then
                             -- Stealable buffs are highlighted white
