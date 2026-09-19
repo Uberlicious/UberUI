@@ -36,8 +36,23 @@ function focusframes:Color()
         ApplyDarkenColor(FocusFrameTextureFrameTexture)
     end
     
+    if FocusFrame then
+        if FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentMain and FocusFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame then
+            if FocusFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame.LevelBackgroundCircle then
+                ApplyDarkenColor(FocusFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame.LevelBackgroundCircle)
+            end
+        end
+        if FocusFrame.LevelBackgroundCircle then
+            ApplyDarkenColor(FocusFrame.LevelBackgroundCircle)
+        end
+    end
+    
     if FocusFrameSpellBar and FocusFrameSpellBar.Border then
         ApplyDarkenColor(FocusFrameSpellBar.Border)
+    end
+    
+    if FocusFrameToTTextureFrameTexture then
+        ApplyDarkenColor(FocusFrameToTTextureFrameTexture)
     end
     
     if FocusFrameToT and FocusFrameToT.FrameTexture then

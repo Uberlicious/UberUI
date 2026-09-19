@@ -45,6 +45,17 @@ function targetframes:Color()
         ApplyDarkenColor(TargetFrameTextureFrameTexture)
     end
     
+    if TargetFrame then
+        if TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain and TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame then
+            if TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame.LevelBackgroundCircle then
+                ApplyDarkenColor(TargetFrame.TargetFrameContent.TargetFrameContentMain.LevelTextFrame.LevelBackgroundCircle)
+            end
+        end
+        if TargetFrame.LevelBackgroundCircle then
+            ApplyDarkenColor(TargetFrame.LevelBackgroundCircle)
+        end
+    end
+    
     if TargetFrameSpellBar and TargetFrameSpellBar.Border then
         ApplyDarkenColor(TargetFrameSpellBar.Border)
     end
