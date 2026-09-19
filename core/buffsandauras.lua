@@ -41,41 +41,43 @@ function buffsandauras:StyleAuraButton(button)
         -- Create a custom border if one doesn't exist
         if not button.UberUIBorderFrame then
             button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
-            button.UberUIBorderFrame:SetPoint("TOPLEFT", button.Icon or button, "TOPLEFT", 0, 0)
-            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", button.Icon or button, "BOTTOMRIGHT", 2, -2)
+            button.UberUIBorderFrame:SetSize(button.Icon:GetWidth() + 10, button.Icon:GetHeight() + 10)
+            button.UberUIBorderFrame:SetPoint("CENTER", button.Icon or button, "CENTER", 0, 0)
             button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
             
             local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
-            local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
-            if tx then
-                tex:SetAtlas(tx)
-            else
-                tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-            end
+            tex:SetAtlas("ui-debuff-border-default-noicon")
+            tex:SetDesaturated(true)
             button.UberUIBorderFrame.texture = tex
         end
 
-        local r, g, b, a = dc.r, dc.g, dc.b, dc.a
-        local showBorder = true
+        local showCustomBorder = false
 
         if button.auraType == "TempEnchant" then
-            showBorder = false -- Let Blizzard show the native purple TempEnchantBorder
+            -- Native purple border is handled by Blizzard
         elseif button.auraType == "Debuff" then
             local dtype = button.auraData and button.auraData.dispelName or button.debuffType or "none"
+            dtype = string.lower(dtype)
             local color = DebuffTypeColor and DebuffTypeColor[dtype]
-            if dtype == "none" or dtype == "" or not color then
-                r, g, b, a = dc.r, dc.g, dc.b, dc.a
-                if button.DebuffBorder then button.DebuffBorder:SetVertexColor(r, g, b, a) end
-                showBorder = false -- Let the native DebuffBorder show it, we tinted it black!
-            else
-                -- It's a typed debuff (e.g. Magic, Poison). Let Blizzard color the native border!
-                showBorder = false
+            
+            if button.DebuffBorder then
+                if dtype == "none" or dtype == "" or not color then
+                    -- Typeless debuff: desaturate the native border and tint it custom dark
+                    button.DebuffBorder:SetDesaturated(true)
+                    button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                else
+                    -- Typed debuff: restore saturation so Blizzard's native color works
+                    button.DebuffBorder:SetDesaturated(false)
+                end
             end
+        else
+            -- It's a Buff! Show our custom desaturated dark border
+            showCustomBorder = true
+            button.UberUIBorderFrame.texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         end
 
-        if showBorder then
-            button.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
+        if showCustomBorder then
             button.UberUIBorderFrame:Show()
         else
             button.UberUIBorderFrame:Hide()
@@ -138,18 +140,14 @@ function buffsandauras:ColorAuras(force)
                     local dc = uuidb.general.darkencolor
                     if not v.UberUIBorderFrame then
                         v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
-                        v.UberUIBorderFrame:SetPoint("TOPLEFT", v.Icon or v, "TOPLEFT", 0, 0)
-                        v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v.Icon or v, "BOTTOMRIGHT", 2, -2)
+                        v.UberUIBorderFrame:SetSize(v.Icon:GetWidth() + 10, v.Icon:GetHeight() + 10)
+                        v.UberUIBorderFrame:SetPoint("CENTER", v.Icon or v, "CENTER", 0, 0)
                         v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
                         
                         local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
                         tex:SetAllPoints()
-                        local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
-                        if tx then
-                            tex:SetAtlas(tx)
-                        else
-                            tex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-                        end
+                        tex:SetAtlas("ui-debuff-border-default-noicon")
+                        tex:SetDesaturated(true)
                         v.UberUIBorderFrame.texture = tex
                     end
                     
@@ -162,13 +160,21 @@ function buffsandauras:ColorAuras(force)
                         if dtype == "Magic" then
                             -- Dispellable magic buffs are white?
                             r, g, b, a = 1, 1, 1, 1
+                            v.UberUIBorderFrame.texture:SetDesaturated(true)
                         elseif dtype ~= "none" and dtype ~= "" and color then
                             r, g, b, a = color.r, color.g, color.b, 1
+                            v.UberUIBorderFrame.texture:SetDesaturated(false)
+                        else
+                            -- Typeless debuff: desaturate and darken
+                            v.UberUIBorderFrame.texture:SetDesaturated(true)
                         end
                     elseif (frameName:find("Buff")) then
                         if v.isStealable then
                             -- Stealable buffs are white or special?
                             r, g, b, a = 1, 1, 1, 1
+                            v.UberUIBorderFrame.texture:SetDesaturated(true)
+                        else
+                            v.UberUIBorderFrame.texture:SetDesaturated(true)
                         end
                     end
                     
