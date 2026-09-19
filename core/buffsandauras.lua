@@ -145,11 +145,14 @@ function buffsandauras:ColorAuras(force)
         if not frame then return end
         local frameName = frame:GetName();
         for _, v in pairs({ frame:GetChildren() }) do
-            if (force) then
-                v.styled = nil;
+            local isAura = false
+            if v.Icon and v.GetObjectType and v.Icon.GetObjectType and v.Icon:GetObjectType() == "Texture" then
+                if v.Count or v.Border or v.Cooldown or (v.GetName and not v:GetName()) then
+                    isAura = true
+                end
             end
-
-            if not v.styled and v.Icon then
+            
+            if isAura then
                 if uuidb.general.buffauraborders then
                     v.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
                     local dc = uuidb.general.darkencolor
@@ -219,14 +222,26 @@ function buffsandauras:ColorAuras(force)
     end
 
     HandleAuras(TargetFrame);
-    if TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
-        HandleAuras(TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
+    if TargetFrame and TargetFrame.TargetFrameContent then
+        HandleAuras(TargetFrame.TargetFrameContent)
+        if TargetFrame.TargetFrameContent.TargetFrameContentContextual then
+            HandleAuras(TargetFrame.TargetFrameContent.TargetFrameContentContextual)
+            if TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
+                HandleAuras(TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
+            end
+        end
     end
     
     if FocusFrame and (not FocusFrame.smallSize) then
         HandleAuras(FocusFrame);
-        if FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentContextual and FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
-            HandleAuras(FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
+        if FocusFrame.TargetFrameContent then
+            HandleAuras(FocusFrame.TargetFrameContent)
+            if FocusFrame.TargetFrameContent.TargetFrameContentContextual then
+                HandleAuras(FocusFrame.TargetFrameContent.TargetFrameContentContextual)
+                if FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras then
+                    HandleAuras(FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras)
+                end
+            end
         end
     end
 end
