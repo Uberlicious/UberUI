@@ -23,11 +23,14 @@ function general:PvPIcon(frame)
         end
     end
     if frame then
-        if frame.PvpBackgroundCircle then
-            UberUI.general:ApplyDarkenColor(frame.PvpBackgroundCircle)
-        end
-        if frame.PvPBackgroundCircle then
-            UberUI.general:ApplyDarkenColor(frame.PvPBackgroundCircle)
+        local dc = uuidb and uuidb.general and uuidb.general.darkencolor
+        if dc then
+            if frame.PvpBackgroundCircle and frame.PvpBackgroundCircle.SetVertexColor then
+                frame.PvpBackgroundCircle:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            end
+            if frame.PvPBackgroundCircle and frame.PvPBackgroundCircle.SetVertexColor then
+                frame.PvPBackgroundCircle:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            end
         end
     end
 end
