@@ -1,6 +1,10 @@
 local addon, ns = ...
 local buffsandauras = {}
 
+if not buffsandauras.borderFrames then
+    buffsandauras.borderFrames = setmetatable({}, {__mode = "k"})
+end
+
 function buffsandauras:StyleAuraButton(button)
     if not button or type(button) ~= "table" or not button.GetObjectType or button:GetObjectType() ~= "Button" and button:GetObjectType() ~= "Frame" then
         return
@@ -29,17 +33,26 @@ function buffsandauras:StyleAuraButton(button)
 
         local dc = uuidb.general.darkencolor
         
-        if not button.UberUIBorderFrame then
-            button.UberUIBorderFrame = CreateFrame("Frame", nil, button)
-            button.UberUIBorderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -5, 5)
-            button.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 5, -5)
-            button.UberUIBorderFrame:SetFrameLevel(button:GetFrameLevel() + 5)
+        local borderFrame = buffsandauras.borderFrames[button]
+        if not borderFrame then
+            borderFrame = CreateFrame("Frame", nil, button:GetParent() or UIParent)
+            borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -5, 5)
+            borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 5, -5)
             
-            local tex = button.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
+            -- Safely attempt to set frame level, fallback to a high number if button is restricted
+            local ok, level = pcall(function() return button:GetFrameLevel() end)
+            if ok and level then
+                borderFrame:SetFrameLevel(level + 5)
+            else
+                borderFrame:SetFrameLevel(100)
+            end
+            
+            local tex = borderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
             tex:SetAtlas("ui-debuff-border-default-noicon")
             tex:SetDesaturated(true)
-            button.UberUIBorderFrame.texture = tex
+            borderFrame.texture = tex
+            buffsandauras.borderFrames[button] = borderFrame
         end
         
         local showCustomBorder = false
@@ -91,14 +104,15 @@ function buffsandauras:StyleAuraButton(button)
             if button.isStealable or (button.Stealable and button.Stealable:IsShown()) then
                 r, g, b, a = 1, 1, 1, 1
             end
-            button.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
-            button.UberUIBorderFrame:Show()
+            borderFrame.texture:SetVertexColor(r, g, b, a)
+            borderFrame:Show()
         else
-            button.UberUIBorderFrame:Hide()
+            borderFrame:Hide()
         end
     else
-        if button.UberUIBorderFrame then
-            button.UberUIBorderFrame:Hide()
+        local borderFrame = buffsandauras.borderFrames[button]
+        if borderFrame then
+            borderFrame:Hide()
         end
         local iconTex = button.Icon or button.icon
         if iconTex then
@@ -164,21 +178,29 @@ function buffsandauras:ColorAuras(force)
                 if isAura then
                     if uuidb.general.buffauraborders then
                         v.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                        local dc = uuidb.general.darkencolor
-                        if not v.UberUIBorderFrame then
-                            v.UberUIBorderFrame = CreateFrame("Frame", nil, v)
-                            v.UberUIBorderFrame:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -5, 5)
-                            v.UberUIBorderFrame:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 5, -5)
-                            v.UberUIBorderFrame:SetFrameLevel(v:GetFrameLevel() + 5)
+                        local r, g, b, a = dc.r, dc.g, dc.b, dc.a
+                        
+                        local borderFrame = buffsandauras.borderFrames[v]
+                        if not borderFrame then
+                            borderFrame = CreateFrame("Frame", nil, v:GetParent() or UIParent)
+                            borderFrame:SetPoint("TOPLEFT", v.Icon, "TOPLEFT", -5, 5)
+                            borderFrame:SetPoint("BOTTOMRIGHT", v.Icon, "BOTTOMRIGHT", 5, -5)
                             
-                            local tex = v.UberUIBorderFrame:CreateTexture(nil, "OVERLAY")
+                            local ok, level = pcall(function() return v:GetFrameLevel() end)
+                            if ok and level then
+                                borderFrame:SetFrameLevel(level + 5)
+                            else
+                                borderFrame:SetFrameLevel(100)
+                            end
+                            
+                            local tex = borderFrame:CreateTexture(nil, "OVERLAY")
                             tex:SetAllPoints()
                             tex:SetAtlas("ui-debuff-border-default-noicon")
                             tex:SetDesaturated(true)
-                            v.UberUIBorderFrame.texture = tex
+                            borderFrame.texture = tex
+                            buffsandauras.borderFrames[v] = borderFrame
                         end
                         
-                        local r, g, b, a = dc.r, dc.g, dc.b, dc.a
                         local frameName = v.GetName and v:GetName() or ""
                         local isDebuff = frameName:find("Debuff") ~= nil or (v.Border and v.Border:IsShown()) or (v.DebuffBorder and v.DebuffBorder:IsShown())
                         local isBuff = frameName:find("Buff") ~= nil or (not isDebuff)
@@ -218,14 +240,15 @@ function buffsandauras:ColorAuras(force)
                         end
                         
                         if showCustomBorder then
-                            v.UberUIBorderFrame.texture:SetVertexColor(r, g, b, a)
-                            v.UberUIBorderFrame:Show()
+                            borderFrame.texture:SetVertexColor(r, g, b, a)
+                            borderFrame:Show()
                         else
-                            v.UberUIBorderFrame:Hide()
+                            borderFrame:Hide()
                         end
                     else
-                        if v.UberUIBorderFrame then
-                            v.UberUIBorderFrame:Hide()
+                        local borderFrame = buffsandauras.borderFrames[v]
+                        if borderFrame then
+                            borderFrame:Hide()
                         end
                         if v.Icon then
                             v.Icon:SetTexCoord(0, 1, 0, 1)
