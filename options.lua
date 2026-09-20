@@ -996,103 +996,111 @@ if DamageMeterSessionWindowMixin then
     end
 end
 
-    -- Icon Zoom
-    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Icon Zoom"));
+    -- Aura Styling
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling"));
 
-    -- Player Buffs/Debuffs
-    do
-        local variable, name = "zoomIconBuffs", "Player Buffs/Debuffs";
-        local tooltip = "Zoom in on player buffs and debuffs icons";
-        local defaultValue = false;
+    local function GetAuraStyleOptions()
+        local container = Settings.CreateControlTextContainer();
+        container:Add("both", "Zoom & Dark Border");
+        container:Add("border", "Dark Border Only");
+        container:Add("zoom", "Zoom Only");
+        container:Add("none", "None");
+        return container:GetData();
+    end
+
+    local function CreateAuraStyleDropdown(name, variableKey, tooltip, isEnabled, onSetCallback)
+        local variable = variableKey .. "_dropdown";
+        local defaultValue = variableKey:find("debuff") and "zoom" or "both";
         local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.zoomiconbuffs;
+            if uuidb.general and uuidb.general[variableKey] ~= nil then
+                return uuidb.general[variableKey];
             else
                 return defaultValue;
             end
         end
 
+        local proxy = { [variableKey] = getValue() };
         local function setValue(self, value)
-            uuidb.general.zoomiconbuffs = value;
+            if not isEnabled then return end
+            if uuidb.general then
+                uuidb.general[variableKey] = value;
+            end
+            proxy[variableKey] = value;
+            if onSetCallback then
+                onSetCallback(value);
+            end
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, variableKey, proxy,
+            Settings.VarType.String, name, defaultValue);
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+
+        local fullTooltip = tooltip;
+        if not isEnabled then
+            fullTooltip = fullTooltip .. "\n\n|cffff8000(Currently disabled - in development)|r";
+        end
+
+        local initializer = Settings.CreateDropdownInitializer(setting, GetAuraStyleOptions, fullTooltip);
+        if not isEnabled and initializer.AddEnabledPredicate then
+            initializer:AddEnabledPredicate(function() return false end);
+        end
+        layout:AddInitializer(initializer);
+    end
+
+    -- Player Buffs
+    CreateAuraStyleDropdown("Player Buffs", "aurastyle_playerbuffs", "Choose how to style player buffs", true, function()
+        if UberUI.buffsandauras then
             UberUI.buffsandauras:Refresh();
         end
+    end);
 
-        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconbuffs", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
-
-    -- Target Auras
-    do
-        local variable, name = "zoomIconTarget", "Target Auras";
-        local tooltip = "Zoom in on target auras icons";
-        local defaultValue = false;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.zoomicontarget;
-            else
-                return defaultValue;
-            end
+    -- Player Debuffs
+    CreateAuraStyleDropdown("Player Debuffs", "aurastyle_playerdebuffs", "Choose how to style player debuffs", true, function()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:Refresh();
         end
+    end);
 
-        local function setValue(self, value)
-            uuidb.general.zoomicontarget = value;
-            UberUI.targetframes:ForceZoom();
-        end
+    -- Sub-group for other frames
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling - Other Frames (Coming Soon)"));
 
-        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomicontarget", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
+    -- Target Buffs
+    CreateAuraStyleDropdown("Target Buffs", "aurastyle_targetbuffs", "Choose how to style target buffs", false);
 
-    -- Compact Frames (Raid/Party)
-    do
-        local variable, name = "zoomIconCompact", "Compact Raid/Party Frames";
-        local tooltip = "Zoom in on compact raid/party auras icons";
-        local defaultValue = false;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.zoomiconcompact;
-            else
-                return defaultValue;
-            end
-        end
+    -- Target Debuffs
+    CreateAuraStyleDropdown("Target Debuffs", "aurastyle_targetdebuffs", "Choose how to style target debuffs", false);
 
-        local function setValue(self, value)
-            uuidb.general.zoomiconcompact = value;
-            UberUI.cuf:ForceZoom();
-        end
+    -- Focus Buffs
+    CreateAuraStyleDropdown("Focus Buffs", "aurastyle_focusbuffs", "Choose how to style focus buffs", false);
 
-        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconcompact", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
-    -- Standard Party Frames
-    do
-        local variable, name = "zoomIconParty", "Standard Party Frames";
-        local tooltip = "Zoom in on standard party auras icons";
-        local defaultValue = false;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.zoomiconparty;
-            else
-                return defaultValue;
-            end
-        end
+    -- Focus Debuffs
+    CreateAuraStyleDropdown("Focus Debuffs", "aurastyle_focusdebuffs", "Choose how to style focus debuffs", false);
 
-        local function setValue(self, value)
-            uuidb.general.zoomiconparty = value;
-            UberUI.partyframes:ForceZoom();
-        end
+    -- Party Buffs
+    CreateAuraStyleDropdown("Party Buffs", "aurastyle_partybuffs", "Choose how to style standard party buffs", false);
 
-        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconparty", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
+    -- Party Debuffs
+    CreateAuraStyleDropdown("Party Debuffs", "aurastyle_partydebuffs", "Choose how to style standard party debuffs", false);
+
+    -- Compact Raid/Party Buffs
+    CreateAuraStyleDropdown("Compact Raid/Party Buffs", "aurastyle_compactbuffs", "Choose how to style compact raid and party buffs", false);
+
+    -- Compact Raid/Party Debuffs
+    CreateAuraStyleDropdown("Compact Raid/Party Debuffs", "aurastyle_compactdebuffs", "Choose how to style compact raid and party debuffs", false);
+
+    -- Nameplate Buffs
+    CreateAuraStyleDropdown("Nameplate Buffs", "aurastyle_nameplatebuffs", "Choose how to style nameplate buffs", false);
+
+    -- Nameplate Debuffs
+    CreateAuraStyleDropdown("Nameplate Debuffs", "aurastyle_nameplatedebuffs", "Choose how to style nameplate debuffs", false);
+
+if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
+    -- Arena Buffs
+    CreateAuraStyleDropdown("Arena Buffs", "aurastyle_arenabuffs", "Choose how to style arena buffs", false);
+
+    -- Arena Debuffs
+    CreateAuraStyleDropdown("Arena Debuffs", "aurastyle_arenadebuffs", "Choose how to style arena debuffs", false);
+end
 
 if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Arena"));
@@ -1375,32 +1383,6 @@ end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "nameplateraidtargettopanchor", uuidb.general,
             Settings.VarType.Boolean, name, defaultValue);
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
-
-    -- Buff and Aura Borders
-    do
-        local variable, name = "BuffAuraBorders", "Buff and Aura Borders";
-        local tooltip = "Enable borders on Buffs and Auras"
-        local defaultValue = true;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.buffauraborders;
-            else
-                return defaultValue;
-            end
-        end
-
-        local function setValue(self, value)
-            uuidb.general.buffauraborders = value;
-            if UberUI.buffsandauras then
-                UberUI.buffsandauras:Refresh();
-            end
-        end
-
-        local setting = Settings.RegisterAddOnSetting(category, variable, "buffauraborders", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
         setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
         Settings.CreateCheckbox(category, setting, tooltip);
     end
