@@ -164,7 +164,7 @@ local function StyleCompactBuff(buffFrame)
     end
 
     if darkBorderEnabled then
-        local pad = 1
+        local pad = 2
         local target = icon or buffFrame
         borderHost:ClearAllPoints()
         borderHost:SetPoint("TOPLEFT", target, "TOPLEFT", -pad, pad)
@@ -225,7 +225,7 @@ local function StyleCompactDebuff(debuffFrame)
         debuffFrame.borderTex = borderTex
     end
 
-    local pad = 1
+    local pad = 2
     local blizzBorder = debuffFrame.border or debuffFrame.Border
     local target = icon or debuffFrame
 
@@ -432,8 +432,8 @@ local function CreateCUFPreview()
         btn.icon = icon
 
         local borderHost = CreateFrame("Frame", nil, btn)
-        borderHost:SetPoint("TOPLEFT", icon, "TOPLEFT", -1, 1)
-        borderHost:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
+        borderHost:SetPoint("TOPLEFT", btn, "TOPLEFT", -2, 2)
+        borderHost:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 2, -2)
         borderHost:SetFrameLevel(btn:GetFrameLevel() + 2)
         borderHost:EnableMouse(false)
 

@@ -220,7 +220,15 @@ function buffsandauras:StyleAuraButton(button)
             borderFrame:SetFrameLevel(100)
         end
         
-        local pad = 1
+        local isPlayer = (button:GetParent() == BuffFrame or button:GetParent() == DebuffFrame)
+        local pad = isPlayer and 5 or 4
+        pcall(function()
+            local iconWidth = iconTexture.GetWidth and iconTexture:GetWidth()
+            if issecretvalue and issecretvalue(iconWidth) then return end
+            if type(iconWidth) == "number" and iconWidth > 0 then
+                pad = math.max(2, math.floor(iconWidth * (5 / 30) + 0.5))
+            end
+        end)
         borderFrame:ClearAllPoints()
         borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
         borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
