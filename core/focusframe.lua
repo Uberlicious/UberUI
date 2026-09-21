@@ -85,10 +85,6 @@ function focusframes:Color()
         ApplyDarkenColor(FocusFrameSpellBar.Border)
     end
     
-    if FocusFrameToTTextureFrameTexture then
-        ApplyDarkenColor(FocusFrameToTTextureFrameTexture)
-    end
-    
     if FocusFrameToT and FocusFrameToT.FrameTexture then
         ApplyDarkenColor(FocusFrameToT.FrameTexture)
     elseif FocusFrameToTTextureFrameTexture then
@@ -170,7 +166,7 @@ function focusframes:HealthManaBarTexture()
         if healthBar.OtherHealPredictionBar then healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply); end
         if healthBar.TotalAbsorbBar then
             healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply);
-            healthBar.TotalAbsorbBar.Fill:SetVertexColor(.6, .9, .9, 1);
+            healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1);
         end
     end
 end
@@ -214,7 +210,7 @@ function focusframes:UpdateAuraButtonStyle(button)
     local zoomEnabled = (style == "both" or style == "zoom")
     local darkBorderEnabled = (style == "both" or style == "border")
 
-    for _, key in ipairs({"Border", "border", "DebuffBorder", "DispelBorder", "BorderOverlay", "Overlay"}) do
+    for _, key in ipairs({"Border", "border", "DebuffBorder", "DispelBorder", "BorderOverlay", "Overlay", "IconBorder", "AuraBorder"}) do
         local tex = button[key]
         if tex and not IsSecret(tex) then
             pcall(function()
@@ -226,6 +222,13 @@ function focusframes:UpdateAuraButtonStyle(button)
 
     if button.icon then
         pcall(function()
+            button.icon:ClearAllPoints()
+            if darkBorderEnabled or zoomEnabled then
+                button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+                button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+            else
+                button.icon:SetAllPoints(button)
+            end
             if zoomEnabled then
                 button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
             else
@@ -246,9 +249,17 @@ function focusframes:UpdateAuraButtonStyle(button)
     if button.borderHost then
         pcall(function()
             local pad = 3
+            if button.elementSize and button.elementSize >= 20 then
+                pad = 4
+            end
             button.borderHost:ClearAllPoints()
             button.borderHost:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
             button.borderHost:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
+
+            if button.borderTex then
+                button.borderTex:ClearAllPoints()
+                button.borderTex:SetAllPoints(button.borderHost)
+            end
 
             if isBuff then
                 if darkBorderEnabled then
@@ -280,10 +291,11 @@ function focusframes:UpdateAuraButtonStyle(button)
                     button.borderHost:Show()
                     if button.borderTex then
                         button.borderTex:SetDesaturated(false)
-                        button.borderTex:SetVertexColor(1, 1, 1, 1)
+                        button.borderTex:ClearAllPoints()
+                        button.borderTex:SetAllPoints(button.borderHost)
                     end
                     if button.GetDispelTypeTextureCount and button:GetDispelTypeTextureCount() == 0 and button.AddDispelTypeTexture then
-                        local dispelStyle = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle and Enum.CustomAuraButtonDispelTypeTextureStyle.Border
+                        local dispelStyle = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle and (Enum.CustomAuraButtonDispelTypeTextureStyle.Border or Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset)
                         if dispelStyle then
                             pcall(button.AddDispelTypeTexture, button, button.borderTex, {
                                 style = dispelStyle,
@@ -291,9 +303,8 @@ function focusframes:UpdateAuraButtonStyle(button)
                                 showWhenHelpful = false,
                                 showWithoutDispelType = true,
                             })
-                            if button.UpdateAuraDisplay then
-                                pcall(button.UpdateAuraDisplay, button)
-                            end
+                            button.borderTex:ClearAllPoints()
+                            button.borderTex:SetAllPoints(button.borderHost)
                         end
                     end
                 else
@@ -310,7 +321,7 @@ local function MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, la
         elementHeight = elementSize,
         elementSpacing = spacingX or FOCUS_AURA_SPACING,
         lineSpacing = (spacingY or FOCUS_AURA_SPACING) + 2,
-        groupSpacing = 0,
+        groupSpacing = -1,
         groupLineSpacing = (spacingY or FOCUS_AURA_SPACING) + 2,
         forceNewLine = forceNewLine or false,
         layoutIndex = layoutIndex,
@@ -378,30 +389,51 @@ function focusframes:UpdateAuras()
         end
     end
 
-    local function GetGroupVisibleCount(groupKey)
-        if not self.customAuras then return 0 end
-        local ok, grp = pcall(self.customAuras.GetAuraGroup, self.customAuras, groupKey)
-        if ok and grp and grp.GetFramesByIndex then
-            local okF, frames = pcall(grp.GetFramesByIndex, grp)
-            if okF and type(frames) == "table" then
-                return #frames
+    local function UnitHasAura(unit, filter)
+        if not UnitExists(unit) then return false end
+        if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+            local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, 1, filter)
+            if ok and not IsSecret(aura) and aura ~= nil then return true end
+        end
+        if UnitAura then
+            local ok, name = pcall(UnitAura, unit, 1, filter)
+            if ok and not IsSecret(name) and name ~= nil then return true end
+        end
+        return false
+    end
+
+    local function CheckAuras(isBuff, isMine)
+        local filter = (isBuff and "HELPFUL" or "HARMFUL") .. (isMine and "|PLAYER" or "")
+        if UnitHasAura("focus", filter) then
+            return true
+        end
+        if self.customAuras and self.customAuras.allButtons then
+            for btn in pairs(self.customAuras.allButtons) do
+                if btn and not IsSecret(btn) then
+                    local okS, isShown = pcall(btn.IsShown, btn)
+                    if okS and SafeBool(isShown) and btn.isBuff == isBuff then
+                        if isMine == nil or btn.isMine == isMine then
+                            return true
+                        end
+                    end
+                end
             end
         end
-        return 0
+        return false
     end
 
     if self.customAuras and self.customAuras.SetAuraGroupLayout then
         local layoutBuffsMine, layoutBuffsOther, layoutDebuffsMine, layoutDebuffsOther
         if isFriend then
-            local hasBuffs = (GetGroupVisibleCount("buffs_mine") > 0) or (GetGroupVisibleCount("buffs_other") > 0)
-            local hasDebuffsMine = (GetGroupVisibleCount("debuffs_mine") > 0)
+            local hasBuffs = CheckAuras(true, nil)
+            local hasDebuffsMine = CheckAuras(false, true)
             layoutBuffsMine = MakeGroupLayout(FOCUS_LARGE_AURA_SIZE, FOCUS_AURA_SPACING, FOCUS_AURA_SPACING, false, 1)
             layoutBuffsOther = MakeGroupLayout(FOCUS_SMALL_AURA_SIZE, FOCUS_AURA_SPACING, FOCUS_AURA_SPACING, false, 2)
             layoutDebuffsMine = MakeGroupLayout(FOCUS_LARGE_AURA_SIZE, FOCUS_AURA_SPACING, FOCUS_AURA_SPACING, hasBuffs, 3)
             layoutDebuffsOther = MakeGroupLayout(FOCUS_SMALL_AURA_SIZE, FOCUS_AURA_SPACING, FOCUS_AURA_SPACING, (not hasDebuffsMine) and hasBuffs, 4)
         else
-            local hasDebuffs = (GetGroupVisibleCount("debuffs_mine") > 0) or (GetGroupVisibleCount("debuffs_other") > 0)
-            local hasBuffsMine = (GetGroupVisibleCount("buffs_mine") > 0)
+            local hasDebuffs = CheckAuras(false, nil)
+            local hasBuffsMine = CheckAuras(true, true)
             layoutDebuffsMine = MakeGroupLayout(FOCUS_LARGE_AURA_SIZE, FOCUS_AURA_SPACING, FOCUS_AURA_SPACING, false, 1)
             layoutDebuffsOther = MakeGroupLayout(FOCUS_SMALL_AURA_SIZE, FOCUS_AURA_SPACING, FOCUS_AURA_SPACING, false, 2)
             layoutBuffsMine = MakeGroupLayout(FOCUS_LARGE_AURA_SIZE, FOCUS_AURA_SPACING, FOCUS_AURA_SPACING, hasDebuffs, 3)
@@ -500,7 +532,8 @@ function focusframes:SetupCustomAuraContainer()
 
         local icon = button.icon or button:CreateTexture(nil, "ARTWORK")
         icon:ClearAllPoints()
-        icon:SetAllPoints(button)
+        icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
         button.icon = icon
         if button.SetIcon then
             pcall(button.SetIcon, button, icon)
@@ -533,7 +566,7 @@ function focusframes:SetupCustomAuraContainer()
             pcall(button.SetApplicationCount, button, count, {})
         end
 
-        local pad = 3
+        local pad = (size >= 20) and 4 or 3
         local borderHost = button.borderHost or CreateFrame("Frame", nil, button)
         borderHost:ClearAllPoints()
         borderHost:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
@@ -551,8 +584,8 @@ function focusframes:SetupCustomAuraContainer()
 
         local stealable = button.stealable or button:CreateTexture(nil, "OVERLAY")
         stealable:ClearAllPoints()
-        stealable:SetPoint("TOPLEFT", button, "TOPLEFT", -3, 3)
-        stealable:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 3, -3)
+        stealable:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
+        stealable:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
         stealable:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Stealable")
         stealable:SetBlendMode("ADD")
         stealable:Hide()
@@ -569,7 +602,7 @@ function focusframes:SetupCustomAuraContainer()
         end
 
         if not isBuff and button.AddDispelTypeTexture then
-            local dispelStyle = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle and Enum.CustomAuraButtonDispelTypeTextureStyle.Border
+            local dispelStyle = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle and (Enum.CustomAuraButtonDispelTypeTextureStyle.Border or Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset)
             if dispelStyle then
                 pcall(button.AddDispelTypeTexture, button, borderTex, {
                     style = dispelStyle,
@@ -577,6 +610,8 @@ function focusframes:SetupCustomAuraContainer()
                     showWhenHelpful = false,
                     showWithoutDispelType = true,
                 })
+                borderTex:ClearAllPoints()
+                borderTex:SetAllPoints(borderHost)
             end
         end
 

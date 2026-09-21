@@ -1081,9 +1081,6 @@ end
         end
     end);
 
-    -- Sub-group for other frames
-    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling - Other Frames (Coming Soon)"));
-
     -- Focus Buffs
     CreateAuraStyleDropdown("Focus Buffs", "aurastyle_focusbuffs", "Choose how to style focus buffs", true, function()
         if UberUI.buffsandauras then
@@ -1103,6 +1100,9 @@ end
             UberUI.focusframes:UpdateAuras();
         end
     end);
+
+    -- Sub-group for other frames
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling - Other Frames (Coming Soon)"));
 
     -- Party Buffs
     CreateAuraStyleDropdown("Party Buffs", "aurastyle_partybuffs", "Choose how to style standard party buffs", false);
