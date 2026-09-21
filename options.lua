@@ -1124,7 +1124,8 @@ end
                     UberUI.cuf:ToggleTestMode();
                 end
             end,
-            "Shows or hides test raid and party frames (with 5 simulated members) so you can preview aura styling while solo."
+            "Shows or hides test raid and party frames so you can preview aura styling while solo.",
+            true
         ));
     end
 

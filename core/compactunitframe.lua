@@ -356,73 +356,183 @@ cuf.ForceZoom = cuf.UpdateAllAuras
 -- MANUAL RAID / PARTY FRAME TEST PREVIEW
 -- =========================================================================
 
-local origAreRaidFramesForcedShown = nil
-local origGetNumRaidMembersForcedShown = nil
-local origArePartyFramesForcedShown = nil
+local previewFrame = nil
 
-function cuf:ToggleTestMode(enable)
-    if InCombatLockdown() then
-        print("|cffff0000[UberUI]|r Cannot toggle raid test mode while in combat.")
-        return
+local function CreateCUFPreview()
+    if previewFrame then return previewFrame end
+
+    local f = CreateFrame("Frame", "UberUI_CUFTestPreview", UIParent, "BackdropTemplate")
+    f:SetSize(130, 52)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetFrameStrata("HIGH")
+    f:SetClampedToScreen(true)
+
+    -- Background
+    f:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false, tileSize = 0, edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    f:SetBackdropBorderColor(dc.r, dc.g, dc.b, 1)
+    f:SetBackdropColor(0.1, 0.1, 0.1, 0.85)
+
+    -- Title / drag header
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    title:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 0, 4)
+    title:SetText("|cff00ff00UberUI CUF Preview|r (|cffaaaaaaDrag to move|r)")
+    f.title = title
+
+    -- Health Bar
+    local hb = CreateFrame("StatusBar", nil, f)
+    hb:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+    hb:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 10)
+    local texPath = (uuidb and uuidb.general and uuidb.statusbars and uuidb.general.raidbartexture and uuidb.statusbars[uuidb.general.raidbartexture])
+        or (uuidb and uuidb.general and uuidb.statusbars and uuidb.general.texture and uuidb.statusbars[uuidb.general.texture])
+        or "Interface\\TargetingFrame\\UI-StatusBar"
+    hb:SetStatusBarTexture(texPath)
+    hb:SetMinMaxValues(0, 100)
+    hb:SetValue(82)
+    hb:SetStatusBarColor(0.2, 0.75, 0.3)
+    f.healthBar = hb
+
+    -- Power Bar
+    local pb = CreateFrame("StatusBar", nil, f)
+    pb:SetPoint("TOPLEFT", hb, "BOTTOMLEFT", 0, -1)
+    pb:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+    pb:SetStatusBarTexture(texPath)
+    pb:SetMinMaxValues(0, 100)
+    pb:SetValue(65)
+    pb:SetStatusBarColor(0.0, 0.5, 1.0)
+    f.powerBar = pb
+
+    -- Name text
+    local name = hb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    name:SetPoint("CENTER", hb, "CENTER", 0, 6)
+    name:SetText("Raid Member")
+    name:SetTextColor(1, 1, 1)
+    f.name = name
+
+    -- Helper to create styled test aura icon
+    local function CreateTestAura(parent, size, isBuff, iconTex, dispelType, stackCount)
+        local btn = CreateFrame("Frame", nil, parent)
+        btn:SetSize(size, size)
+
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+        icon:SetTexture(iconTex)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        btn.icon = icon
+
+        local borderHost = CreateFrame("Frame", nil, btn)
+        borderHost:SetPoint("TOPLEFT", icon, "TOPLEFT", -1, 1)
+        borderHost:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
+        borderHost:SetFrameLevel(btn:GetFrameLevel() + 2)
+        borderHost:EnableMouse(false)
+
+        local borderTex = borderHost:CreateTexture(nil, "OVERLAY")
+        borderTex:SetAllPoints(borderHost)
+        borderTex:SetAtlas("ui-debuff-border-default-noicon")
+
+        local style = isBuff and ((uuidb and uuidb.general and uuidb.general.aurastyle_compactbuffs) or "both")
+            or ((uuidb and uuidb.general and uuidb.general.aurastyle_compactdebuffs) or "zoom")
+        local darkBorder = (style == "both" or style == "border")
+
+        if isBuff then
+            if darkBorder then
+                borderTex:SetDesaturated(true)
+                borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                borderHost:Show()
+            else
+                borderHost:Hide()
+            end
+        else
+            -- Debuff
+            if darkBorder then
+                borderTex:SetDesaturated(true)
+                borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                borderHost:Show()
+            else
+                borderTex:SetDesaturated(false)
+                if dispelType == "Magic" then
+                    borderTex:SetVertexColor(0.2, 0.6, 1.0)
+                elseif dispelType == "Poison" then
+                    borderTex:SetVertexColor(0.0, 0.8, 0.0)
+                elseif dispelType == "Curse" then
+                    borderTex:SetVertexColor(0.6, 0.0, 1.0)
+                elseif dispelType == "Disease" then
+                    borderTex:SetVertexColor(0.6, 0.4, 0.0)
+                else
+                    borderTex:SetVertexColor(0.8, 0.0, 0.0)
+                end
+                borderHost:Show()
+            end
+        end
+
+        if stackCount and stackCount > 1 then
+            local count = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+            count:SetDrawLayer("OVERLAY", 7)
+            count:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+            count:SetText(tostring(stackCount))
+        end
+
+        return btn
     end
 
+    -- 3 Test Buffs (bottom right, growing left)
+    local buffSize = 14
+    local b1 = CreateTestAura(f, buffSize, true, "Interface\\Icons\\Spell_Holy_WordFortitude", nil, 1)
+    b1:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 11)
+
+    local b2 = CreateTestAura(f, buffSize, true, "Interface\\Icons\\Spell_Holy_MagicalSentry", nil, 1)
+    b2:SetPoint("RIGHT", b1, "LEFT", -2, 0)
+
+    local b3 = CreateTestAura(f, buffSize, true, "Interface\\Icons\\Spell_Nature_Rejuvenation", nil, 3)
+    b3:SetPoint("RIGHT", b2, "LEFT", -2, 0)
+
+    -- 2 Test Debuffs (bottom left, growing right)
+    local debuffSize = 14
+    local d1 = CreateTestAura(f, debuffSize, false, "Interface\\Icons\\Spell_Shadow_CurseOfTounges", "Curse", 1)
+    d1:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 2, 11)
+
+    local d2 = CreateTestAura(f, debuffSize, false, "Interface\\Icons\\Ability_Creature_Poison_02", "Poison", 1)
+    d2:SetPoint("LEFT", d1, "RIGHT", 2, 0)
+
+    f.UpdateStyles = function()
+        local curDc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+        f:SetBackdropBorderColor(curDc.r, curDc.g, curDc.b, 1)
+        local curTex = (uuidb and uuidb.general and uuidb.statusbars and uuidb.general.raidbartexture and uuidb.statusbars[uuidb.general.raidbartexture])
+            or (uuidb and uuidb.general and uuidb.statusbars and uuidb.general.texture and uuidb.statusbars[uuidb.general.texture])
+            or "Interface\\TargetingFrame\\UI-StatusBar"
+        hb:SetStatusBarTexture(curTex)
+        pb:SetStatusBarTexture(curTex)
+    end
+
+    previewFrame = f
+    return f
+end
+
+function cuf:ToggleTestMode(enable)
     if enable == nil then
         enable = not cuf.testMode
     end
     cuf.testMode = enable
 
-    if not EditModeManagerFrame then
-        print("|cffff0000[UberUI]|r EditModeManagerFrame not found.")
-        return
-    end
-
-    if not origAreRaidFramesForcedShown then
-        origAreRaidFramesForcedShown = EditModeManagerFrame.AreRaidFramesForcedShown
-    end
-    if not origGetNumRaidMembersForcedShown then
-        origGetNumRaidMembersForcedShown = EditModeManagerFrame.GetNumRaidMembersForcedShown
-    end
-    if not origArePartyFramesForcedShown then
-        origArePartyFramesForcedShown = EditModeManagerFrame.ArePartyFramesForcedShown
-    end
-
+    local preview = CreateCUFPreview()
     if enable then
-        EditModeManagerFrame.AreRaidFramesForcedShown = function(self) return true end
-        EditModeManagerFrame.GetNumRaidMembersForcedShown = function(self) return 5 end
-        EditModeManagerFrame.ArePartyFramesForcedShown = function(self) return true end
-
-        if CompactRaidFrameContainer then
-            pcall(CompactRaidFrameContainer.TryUpdate, CompactRaidFrameContainer)
-            pcall(CompactRaidFrameContainer.Show, CompactRaidFrameContainer)
-        end
-        if CompactPartyFrame then
-            pcall(CompactPartyFrame.Show, CompactPartyFrame)
-            if CompactPartyFrame.RefreshMembers then
-                pcall(CompactPartyFrame.RefreshMembers, CompactPartyFrame)
-            end
-        end
-        C_Timer.After(0.1, function()
-            cuf:UpdateAllAuras()
-        end)
-        print("|cff00ff00[UberUI]|r Test raid/party frames shown (forced preview with 5 members). Use |cffffff00/uui testraid|r to hide.")
+        preview:UpdateStyles()
+        preview:Show()
+        print("|cff00ff00[UberUI]|r Test raid frame preview shown (standalone preview with test buffs/debuffs). Drag to move, type |cffffff00/uui testraid|r to hide.")
     else
-        if origAreRaidFramesForcedShown then
-            EditModeManagerFrame.AreRaidFramesForcedShown = origAreRaidFramesForcedShown
-        end
-        if origGetNumRaidMembersForcedShown then
-            EditModeManagerFrame.GetNumRaidMembersForcedShown = origGetNumRaidMembersForcedShown
-        end
-        if origArePartyFramesForcedShown then
-            EditModeManagerFrame.ArePartyFramesForcedShown = origArePartyFramesForcedShown
-        end
-
-        if CompactRaidFrameContainer then
-            pcall(CompactRaidFrameContainer.TryUpdate, CompactRaidFrameContainer)
-        end
-        if CompactPartyFrame and CompactPartyFrame.UpdateVisibility then
-            pcall(CompactPartyFrame.UpdateVisibility, CompactPartyFrame)
-        end
-        print("|cff00ff00[UberUI]|r Test raid/party frames hidden.")
+        preview:Hide()
+        print("|cff00ff00[UberUI]|r Test raid frame preview hidden.")
     end
 end
 
