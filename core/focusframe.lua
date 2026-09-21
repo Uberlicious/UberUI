@@ -251,14 +251,7 @@ function focusframes:UpdateAuraButtonStyle(button)
     if button.borderHost then
         pcall(function()
             local target = icon or button
-            local pad = 3
-            local w = (icon and icon.GetWidth and icon:GetWidth()) or (button.GetWidth and button:GetWidth())
-            if issecretvalue and issecretvalue(w) then w = nil end
-            if type(w) == "number" and w > 0 then
-                pad = math.max(2, math.floor(w * (5 / 30) + 0.5))
-            elseif button.elementSize and button.elementSize >= 20 then
-                pad = 4
-            end
+            local pad = 4
             button.borderHost:ClearAllPoints()
             button.borderHost:SetPoint("TOPLEFT", target, "TOPLEFT", -pad, pad)
             button.borderHost:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", pad, -pad)
@@ -730,7 +723,7 @@ function focusframes:SetupCustomAuraContainer()
             pcall(button.SetApplicationCount, button, count, {})
         end
 
-        local pad = (size >= 20) and 4 or 3
+        local pad = 4
         local target = icon or button
         local borderHost = button.borderHost or CreateFrame("Frame", nil, button)
         borderHost:ClearAllPoints()
