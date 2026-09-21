@@ -199,8 +199,8 @@ function buffsandauras:StyleAuraButton(button)
         
         if not borderFrame then
             borderFrame = CreateFrame("Frame", nil, button)
-            borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -1, 1)
-            borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 1, -1)
+            borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -5, 5)
+            borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 5, -5)
             
             local tex = borderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
