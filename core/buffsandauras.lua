@@ -9,18 +9,25 @@ local function GetAuraInfo(button)
     local isPlayer = false
     local isDebuff = false
     local btnName = (button.GetName and button:GetName()) or ""
-    local isTempEnchant = (button.isTempEnchant == true)
-        or (button.auraType == "TempEnchant")
-        or (button.buttonInfo and button.buttonInfo.auraType == "TempEnchant")
-        or (btnName ~= "" and btnName:find("^TempEnchant") ~= nil)
-        or (button.TempEnchantBorder and button.TempEnchantBorder.IsShown and button.TempEnchantBorder:IsShown())
+    local isTempEnchant = false
+    pcall(function()
+        isTempEnchant = (button.isTempEnchant == true)
+            or (button.auraType == "TempEnchant")
+            or (button.buttonInfo and button.buttonInfo.auraType == "TempEnchant")
+            or (btnName ~= "" and btnName:find("^TempEnchant") ~= nil)
+            or (button.TempEnchantBorder and button.TempEnchantBorder.IsShown and button.TempEnchantBorder:IsShown())
+    end)
 
     if isTempEnchant then
         isPlayer = true
     end
 
-    if button.isDebuff == true then
-        isDebuff = true
+    if button.isDebuff ~= nil then
+        pcall(function()
+            if not (issecretvalue and issecretvalue(button.isDebuff)) then
+                isDebuff = (button.isDebuff == true)
+            end
+        end)
     end
 
     local cur = button
@@ -45,47 +52,58 @@ local function GetAuraInfo(button)
         cur = cur.GetParent and cur:GetParent()
     end
 
-    if not isDebuff and DebuffFrame and DebuffFrame.auraFrames then
-        for _, af in ipairs(DebuffFrame.auraFrames) do
-            if af == button then
-                isPlayer = true
+    if button.isDebuff == nil then
+        if DebuffFrame and DebuffFrame.auraFrames then
+            for _, af in ipairs(DebuffFrame.auraFrames) do
+                if af == button then
+                    isPlayer = true
+                    isDebuff = true
+                    break
+                end
+            end
+        end
+
+        if not isPlayer and BuffFrame and BuffFrame.auraFrames then
+            for _, af in ipairs(BuffFrame.auraFrames) do
+                if af == button then
+                    isPlayer = true
+                    break
+                end
+            end
+        end
+
+        if button.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+            local p = button.GetParent and button:GetParent()
+            local unit = button.unit or (p and p.GetUnit and p:GetUnit()) or (isPlayer and "player") or "target"
+            local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, button.auraInstanceID)
+            if aura then
+                if aura.isHarmful then
+                    isDebuff = true
+                elseif aura.isHelpful then
+                    isDebuff = false
+                end
+            end
+        end
+
+        if not isDebuff then
+            if button.GetAuraInstance then
+                local ok, unitToken, auraData = pcall(button.GetAuraInstance, button)
+                if ok and auraData and auraData.isHarmful then
+                    isDebuff = true
+                end
+            elseif button.auraType == "Debuff" then
                 isDebuff = true
-                break
-            end
-        end
-    end
-
-    if not isPlayer and BuffFrame and BuffFrame.auraFrames then
-        for _, af in ipairs(BuffFrame.auraFrames) do
-            if af == button then
-                isPlayer = true
-                break
-            end
-        end
-    end
-
-    if not isDebuff and button.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
-        local p = button.GetParent and button:GetParent()
-        local unit = button.unit or (p and p.GetUnit and p:GetUnit()) or (isPlayer and "player") or "target"
-        local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, button.auraInstanceID)
-        if aura then
-            if aura.isHarmful then
+            elseif button.buttonInfo and button.buttonInfo.auraType == "Debuff" then
                 isDebuff = true
-            elseif aura.isHelpful then
-                isDebuff = false
+            elseif button.filter == "HARMFUL" or (button.buttonInfo and button.buttonInfo.filter == "HARMFUL") then
+                isDebuff = true
+            elseif button.auraData and button.auraData.isHarmful then
+                isDebuff = true
+            elseif button.DispelBorder and button.DispelBorder.IsShown and button.DispelBorder:IsShown() then
+                isDebuff = true
+            elseif button.DebuffBorder and button.DebuffBorder.IsShown and button.DebuffBorder:IsShown() then
+                isDebuff = true
             end
-        end
-    end
-
-    if not isDebuff then
-        if button.auraType == "Debuff" then
-            isDebuff = true
-        elseif button.buttonInfo and button.buttonInfo.auraType == "Debuff" then
-            isDebuff = true
-        elseif button.filter == "HARMFUL" or (button.buttonInfo and button.buttonInfo.filter == "HARMFUL") then
-            isDebuff = true
-        elseif button.auraData and button.auraData.isHarmful then
-            isDebuff = true
         end
     end
 
@@ -93,7 +111,12 @@ local function GetAuraInfo(button)
 end
 
 function buffsandauras:StyleAuraButton(button)
-    if not button or type(button) ~= "table" or not button.GetObjectType or (button:GetObjectType() ~= "Button" and button:GetObjectType() ~= "Frame") then
+    if not button or type(button) ~= "table" or not button.GetObjectType then
+        return
+    end
+
+    local objType = button:GetObjectType()
+    if objType ~= "Button" and objType ~= "Frame" and objType ~= "AuraButton" then
         return
     end
 
@@ -167,7 +190,7 @@ function buffsandauras:StyleAuraButton(button)
         iconTexture:SetTexCoord(0, 1, 0, 1)
     end
 
-    local borderObj = button.DebuffBorder or button.Border or (btnName ~= "" and _G[btnName .. "Border"])
+    local borderObj = button.DispelBorder or button.DebuffBorder or button.Border or (btnName ~= "" and _G[btnName .. "Border"])
     local teBorder = button.TempEnchantBorder or (isTempEnchant and (button.Border or (btnName ~= "" and _G[btnName .. "Border"])))
     local borderFrame = buffsandauras.borderFrames[button]
 
@@ -175,17 +198,9 @@ function buffsandauras:StyleAuraButton(button)
         local dc = uuidb.general.darkencolor
         
         if not borderFrame then
-            borderFrame = CreateFrame("Frame", nil, button:GetParent() or UIParent)
+            borderFrame = CreateFrame("Frame", nil, button)
             borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -5, 5)
             borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 5, -5)
-            
-            -- Safely attempt to set frame level, fallback to a high number if button is restricted
-            local ok, level = pcall(function() return button:GetFrameLevel() end)
-            if ok and level then
-                borderFrame:SetFrameLevel(level + 5)
-            else
-                borderFrame:SetFrameLevel(100)
-            end
             
             local tex = borderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
@@ -193,9 +208,26 @@ function buffsandauras:StyleAuraButton(button)
             tex:SetDesaturated(true)
             borderFrame.texture = tex
             buffsandauras.borderFrames[button] = borderFrame
+        elseif borderFrame:GetParent() ~= button then
+            borderFrame:SetParent(button)
+        end
+
+        -- Safely attempt to set frame level, fallback to a high number if button is restricted
+        local ok, level = pcall(function() return button:GetFrameLevel() end)
+        if ok and level then
+            borderFrame:SetFrameLevel(level + 5)
+        else
+            borderFrame:SetFrameLevel(100)
         end
         
-        local pad = zoomEnabled and 5 or 2
+        local pad = isPlayer and 5 or 4
+        pcall(function()
+            local iconWidth = iconTexture.GetWidth and iconTexture:GetWidth()
+            if issecretvalue and issecretvalue(iconWidth) then return end
+            if type(iconWidth) == "number" and iconWidth > 0 then
+                pad = math.max(2, math.floor(iconWidth * (5 / 30) + 0.5))
+            end
+        end)
         borderFrame:ClearAllPoints()
         borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
         borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
@@ -212,24 +244,31 @@ function buffsandauras:StyleAuraButton(button)
         elseif isTempEnchant then
             if teBorder then
                 teBorder:ClearAllPoints()
-                if zoomEnabled then
-                    teBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -2, 2)
-                    teBorder:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 2, -2)
-                else
-                    teBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", 0, 0)
-                    teBorder:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 0, 0)
-                end
-                teBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                teBorder:Show()
+                teBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
+                teBorder:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
+                teBorder:SetAlpha(0)
             end
+            showCustomBorder = true
         else
             -- It's a buff
+            if borderObj then
+                borderObj:ClearAllPoints()
+                borderObj:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
+                borderObj:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
+                borderObj:SetAlpha(0)
+            end
             showCustomBorder = true
         end
         
         if showCustomBorder then
             local r, g, b, a = dc.r, dc.g, dc.b, dc.a
-            if button.isStealable or (button.Stealable and button.Stealable:IsShown()) then
+            local isStealable = false
+            pcall(function()
+                if button.isStealable then isStealable = true end
+                if button.Stealable and button.Stealable.IsShown and button.Stealable:IsShown() then isStealable = true end
+                if button.StealableBorder and button.StealableBorder.IsShown and button.StealableBorder:IsShown() then isStealable = true end
+            end)
+            if isStealable then
                 r, g, b, a = 1, 1, 1, 1
             end
             borderFrame.texture:SetVertexColor(r, g, b, a)
@@ -244,12 +283,21 @@ function buffsandauras:StyleAuraButton(button)
             borderFrame:Hide()
         end
 
-        if isDebuff and borderObj then
-            local pad = zoomEnabled and 5 or 2
+        if borderObj and not isTempEnchant then
+            local pad = zoomEnabled and (isPlayer and 5 or 4) or 0
+            pcall(function()
+                local iconWidth = iconTexture.GetWidth and iconTexture:GetWidth()
+                if issecretvalue and issecretvalue(iconWidth) then return end
+                if type(iconWidth) == "number" and iconWidth > 0 then
+                    local basePad = math.max(2, math.floor(iconWidth * (5 / 30) + 0.5))
+                    pad = zoomEnabled and basePad or 0
+                end
+            end)
             borderObj:SetAlpha(1)
             borderObj:ClearAllPoints()
             borderObj:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
             borderObj:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
+            borderObj:Show()
         end
 
         if isTempEnchant and teBorder then
@@ -261,6 +309,7 @@ function buffsandauras:StyleAuraButton(button)
                 teBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", 0, 0)
                 teBorder:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 0, 0)
             end
+            teBorder:SetAlpha(1)
             teBorder:SetVertexColor(1, 1, 1, 1)
             teBorder:Show()
         end
@@ -371,66 +420,142 @@ function buffsandauras:ColorAuras(force)
     local dc = uuidb.general.darkencolor;
     local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
+    local function IsSecret(v)
+        return (issecretvalue and issecretvalue(v))
+    end
+
     local function HandleAuras(frame, depth)
-        if not frame or depth > 10 then return end
-        for _, v in pairs({ frame:GetChildren() }) do
-            if v and v.GetObjectType then
-                local isAura = false
-                local objType = v:GetObjectType()
-                if objType == "Frame" or objType == "Button" then
-                    local iconObj = v.Icon or v.icon
-                    if iconObj and iconObj.GetObjectType and iconObj:GetObjectType() == "Texture" then
-                        if v.Count or v.count or v.Border or v.border or v.Cooldown or v.cooldown or (v.GetName and not v:GetName()) or v.DebuffBorder then
-                            isAura = true
+        if not frame or depth > 10 or IsSecret(frame) then return end
+        local okF, isForbid = pcall(frame.IsForbidden, frame)
+        if (okF and not IsSecret(isForbid) and isForbid) or not frame.GetChildren then return end
+        local fName = (frame.GetName and not IsSecret(frame.GetName) and frame:GetName()) or ""
+        if IsSecret(fName) or fName:find("UberUI_Target") or fName:find("AuraContainer") or fName:find("TargetAuras") then return end
+
+        local okKids, kids = pcall(function() return { frame:GetChildren() } end)
+        if not okKids or not kids or IsSecret(kids) then return end
+
+        for _, v in pairs(kids) do
+            if not IsSecret(v) then
+                local okVForbid, vForbid = pcall(function() return v.IsForbidden and v:IsForbidden() end)
+                if okVForbid and not IsSecret(vForbid) and not vForbid and v and v.GetObjectType then
+                    local okType, objType = pcall(v.GetObjectType, v)
+                    if okType and objType and not IsSecret(objType) then
+                        local isAura = false
+                        local vName = (v.GetName and v:GetName()) or ""
+                        if objType == "Frame" or objType == "Button" or objType == "AuraButton" then
+                            local iconObj = v.Icon or v.icon or (vName ~= "" and _G[vName .. "Icon"])
+                            local okIconType, iconType = pcall(function() return iconObj and iconObj.GetObjectType and iconObj:GetObjectType() end)
+                            if okIconType and iconType == "Texture" then
+                                if v.Count or v.count or v.Border or v.border or v.Cooldown or v.cooldown or (vName ~= "" and (vName:find("Buff") or vName:find("Debuff"))) or v.DebuffBorder or v.DispelBorder or v.StealableBorder or objType == "AuraButton" then
+                                    isAura = true
+                                end
+                            end
+                        end
+                        
+                        if isAura then
+                            self:StyleAuraButton(v)
+                        else
+                            HandleAuras(v, depth + 1)
                         end
                     end
-                end
-                
-                if isAura then
-                    self:StyleAuraButton(v)
-                else
-                    HandleAuras(v, depth + 1)
                 end
             end
         end
     end
 
-    HandleAuras(TargetFrame, 1);
-    if TargetFrame and TargetFrame.auraPools then
-        for pool in TargetFrame.auraPools:EnumeratePools() do
-            for frame in pool:EnumerateActive() do
+    local function StyleAuraContainer(container)
+        if not container or IsSecret(container) then return end
+        local okF, isForbid = pcall(container.IsForbidden, container)
+        if okF and not IsSecret(isForbid) and isForbid then return end
+        local cName = (container.GetName and container:GetName()) or ""
+        if IsSecret(cName) or cName:find("UberUI_Target") then return end
+
+        if container.buffAuraGroup and container.buffAuraGroup.GetFramesByIndex then
+            for _, btn in ipairs(container.buffAuraGroup:GetFramesByIndex()) do
+                btn.isDebuff = false
+                self:StyleAuraButton(btn)
+            end
+        end
+        if container.debuffAuraGroup and container.debuffAuraGroup.GetFramesByIndex then
+            for _, btn in ipairs(container.debuffAuraGroup:GetFramesByIndex()) do
+                btn.isDebuff = true
+                self:StyleAuraButton(btn)
+            end
+        end
+        if container.auraPools and container.auraPools.EnumerateActive then
+            for frame in container.auraPools:EnumerateActive() do
                 self:StyleAuraButton(frame)
             end
         end
-    end
-    
-    local aurasContainer = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
-    if aurasContainer and aurasContainer.GetAuraGroupFrameCount then
-        for _, groupKey in ipairs({"HELPFUL", "HARMFUL", "Buffs", "Debuffs", "buffs", "debuffs"}) do
-            local count = aurasContainer:GetAuraGroupFrameCount(groupKey) or 0
-            for i = 1, count do
-                local auraFrame = aurasContainer:GetAuraGroupFrame(groupKey, i)
-                if auraFrame then
-                    self:StyleAuraButton(auraFrame)
+        if container.GetChildren then
+            for _, child in pairs({ container:GetChildren() }) do
+                local okChildForbid, childForbid = pcall(function() return child.IsForbidden and child:IsForbidden() end)
+                if okChildForbid and not childForbid and child and child.GetObjectType then
+                    local okType, objType = pcall(child.GetObjectType, child)
+                    if okType and (objType == "AuraButton" or objType == "Button") then
+                        self:StyleAuraButton(child)
+                    end
                 end
             end
         end
     end
-    
-    -- Fallback for global frames (Classic/Older retail)
-    for i = 1, 40 do
-        local b = _G["TargetFrameBuff"..i]
-        if b then self:StyleAuraButton(b) end
-        local d = _G["TargetFrameDebuff"..i]
-        if d then self:StyleAuraButton(d) end
+
+    -- TargetFrame aura handling (disabled on 12.1 / Forever 1.6 as native buttons are engine-forbidden)
+    if false and not hasCustomAuras and not targetForbidden and TargetFrame then
+        HandleAuras(TargetFrame, 1);
+        local targetAuras = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
+        StyleAuraContainer(targetAuras)
+
+        if TargetFrame.auraPools then
+            if TargetFrame.auraPools.EnumerateActive then
+                for frame in TargetFrame.auraPools:EnumerateActive() do
+                    self:StyleAuraButton(frame)
+                end
+            elseif TargetFrame.auraPools.GetPool then
+                for _, tmpl in ipairs({"TargetBuffFrameTemplate", "TargetDebuffFrameTemplate"}) do
+                    local pool = TargetFrame.auraPools:GetPool(tmpl)
+                    if pool and pool.EnumerateActive then
+                        for frame in pool:EnumerateActive() do
+                            self:StyleAuraButton(frame)
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Fallback for global frames (Classic/Older retail)
+        for i = 1, 40 do
+            local b = _G["TargetFrameBuff"..i]
+            if b then self:StyleAuraButton(b) end
+            local d = _G["TargetFrameDebuff"..i]
+            if d then self:StyleAuraButton(d) end
+        end
     end
     
     if FocusFrame and (not FocusFrame.smallSize) then
-        HandleAuras(FocusFrame, 1);
-        if FocusFrame.auraPools then
-            for pool in FocusFrame.auraPools:EnumeratePools() do
-                for frame in pool:EnumerateActive() do
-                    self:StyleAuraButton(frame)
+        local focusForbidden = FocusFrame.IsForbidden and FocusFrame:IsForbidden()
+        if not focusForbidden then
+            local focusAuras = FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentContextual and FocusFrame.TargetFrameContent.TargetFrameContentContextual.Auras
+            local focusAurasForbidden = focusAuras and focusAuras.IsForbidden and focusAuras:IsForbidden()
+            if not focusAurasForbidden then
+                HandleAuras(FocusFrame, 1);
+                StyleAuraContainer(focusAuras)
+            end
+
+            if FocusFrame.auraPools then
+                if FocusFrame.auraPools.EnumerateActive then
+                    for frame in FocusFrame.auraPools:EnumerateActive() do
+                        self:StyleAuraButton(frame)
+                    end
+                elseif FocusFrame.auraPools.GetPool then
+                    for _, tmpl in ipairs({"TargetBuffFrameTemplate", "TargetDebuffFrameTemplate", "FocusBuffFrameTemplate", "FocusDebuffFrameTemplate"}) do
+                        local pool = FocusFrame.auraPools:GetPool(tmpl)
+                        if pool and pool.EnumerateActive then
+                            for frame in pool:EnumerateActive() do
+                                self:StyleAuraButton(frame)
+                            end
+                        end
+                    end
                 end
             end
         end

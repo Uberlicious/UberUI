@@ -35,41 +35,87 @@ function general:PvPIcon(frame)
     end
 end
 
+local function IsSecret(val)
+    return issecretvalue and issecretvalue(val)
+end
+
+local function SafeBool(val)
+    if val == nil or IsSecret(val) then return false end
+    return val and true or false
+end
+
 function general:SetHealthColor(healthBar, unit, db)
-    if healthBar == nil then return end
+    if healthBar == nil or not db then return end
 
-    local canUseClassColor = UnitIsPlayer(unit)
-    local isFriendly = UnitIsFriend("player", unit)
+    local isFriendly = false
+    local isEnemy = false
+    local isPlayer = false
 
-    if canUseClassColor then
-        local _, class = UnitClass(unit)
-        local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class])
-        if classColor then
-            if (db.classcolorenemy and not isFriendly) or (db.classcolorfriendly and isFriendly) then
-                healthBar:SetStatusBarDesaturated(true)
-                healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
-                return -- Class color applied, so we are done.
+    local okU, isSelf = pcall(UnitIsUnit, "player", unit)
+    if okU and SafeBool(isSelf) then
+        isFriendly = true
+        isPlayer = true
+    else
+        local okP, isP = pcall(UnitIsPlayer, unit)
+        if okP and not IsSecret(isP) then
+            isPlayer = isP and true or false
+        end
+
+        local okF, isF = pcall(UnitIsFriend, "player", unit)
+        if okF and not IsSecret(isF) then
+            isFriendly = isF and true or false
+            isEnemy = not isFriendly
+        else
+            local okE, isE = pcall(UnitCanAttack, "player", unit)
+            if okE and not IsSecret(isE) then
+                isEnemy = isE and true or false
+                isFriendly = not isEnemy
             end
         end
     end
 
-    local useHostilityColor = uuidb.general and uuidb.general.hostilitycolor
+    if isPlayer then
+        local _, class = UnitClass(unit)
+        local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class])
+        if classColor then
+            if (db.classcolorfriendly and db.classcolorenemy) or
+               (db.classcolorenemy and isEnemy) or
+               (db.classcolorfriendly and isFriendly) then
+                healthBar:SetStatusBarDesaturated(true)
+                healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
+                return
+            end
+        end
+    end
+
+    local useHostilityColor = uuidb and uuidb.general and uuidb.general.hostilitycolor
     if useHostilityColor then
-        local reaction = UnitReaction(unit, "player")
+        local reaction
+        local okR, r = pcall(UnitReaction, unit, "player")
+        if okR and not IsSecret(r) and type(r) == "number" then
+            reaction = r
+        end
+
         healthBar:SetStatusBarDesaturated(true)
         if reaction and reaction >= 5 then
             healthBar:SetStatusBarColor(0, 1, 0) -- Friendly
         elseif reaction == 4 then
             healthBar:SetStatusBarColor(1, 1, 0) -- Neutral
+        elseif isFriendly then
+            healthBar:SetStatusBarColor(0, 1, 0) -- Friendly fallback
         else
             healthBar:SetStatusBarColor(1, 0, 0) -- Hostile
         end
-        return                                   -- Hostility color applied, so we are done.
+        return
     end
 
     -- Default to friendly color if no other condition is met
     healthBar:SetStatusBarDesaturated(true)
-    healthBar:SetStatusBarColor(0, 1, 0)
+    if isEnemy then
+        healthBar:SetStatusBarColor(1, 0, 0)
+    else
+        healthBar:SetStatusBarColor(0, 1, 0)
+    end
 end
 
 -- Safer ApplyIconZoom in Uber UI/core/generalfunctions.lua

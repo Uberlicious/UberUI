@@ -1061,20 +1061,48 @@ end
         end
     end);
 
+    -- Target Buffs
+    CreateAuraStyleDropdown("Target Buffs", "aurastyle_targetbuffs", "Choose how to style target buffs", true, function()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:Refresh();
+        end
+        if UberUI.targetframes then
+            UberUI.targetframes:UpdateAuras();
+        end
+    end);
+
+    -- Target Debuffs
+    CreateAuraStyleDropdown("Target Debuffs", "aurastyle_targetdebuffs", "Choose how to style target debuffs", true, function()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:Refresh();
+        end
+        if UberUI.targetframes then
+            UberUI.targetframes:UpdateAuras();
+        end
+    end);
+
     -- Sub-group for other frames
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling - Other Frames (Coming Soon)"));
 
-    -- Target Buffs
-    CreateAuraStyleDropdown("Target Buffs", "aurastyle_targetbuffs", "Choose how to style target buffs", false);
-
-    -- Target Debuffs
-    CreateAuraStyleDropdown("Target Debuffs", "aurastyle_targetdebuffs", "Choose how to style target debuffs", false);
-
     -- Focus Buffs
-    CreateAuraStyleDropdown("Focus Buffs", "aurastyle_focusbuffs", "Choose how to style focus buffs", false);
+    CreateAuraStyleDropdown("Focus Buffs", "aurastyle_focusbuffs", "Choose how to style focus buffs", true, function()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:Refresh();
+        end
+        if UberUI.focusframes and UberUI.focusframes.UpdateAuras then
+            UberUI.focusframes:UpdateAuras();
+        end
+    end);
 
     -- Focus Debuffs
-    CreateAuraStyleDropdown("Focus Debuffs", "aurastyle_focusdebuffs", "Choose how to style focus debuffs", false);
+    CreateAuraStyleDropdown("Focus Debuffs", "aurastyle_focusdebuffs", "Choose how to style focus debuffs", true, function()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:Refresh();
+        end
+        if UberUI.focusframes and UberUI.focusframes.UpdateAuras then
+            UberUI.focusframes:UpdateAuras();
+        end
+    end);
 
     -- Party Buffs
     CreateAuraStyleDropdown("Party Buffs", "aurastyle_partybuffs", "Choose how to style standard party buffs", false);
@@ -1792,3 +1820,226 @@ end
 
 SLASH_UBERUI1 = "/uui"
 Slash_UBERUI2 = "/uberui"
+
+SlashCmdList.UUITEST = function()
+    local dbg = {}
+    dbg.time = date("%Y-%m-%d %H:%M:%S")
+    dbg.targetExists = UnitExists("target")
+    dbg.targetName = UnitName("target")
+
+    -- Check Blizzard_AuraContainer availability
+    dbg.hasAuraContainerAddon = C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist("Blizzard_AuraContainer")
+    dbg.isAuraContainerLoaded = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer")
+    local okLoad, resLoad = pcall(function()
+        if C_AddOns and C_AddOns.LoadAddOn then
+            return C_AddOns.LoadAddOn("Blizzard_AuraContainer")
+        end
+    end)
+    dbg.loadAuraContainerResult = okLoad and tostring(resLoad) or "pcall failed"
+    
+    local okCreate, testContainer = pcall(function()
+        return CreateFrame("AuraContainer", "UUITestContainer", UIParent, "CustomAuraContainerTemplate")
+    end)
+    dbg.createContainerOk = okCreate
+    if okCreate and testContainer then
+        dbg.containerType = testContainer:GetObjectType()
+        testContainer:Hide()
+    else
+        dbg.containerErr = tostring(testContainer)
+    end
+
+    -- Check TargetFrame structure
+    dbg.hasTargetFrame = TargetFrame ~= nil
+    dbg.hasTargetContent = TargetFrame and TargetFrame.TargetFrameContent ~= nil
+    dbg.hasContextual = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual ~= nil
+    local targetAuras = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
+    dbg.hasTargetAuras = targetAuras ~= nil
+    if targetAuras then
+        dbg.targetAurasType = targetAuras.GetObjectType and targetAuras:GetObjectType()
+        dbg.hasBuffAuraGroup = targetAuras.buffAuraGroup ~= nil
+        dbg.hasDebuffAuraGroup = targetAuras.debuffAuraGroup ~= nil
+        dbg.hasAuraPools = targetAuras.auraPools ~= nil
+        if targetAuras.buffAuraGroup and targetAuras.buffAuraGroup.GetFramesByIndex then
+            local bf = targetAuras.buffAuraGroup:GetFramesByIndex()
+            dbg.buffAuraGroupCount = bf and #bf or 0
+        end
+        if targetAuras.debuffAuraGroup and targetAuras.debuffAuraGroup.GetFramesByIndex then
+            local df = targetAuras.debuffAuraGroup:GetFramesByIndex()
+            dbg.debuffAuraGroupCount = df and #df or 0
+        end
+    end
+
+    if targetAuras then
+        local childNames = {}
+        for _, ch in pairs({ targetAuras:GetChildren() }) do
+            local cn = (ch.GetName and ch:GetName()) or ("(anon " .. ch:GetObjectType() .. ")")
+            table.insert(childNames, cn)
+        end
+        dbg.targetAurasChildren = table.concat(childNames, ", ")
+    end
+
+    -- Hover check: inspect whatever frame is under the mouse cursor right now!
+    local mouseFrames = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+    local hoverChain = {}
+    for _, mf in ipairs(mouseFrames) do
+        if mf and mf ~= WorldFrame then
+            local chain = {}
+            local cur = mf
+            while cur and cur ~= UIParent do
+                local cname = cur.GetName and cur:GetName() or ("(anon " .. cur:GetObjectType() .. ")")
+                table.insert(chain, cname)
+                cur = cur.GetParent and cur:GetParent()
+            end
+            table.insert(hoverChain, table.concat(chain, " -> "))
+        end
+    end
+
+    -- Inspect aura functions on TargetFrame
+    local tfFuncs = {}
+    if TargetFrame then
+        for k, v in pairs(TargetFrame) do
+            if type(k) == "string" and (k:lower():find("aura") or k:lower():find("buff")) and type(v) == "function" then
+                table.insert(tfFuncs, k)
+            end
+        end
+        table.sort(tfFuncs)
+    end
+
+    -- Inspect fields on targetAuras
+    local taFields = {}
+    if targetAuras then
+        for k, v in pairs(targetAuras) do
+            if type(k) == "string" and not k:find("^_") then
+                table.insert(taFields, k .. " (" .. type(v) .. ")")
+            end
+        end
+        table.sort(taFields)
+    end
+
+    -- Inspect ALL shown children of TargetFrame (up to depth 3)
+    local shownTree = {}
+    local function DumpShown(parent, depth, prefix)
+        if not parent or depth > 3 then return end
+        for _, ch in pairs({ parent:GetChildren() }) do
+            if ch and ch.IsShown and ch:IsShown() then
+                local cn = ch.GetName and ch:GetName() or ("(anon " .. ch:GetObjectType() .. ")")
+                local hasIcon = (ch.Icon or ch.icon) ~= nil
+                table.insert(shownTree, string.format("%s%s [%s, icon=%s]", prefix, cn, ch:GetObjectType(), tostring(hasIcon)))
+                DumpShown(ch, depth + 1, prefix .. "  ")
+            end
+        end
+    end
+    if TargetFrame then
+        DumpShown(TargetFrame, 1, "  ")
+    end
+
+    local function SafeDim(val)
+        local out = "?"
+        pcall(function()
+            if issecretvalue and issecretvalue(val) then out = "sec" return end
+            if type(val) == "number" then out = tostring(math.floor(val + 0.5)) end
+        end)
+        return out
+    end
+
+    -- Inspect TargetAuras configuration
+    local taConfig = {}
+    if targetAuras then
+        local function SafeCall(fn, ...)
+            if not fn then return "nil" end
+            local ok, res1, res2, res3, res4 = pcall(fn, targetAuras, ...)
+            if ok then
+                return tostring(res1) .. (res2 and (", " .. tostring(res2)) or "") .. (res3 and (", " .. tostring(res3)) or "") .. (res4 and (", " .. tostring(res4)) or "")
+            end
+            return "err: " .. tostring(res1)
+        end
+
+        table.insert(taConfig, "BuffTemplate: " .. SafeCall(targetAuras.GetBuffTemplate))
+        table.insert(taConfig, "DebuffTemplate: " .. SafeCall(targetAuras.GetDebuffTemplate))
+        table.insert(taConfig, "BuffFilter: " .. SafeCall(targetAuras.GetBuffFilterString))
+        table.insert(taConfig, "DebuffFilter: " .. SafeCall(targetAuras.GetDebuffFilterString))
+        table.insert(taConfig, "AnchorPoint: " .. SafeCall(targetAuras.GetFlowLayoutAnchorPoint))
+        table.insert(taConfig, "Growth: " .. SafeCall(targetAuras.GetFlowLayoutGrowthDirection))
+        table.insert(taConfig, "MaxLineSize: " .. SafeCall(targetAuras.GetFlowLayoutMaximumLineSize))
+        table.insert(taConfig, "Spacing: " .. SafeCall(targetAuras.GetFlowLayoutSpacing))
+        table.insert(taConfig, "Padding: " .. SafeCall(targetAuras.GetFlowLayoutPadding))
+        table.insert(taConfig, "SmallSize: " .. SafeCall(targetAuras.GetSmallAuraSize))
+        table.insert(taConfig, "LargeSize: " .. SafeCall(targetAuras.GetLargeAuraSize))
+        table.insert(taConfig, "MaxBuffs: " .. SafeCall(targetAuras.GetMaxBuffs))
+        table.insert(taConfig, "MaxDebuffs: " .. SafeCall(targetAuras.GetMaxDebuffs))
+        local okPt, ptStr = pcall(function()
+            local p1, rf, p2, x, y = targetAuras:GetPoint(1)
+            if issecretvalue and (issecretvalue(x) or issecretvalue(y)) then
+                return tostring(p1) .. " to " .. tostring(rf and rf:GetName() or "anon") .. " " .. tostring(p2) .. " (secret offsets)"
+            end
+            return string.format("%s to %s %s (x=%s, y=%s)", tostring(p1), tostring(rf and rf:GetName() or "anon"), tostring(p2), tostring(x), tostring(y))
+        end)
+        if okPt and ptStr and not (issecretvalue and issecretvalue(ptStr)) then
+            table.insert(taConfig, "Points: " .. ptStr)
+        end
+    end
+
+    local lines = {}
+    local function SafeAdd(str)
+        if issecretvalue and issecretvalue(str) then
+            table.insert(lines, "<secret>")
+        else
+            table.insert(lines, tostring(str))
+        end
+    end
+
+    SafeAdd("[UberUI /uuitest] Report:")
+    SafeAdd(string.format("  Target: %s (exists=%s)", tostring(dbg.targetName), tostring(dbg.targetExists)))
+    SafeAdd("  TargetAuras Config:")
+    for _, cfg in ipairs(taConfig) do
+        SafeAdd("    " .. tostring(cfg))
+    end
+    SafeAdd(string.format("  TargetFrame Aura Funcs: %s", #tfFuncs > 0 and table.concat(tfFuncs, ", ") or "none"))
+    SafeAdd(string.format("  TargetAuras Fields: %s", #taFields > 0 and table.concat(taFields, ", ") or "none"))
+    SafeAdd(string.format("  TargetAuras Children: %s", tostring(dbg.targetAurasChildren or "none")))
+    SafeAdd("  TargetFrame Visible Children Tree:")
+    for _, item in ipairs(shownTree) do
+        SafeAdd("  " .. tostring(item))
+    end
+
+    local fullText = table.concat(lines, "\n")
+    UberuiDB.debug_target_auras_report = fullText
+
+    -- Print to chat as well
+    print("|cff00ff00[UberUI /uuitest]|r Report generated (popup opened - press Ctrl+C to copy):")
+    for _, l in ipairs(lines) do
+        print(l)
+    end
+
+    -- Create/Show popup copy window
+    local f = _G["UUICopyDialog"]
+    if not f then
+        f = CreateFrame("Frame", "UUICopyDialog", UIParent, "DialogBoxFrame")
+        f:SetSize(620, 480)
+        f:SetPoint("CENTER")
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving)
+        f:SetScript("OnDragStop", f.StopMovingOrSizing)
+        f:SetFrameStrata("DIALOG")
+
+        local scroll = CreateFrame("ScrollFrame", "UUICopyScroll", f, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -30)
+        scroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -40, 40)
+
+        local edit = CreateFrame("EditBox", "UUICopyEdit", scroll)
+        edit:SetMultiLine(true)
+        edit:SetFontObject(ChatFontNormal)
+        edit:SetWidth(540)
+        edit:SetAutoFocus(false)
+        edit:SetScript("OnEscapePressed", function() f:Hide() end)
+        scroll:SetScrollChild(edit)
+        f.edit = edit
+    end
+    f.edit:SetText(fullText)
+    f:Show()
+    f.edit:SetFocus()
+    f.edit:HighlightText()
+end
+SLASH_UUITEST1 = "/uuitest"
