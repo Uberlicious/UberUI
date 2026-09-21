@@ -1101,6 +1101,33 @@ end
         end
     end);
 
+    -- Compact Raid/Party Buffs
+    CreateAuraStyleDropdown("Compact Raid/Party Buffs", "aurastyle_compactbuffs", "Choose how to style compact raid and party buffs", true, function()
+        if UberUI.cuf and UberUI.cuf.UpdateAllAuras then
+            UberUI.cuf:UpdateAllAuras();
+        end
+    end);
+
+    -- Compact Raid/Party Debuffs
+    CreateAuraStyleDropdown("Compact Raid/Party Debuffs", "aurastyle_compactdebuffs", "Choose how to style compact raid and party debuffs", true, function()
+        if UberUI.cuf and UberUI.cuf.UpdateAllAuras then
+            UberUI.cuf:UpdateAllAuras();
+        end
+    end);
+
+    if CreateSettingsButtonInitializer then
+        layout:AddInitializer(CreateSettingsButtonInitializer(
+            "Test Raid Frames",
+            "Toggle Preview",
+            function()
+                if UberUI.cuf and UberUI.cuf.ToggleTestMode then
+                    UberUI.cuf:ToggleTestMode();
+                end
+            end,
+            "Shows or hides test raid and party frames (with 5 simulated members) so you can preview aura styling while solo."
+        ));
+    end
+
     -- Sub-group for other frames
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling - Other Frames (Coming Soon)"));
 
@@ -1109,12 +1136,6 @@ end
 
     -- Party Debuffs
     CreateAuraStyleDropdown("Party Debuffs", "aurastyle_partydebuffs", "Choose how to style standard party debuffs", false);
-
-    -- Compact Raid/Party Buffs
-    CreateAuraStyleDropdown("Compact Raid/Party Buffs", "aurastyle_compactbuffs", "Choose how to style compact raid and party buffs", false);
-
-    -- Compact Raid/Party Debuffs
-    CreateAuraStyleDropdown("Compact Raid/Party Debuffs", "aurastyle_compactdebuffs", "Choose how to style compact raid and party debuffs", false);
 
     -- Nameplate Buffs
     CreateAuraStyleDropdown("Nameplate Buffs", "aurastyle_nameplatebuffs", "Choose how to style nameplate buffs", false);
@@ -1814,14 +1835,29 @@ end
 -- SLASH COMMAND
 -- ---------------------------
 
-SlashCmdList.UBERUI = function()
+SlashCmdList.UBERUI = function(msg)
+    local arg = msg and msg:trim():lower()
+    if arg == "testraid" or arg == "showraid" or arg == "raid" then
+        if UberUI.cuf and UberUI.cuf.ToggleTestMode then
+            UberUI.cuf:ToggleTestMode()
+        end
+        return
+    end
     Settings.OpenToCategory(Settings.UBERUI_CATEGORY_ID);
 end
 
 SLASH_UBERUI1 = "/uui"
 Slash_UBERUI2 = "/uberui"
 
-SlashCmdList.UUITEST = function()
+SlashCmdList.UUITEST = function(msg)
+    local arg = msg and msg:trim():lower()
+    if arg == "raid" or arg == "testraid" or arg == "showraid" then
+        if UberUI.cuf and UberUI.cuf.ToggleTestMode then
+            UberUI.cuf:ToggleTestMode()
+        end
+        return
+    end
+
     local dbg = {}
     dbg.time = date("%Y-%m-%d %H:%M:%S")
     dbg.targetExists = UnitExists("target")
@@ -1996,7 +2032,46 @@ SlashCmdList.UUITEST = function()
     end
     SafeAdd(string.format("  TargetFrame Aura Funcs: %s", #tfFuncs > 0 and table.concat(tfFuncs, ", ") or "none"))
     SafeAdd(string.format("  TargetAuras Fields: %s", #taFields > 0 and table.concat(taFields, ", ") or "none"))
-    SafeAdd(string.format("  TargetAuras Children: %s", tostring(dbg.targetAurasChildren or "none")))
+    -- Compact Unit Frame Diagnostics
+    local cufInfo = {}
+    table.insert(cufInfo, string.format("CompactPartyFrame: %s", CompactPartyFrame and (CompactPartyFrame:IsShown() and "Shown" or "Hidden") or "nil"))
+    table.insert(cufInfo, string.format("CompactRaidFrameContainer: %s", CompactRaidFrameContainer and (CompactRaidFrameContainer:IsShown() and "Shown" or "Hidden") or "nil"))
+    table.insert(cufInfo, string.format("CUF Test Mode: %s", tostring(UberUI.cuf and UberUI.cuf.testMode)))
+    table.insert(cufInfo, string.format("AuraStyle Buffs: %s | Debuffs: %s",
+        tostring(uuidb and uuidb.general and uuidb.general.aurastyle_compactbuffs or "both"),
+        tostring(uuidb and uuidb.general and uuidb.general.aurastyle_compactdebuffs or "zoom")
+    ))
+    local m1 = CompactPartyFrameMember1 or (CompactPartyFrame and CompactPartyFrame.memberUnitFrames and CompactPartyFrame.memberUnitFrames[1])
+    if m1 then
+        local shownB, bdrB = 0, 0
+        if m1.buffFrames then
+            for _, bf in ipairs(m1.buffFrames) do
+                if bf:IsShown() then shownB = shownB + 1 end
+                if bf.borderHost and bf.borderHost:IsShown() then bdrB = bdrB + 1 end
+            end
+        end
+        local shownD, bdrD = 0, 0
+        if m1.debuffFrames then
+            for _, df in ipairs(m1.debuffFrames) do
+                if df:IsShown() then shownD = shownD + 1 end
+                if df.borderHost and df.borderHost:IsShown() then bdrD = bdrD + 1 end
+            end
+        end
+        table.insert(cufInfo, string.format("Member1 [%s, unit=%s, disp=%s]: buffs=%d/%d (bdrHost=%d), debuffs=%d/%d (bdrHost=%d)",
+            m1:GetName() or "anon",
+            tostring(m1.unit),
+            tostring(m1.displayedUnit),
+            shownB, m1.buffFrames and #m1.buffFrames or 0, bdrB,
+            shownD, m1.debuffFrames and #m1.debuffFrames or 0, bdrD
+        ))
+    else
+        table.insert(cufInfo, "Member1: nil")
+    end
+
+    SafeAdd("  Compact Unit Frame Info:")
+    for _, info in ipairs(cufInfo) do
+        SafeAdd("    " .. tostring(info))
+    end
     SafeAdd("  TargetFrame Visible Children Tree:")
     for _, item in ipairs(shownTree) do
         SafeAdd("  " .. tostring(item))
