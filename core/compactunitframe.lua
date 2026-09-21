@@ -164,7 +164,7 @@ local function StyleCompactBuff(buffFrame)
     end
 
     if darkBorderEnabled then
-        local pad = 2
+        local pad = 1
         local target = icon or buffFrame
         borderHost:ClearAllPoints()
         borderHost:SetPoint("TOPLEFT", target, "TOPLEFT", -pad, pad)
@@ -225,7 +225,7 @@ local function StyleCompactDebuff(debuffFrame)
         debuffFrame.borderTex = borderTex
     end
 
-    local pad = 2
+    local pad = 1
     local blizzBorder = debuffFrame.border or debuffFrame.Border
     local target = icon or debuffFrame
 

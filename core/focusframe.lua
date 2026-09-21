@@ -253,13 +253,11 @@ function focusframes:UpdateAuraButtonStyle(button)
 
     if button.borderHost then
         pcall(function()
-            local pad = 3
-            if button.elementSize and button.elementSize >= 20 then
-                pad = 4
-            end
+            local pad = 1
+            local target = button.icon or button
             button.borderHost:ClearAllPoints()
-            button.borderHost:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
-            button.borderHost:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
+            button.borderHost:SetPoint("TOPLEFT", target, "TOPLEFT", -pad, pad)
+            button.borderHost:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", pad, -pad)
 
             if button.borderTex then
                 button.borderTex:ClearAllPoints()
@@ -727,11 +725,12 @@ function focusframes:SetupCustomAuraContainer()
             pcall(button.SetApplicationCount, button, count, {})
         end
 
-        local pad = (size >= 20) and 4 or 3
+        local pad = 1
+        local target = icon or button
         local borderHost = button.borderHost or CreateFrame("Frame", nil, button)
         borderHost:ClearAllPoints()
-        borderHost:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
-        borderHost:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
+        borderHost:SetPoint("TOPLEFT", target, "TOPLEFT", -pad, pad)
+        borderHost:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", pad, -pad)
         borderHost:SetFrameLevel(cd:GetFrameLevel() + 2)
         borderHost:EnableMouse(false)
 
@@ -745,8 +744,8 @@ function focusframes:SetupCustomAuraContainer()
 
         local stealable = button.stealable or button:CreateTexture(nil, "OVERLAY")
         stealable:ClearAllPoints()
-        stealable:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
-        stealable:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
+        stealable:SetPoint("TOPLEFT", target, "TOPLEFT", -pad, pad)
+        stealable:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", pad, -pad)
         stealable:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Stealable")
         stealable:SetBlendMode("ADD")
         stealable:Hide()

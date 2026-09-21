@@ -199,8 +199,8 @@ function buffsandauras:StyleAuraButton(button)
         
         if not borderFrame then
             borderFrame = CreateFrame("Frame", nil, button)
-            borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -5, 5)
-            borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 5, -5)
+            borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -1, 1)
+            borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", 1, -1)
             
             local tex = borderFrame:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
@@ -220,14 +220,7 @@ function buffsandauras:StyleAuraButton(button)
             borderFrame:SetFrameLevel(100)
         end
         
-        local pad = isPlayer and 5 or 4
-        pcall(function()
-            local iconWidth = iconTexture.GetWidth and iconTexture:GetWidth()
-            if issecretvalue and issecretvalue(iconWidth) then return end
-            if type(iconWidth) == "number" and iconWidth > 0 then
-                pad = math.max(2, math.floor(iconWidth * (5 / 30) + 0.5))
-            end
-        end)
+        local pad = 1
         borderFrame:ClearAllPoints()
         borderFrame:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
         borderFrame:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
