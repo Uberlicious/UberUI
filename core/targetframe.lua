@@ -28,6 +28,8 @@ targetframes:RegisterUnitEvent("UNIT_DISPLAYPOWER", "target")
 targetframes:RegisterUnitEvent("UNIT_POWER_UPDATE", "target")
 targetframes:RegisterUnitEvent("UNIT_MAXPOWER", "target")
 targetframes:RegisterUnitEvent("UNIT_AURA", "target")
+targetframes:RegisterEvent("GROUP_ROSTER_UPDATE")
+targetframes:RegisterEvent("PARTY_LEADER_CHANGED")
 targetframes:SetScript("OnEvent", function(self, event, unit)
     if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         targetframes:SetupCustomAuraContainer()
@@ -42,6 +44,8 @@ targetframes:SetScript("OnEvent", function(self, event, unit)
             targetframes:UpdateAuras()
             targetframes:HealthBarColor()
         end)
+    elseif event == "GROUP_ROSTER_UPDATE" or event == "PARTY_LEADER_CHANGED" then
+        targetframes:UpdateAuraPositions()
     elseif event == "UNIT_AURA" then
         targetframes:UpdateAuras();
         C_Timer.After(0.05, function() targetframes:UpdateAuras() end)
@@ -301,6 +305,7 @@ end
 
 local TOP_X = 25
 local TOP_Y = 26
+local TOP_ON_TOP_X = 5
 local LARGE_AURA_SIZE = 21
 local SMALL_AURA_SIZE = 15
 local AURA_SPACING = 3
@@ -325,12 +330,164 @@ local function RefreshContainerButtons(container)
     end
 end
 
-function targetframes:UpdateAuraPositions()
-    if self.customAuras then
-        self.customAuras:ClearAllPoints()
-        self.customAuras:SetPoint("TOPLEFT", TargetFrame, "BOTTOMLEFT", TOP_X, TOP_Y)
+local function GetLeaderIcon(frame)
+    if not frame then return nil end
+    local contextual = frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentContextual
+    if contextual then
+        local leader = contextual.LeaderIcon
+        if leader and leader:IsShown() then return leader end
+        local guide = contextual.GuideIcon
+        if guide and guide:IsShown() then return guide end
+    end
+    if frame.LeaderIcon and frame.LeaderIcon:IsShown() then return frame.LeaderIcon end
+    if frame.leaderIcon and frame.leaderIcon:IsShown() then return frame.leaderIcon end
+    local globalLeader = frame.GetName and _G[frame:GetName() .. "LeaderIcon"]
+    if globalLeader and globalLeader:IsShown() then return globalLeader end
+    return nil
+end
+
+local isAdjustingSpellbar = false
+local function UpdateSpellbar(frameObj, container)
+    if not frameObj then return end
+    local spellbar = frameObj.spellbar or (frameObj.GetName and _G[frameObj:GetName() .. "SpellBar"])
+    if not spellbar then return end
+
+    if frameObj.buffsOnTop then
+        frameObj.auraRows = 0
+        frameObj.spellbarAnchor = nil
+        if not isAdjustingSpellbar and spellbar.AdjustPosition then
+            isAdjustingSpellbar = true
+            pcall(spellbar.AdjustPosition, spellbar)
+            isAdjustingSpellbar = false
+        end
+        return
+    end
+
+    if not container or not container.allButtons or not container:IsShown() then
+        frameObj.auraRows = 0
+        frameObj.spellbarAnchor = nil
+        if not isAdjustingSpellbar and spellbar.AdjustPosition then
+            isAdjustingSpellbar = true
+            pcall(spellbar.AdjustPosition, spellbar)
+            isAdjustingSpellbar = false
+        end
+        return
+    end
+
+    local visibleButtons = {}
+    for button in pairs(container.allButtons) do
+        if button and not IsSecret(button) then
+            local okS, isShown = pcall(button.IsShown, button)
+            if okS and SafeBool(isShown) then
+                local okB, bottom = pcall(button.GetBottom, button)
+                local okL, left = pcall(button.GetLeft, button)
+                if okB and okL and bottom and left and not IsSecret(bottom) and not IsSecret(left) then
+                    table.insert(visibleButtons, { btn = button, bottom = bottom, left = left })
+                end
+            end
+        end
+    end
+
+    if #visibleButtons == 0 then
+        frameObj.auraRows = 0
+        frameObj.spellbarAnchor = nil
+        if not isAdjustingSpellbar and spellbar.AdjustPosition then
+            isAdjustingSpellbar = true
+            pcall(spellbar.AdjustPosition, spellbar)
+            isAdjustingSpellbar = false
+        end
+        return
+    end
+
+    table.sort(visibleButtons, function(a, b)
+        return a.bottom < b.bottom
+    end)
+
+    local rows = 1
+    local currentBottom = visibleButtons[1].bottom
+    for i = 2, #visibleButtons do
+        if math.abs(visibleButtons[i].bottom - currentBottom) > 4 then
+            rows = rows + 1
+            currentBottom = visibleButtons[i].bottom
+        end
+    end
+
+    local minBottom = visibleButtons[1].bottom
+    local lowestLeftBtn = visibleButtons[1].btn
+    local minLeft = visibleButtons[1].left
+    for _, item in ipairs(visibleButtons) do
+        if math.abs(item.bottom - minBottom) <= 4 then
+            if item.left < minLeft then
+                minLeft = item.left
+                lowestLeftBtn = item.btn
+            end
+        end
+    end
+
+    frameObj.auraRows = rows
+    frameObj.spellbarAnchor = lowestLeftBtn
+
+    if not isAdjustingSpellbar and spellbar.AdjustPosition then
+        isAdjustingSpellbar = true
+        pcall(spellbar.AdjustPosition, spellbar)
+        isAdjustingSpellbar = false
     end
 end
+
+local function HookSpellbarAdjustPosition(spellbar, frameObj, getContainer)
+    if not spellbar or not spellbar.AdjustPosition or spellbar._uberUIHooked then return end
+    spellbar._uberUIHooked = true
+    hooksecurefunc(spellbar, "AdjustPosition", function(self)
+        if isAdjustingSpellbar then return end
+        local parent = self:GetParent()
+        if parent ~= frameObj then return end
+        local container = getContainer and getContainer()
+        if container then
+            UpdateSpellbar(frameObj, container)
+        end
+    end)
+end
+
+function targetframes:UpdateAuraPositions()
+    if not self.customAuras or not TargetFrame then return end
+    local buffsOnTop = TargetFrame.buffsOnTop
+    self.customAuras:ClearAllPoints()
+    if buffsOnTop then
+        local ref = (TargetFrame.TargetFrameContainer and TargetFrame.TargetFrameContainer.FrameTexture) or TargetFrame
+        local offsetX = (ref == TargetFrame) and TOP_X or TOP_ON_TOP_X
+        local startY = -6
+        local extraY = 0
+        if TargetFrame.threatNumericIndicator and TargetFrame.threatNumericIndicator:IsShown() then
+            local th = TargetFrame.threatNumericIndicator:GetHeight()
+            if th and th > 0 then
+                extraY = math.max(extraY, th)
+            end
+        end
+        local leader = GetLeaderIcon(TargetFrame)
+        if leader then
+            local lh = (leader.GetHeight and leader:GetHeight()) or 0
+            if not lh or lh <= 0 then lh = 18 end
+            extraY = math.max(extraY, lh)
+        end
+        startY = startY + extraY
+        self.customAuras:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
+        if self.customAuras.SetFlowLayoutAnchorPoint then
+            pcall(self.customAuras.SetFlowLayoutAnchorPoint, self.customAuras, "BOTTOMLEFT")
+        end
+        if self.customAuras.SetFlowLayoutGrowthDirection then
+            pcall(self.customAuras.SetFlowLayoutGrowthDirection, self.customAuras, 1, 1)
+        end
+    else
+        self.customAuras:SetPoint("TOPLEFT", TargetFrame, "BOTTOMLEFT", TOP_X, TOP_Y)
+        if self.customAuras.SetFlowLayoutAnchorPoint then
+            pcall(self.customAuras.SetFlowLayoutAnchorPoint, self.customAuras, "TOPLEFT")
+        end
+        if self.customAuras.SetFlowLayoutGrowthDirection then
+            pcall(self.customAuras.SetFlowLayoutGrowthDirection, self.customAuras, 1, -1)
+        end
+    end
+end
+
 
 function targetframes:UpdateAuras()
     local styleBuffs = (uuidb and uuidb.general and uuidb.general.aurastyle_targetbuffs) or "both"
@@ -365,6 +522,7 @@ function targetframes:UpdateAuras()
     end
 
     self.customAuras:Show()
+    self:UpdateAuraPositions()
 
     local isFriend = false
     if UnitExists("target") then
@@ -453,6 +611,7 @@ function targetframes:UpdateAuras()
 
     pcall(self.customAuras.UpdateAllAuras, self.customAuras)
     RefreshContainerButtons(self.customAuras)
+    UpdateSpellbar(TargetFrame, self.customAuras)
 end
 
 function targetframes:ForceZoom()
@@ -618,10 +777,10 @@ function targetframes:SetupCustomAuraContainer()
             self.customDebuffs = container
 
             container:SetSize(1, 1)
-            container:ClearAllPoints()
-            container:SetPoint("TOPLEFT", TargetFrame, "BOTTOMLEFT", TOP_X, TOP_Y)
-            container:SetFlowLayoutAnchorPoint("TOPLEFT")
-            container:SetFlowLayoutGrowthDirection(1, -1)
+            if TargetFrame and TargetFrame.GetFrameLevel then
+                container:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
+            end
+            targetframes:UpdateAuraPositions()
             container:SetFlowLayoutMaximumLineSize(122)
             container:SetFlowLayoutPadding(0, 0, 0, 0)
             if container.SetFlowLayoutSpacing then
@@ -655,6 +814,7 @@ function targetframes:SetupCustomAuraContainer()
             if container.ApplyLayout then
                 hooksecurefunc(container, "ApplyLayout", function()
                     RefreshContainerButtons(container)
+                    UpdateSpellbar(TargetFrame, container)
                 end)
             end
 
@@ -662,6 +822,8 @@ function targetframes:SetupCustomAuraContainer()
             container:UpdateAllAuras()
         end
     end
+
+    HookSpellbarAdjustPosition(TargetFrame.spellbar or TargetFrameSpellBar, TargetFrame, function() return targetframes.customAuras end)
 
     if TargetFrame:IsShown() then
         if self.customAuras then self.customAuras:Show() end
@@ -691,6 +853,14 @@ if TargetFrame and TargetFrame.UpdateAuras then
     hooksecurefunc(TargetFrame, "UpdateAuras", function(self)
         if targetframes and targetframes.UpdateAuras then
             targetframes:UpdateAuras()
+        end
+    end)
+end
+
+if TargetFrame and TargetFrame.CheckPartyLeader then
+    hooksecurefunc(TargetFrame, "CheckPartyLeader", function(self)
+        if targetframes and targetframes.UpdateAuraPositions then
+            targetframes:UpdateAuraPositions()
         end
     end)
 end
@@ -737,6 +907,23 @@ if TargetFrame then
             if targetframes then
                 targetframes:HealthBarColor()
                 targetframes:HealthManaBarTexture()
+            end
+        end)
+    end
+    if TargetFrame.CreateSpellbar then
+        hooksecurefunc(TargetFrame, "CreateSpellbar", function(self)
+            HookSpellbarAdjustPosition(self.spellbar or TargetFrameSpellBar, TargetFrame, function() return targetframes.customAuras end)
+        end)
+    end
+    if TargetFrame.totFrame then
+        TargetFrame.totFrame:HookScript("OnShow", function()
+            if targetframes and targetframes.UpdateAuras then
+                targetframes:UpdateAuras()
+            end
+        end)
+        TargetFrame.totFrame:HookScript("OnHide", function()
+            if targetframes and targetframes.UpdateAuras then
+                targetframes:UpdateAuras()
             end
         end)
     end
