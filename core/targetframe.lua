@@ -372,13 +372,48 @@ local function MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, la
     }
 end
 
-local function RefreshContainerButtons(container)
-    if not container or not container.allButtons then return end
-    local isEnemy = IsEnemyTarget()
-    for button in pairs(container.allButtons) do
-        local isBuff = (button.groupKey == "secondary") == isEnemy
-        targetframes:UpdateAuraButtonStyle(button, isBuff)
+-- Restyle every aura button currently active in a group, using the container's own
+-- authoritative group membership (GetFramesByIndex) rather than any addon-cached
+-- per-button state such as button.groupKey. Blizzard's AuraContainer recycles pooled
+-- button widgets between groups as the target's hostility changes, and a recycled
+-- widget does NOT get run back through our initializeFrame callback, so a cached
+-- button.groupKey can go stale the moment a widget is handed to a different group.
+-- That staleness was why target frame borders would silently stop drawing after
+-- switching from an enemy target to a friendly one (or vice versa): whichever
+-- hostility was targeted first got buttons freshly created with correct state, but
+-- the recycled buttons used for the opposite hostility kept believing they were
+-- still in their original role.
+local function ForEachActiveAuraButton(container, isEnemy, callback)
+    if not container or not container.auraGroups then return end
+
+    local function visitGroup(groupKey, isBuff)
+        local group = container.auraGroups[groupKey]
+        if group and group.GetFramesByIndex then
+            local ok, frames = pcall(group.GetFramesByIndex, group)
+            if ok and frames and not IsSecret(frames) then
+                for _, btn in ipairs(frames) do
+                    callback(btn, isBuff)
+                end
+            end
+        end
     end
+
+    if isEnemy then
+        visitGroup("primary_mine", false)
+        visitGroup("primary_other", false)
+        visitGroup("secondary", true)
+    else
+        visitGroup("primary_mine", true)
+        visitGroup("primary_other", true)
+        visitGroup("secondary", false)
+    end
+end
+
+local function RefreshContainerButtons(container)
+    if not container then return end
+    ForEachActiveAuraButton(container, IsEnemyTarget(), function(btn, isBuff)
+        targetframes:UpdateAuraButtonStyle(btn, isBuff)
+    end)
 end
 
 local function GetLeaderIcon(frame)
@@ -612,28 +647,10 @@ function targetframes:UpdateAuras()
 
     pcall(self.customAuras.UpdateAllAuras, self.customAuras)
 
-    -- Force button style pass with correct hostility context for buffs vs debuffs
-    local function UpdateAurasInGroup(groupKey, isBuff)
-        local group = self.customAuras.auraGroups and self.customAuras.auraGroups[groupKey]
-        if group and group.GetFramesByIndex then
-            local ok, frames = pcall(group.GetFramesByIndex, group)
-            if ok and frames and not IsSecret(frames) then
-                for _, btn in ipairs(frames) do
-                    targetframes:UpdateAuraButtonStyle(btn, isBuff)
-                end
-            end
-        end
-    end
-
-    if isEnemy then
-        UpdateAurasInGroup("primary_mine", false)
-        UpdateAurasInGroup("primary_other", false)
-        UpdateAurasInGroup("secondary", true)
-    else
-        UpdateAurasInGroup("primary_mine", true)
-        UpdateAurasInGroup("primary_other", true)
-        UpdateAurasInGroup("secondary", false)
-    end
+    -- Force a final button style pass with correct hostility context for buffs vs debuffs
+    ForEachActiveAuraButton(self.customAuras, isEnemy, function(btn, isBuff)
+        targetframes:UpdateAuraButtonStyle(btn, isBuff)
+    end)
 
     UpdateSpellbar(TargetFrame, self.customAuras)
 
