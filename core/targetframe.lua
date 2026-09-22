@@ -49,6 +49,10 @@ targetframes:SetScript("OnEvent", function(self, event, unit)
     elseif event == "UNIT_AURA" then
         targetframes:UpdateAuras()
         C_Timer.After(0.05, function() targetframes:UpdateAuras() end)
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        -- Force a correctness pass once combat lockdown lifts, in case any
+        -- styling was skipped or failed while we were in combat.
+        targetframes:UpdateAuras()
     end
 end)
 
@@ -264,12 +268,22 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                 button.borderTex:SetAllPoints(button.borderHost)
             end
 
-            -- Whichever native border texture Blizzard's own aura button template
-            -- provides (dispel-type colored on debuffs, out of the box). We never
-            -- recolor it ourselves: it's only hidden while our own dark border is
-            -- in use, and otherwise left exactly as Blizzard drives it -- except
-            -- for resizing it to hug the icon when the zoom setting is enabled.
-            local nativeBorder = button.DebuffBorder or button.DispelBorder or button.Border or button.border
+            -- This AuraContainer widget's buttons have no native border texture
+            -- field of their own to fall back on (confirmed via runtime
+            -- inspection -- DebuffBorder/DispelBorder/Border/border are all nil
+            -- here), so "stock" for us means reproducing Blizzard's own target
+            -- frame behavior ourselves on our own borderTex: no border at all on
+            -- buffs, and a border tinted with the real dispel-type color on
+            -- debuffs -- using the exact same AuraUtil.SetAuraBorderColor call
+            -- and DEBUFF_TYPE_*_COLOR values Blizzard's own target frame code
+            -- uses for this (see TargetFrameMixin's aura update handler).
+            local function GetAuraDispelName()
+                local auraData = button.auraData
+                if auraData == nil or IsSecret(auraData) then return nil end
+                local ok, dispelName = pcall(function() return auraData.dispelName end)
+                if not ok or IsSecret(dispelName) then return nil end
+                return dispelName
+            end
 
             local function ApplyDarkBorder()
                 button.borderHost:Show()
@@ -281,22 +295,30 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                     { r = 0.4, g = 0.4, b = 0.4, a = 1 }
                     button.borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
                 end
-                if nativeBorder and not IsSecret(nativeBorder) then
-                    nativeBorder:Hide()
-                    nativeBorder:SetAlpha(0)
-                end
             end
 
-            local function ApplyStockBorder()
+            local function ApplyNoBorder()
+                -- Blizzard's stock target frame never draws a border on buffs.
                 button.borderHost:Hide()
                 if button.borderTex then button.borderTex:Hide() end
-                if nativeBorder and not IsSecret(nativeBorder) then
-                    nativeBorder:Show()
-                    nativeBorder:SetAlpha(1)
-                    if zoomEnabled then
-                        nativeBorder:ClearAllPoints()
-                        nativeBorder:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
-                        nativeBorder:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
+            end
+
+            local function ApplyNativeDebuffBorder()
+                button.borderHost:Show()
+                if button.borderTex then
+                    button.borderTex:Show()
+                    button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
+                    button.borderTex:SetDesaturated(false)
+                    local dispelName = GetAuraDispelName()
+                    local colored = false
+                    if AuraUtil and AuraUtil.SetAuraBorderColor then
+                        colored = pcall(AuraUtil.SetAuraBorderColor, button.borderTex, dispelName)
+                    end
+                    if not colored then
+                        -- Fallback if Blizzard's own helper is unavailable for
+                        -- some reason -- plain white leaves the base atlas
+                        -- showing as-is rather than an incorrect color.
+                        button.borderTex:SetVertexColor(1, 1, 1, 1)
                     end
                 end
             end
@@ -306,7 +328,7 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                 if darkBorderEnabled then
                     ApplyDarkBorder()
                 else
-                    ApplyStockBorder()
+                    ApplyNoBorder()
                 end
 
                 local isStealable = false
@@ -326,7 +348,7 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                 if darkBorderEnabled then
                     ApplyDarkBorder()
                 else
-                    ApplyStockBorder()
+                    ApplyNativeDebuffBorder()
                 end
             end
         end)
@@ -683,9 +705,11 @@ function targetframes:SetupCustomAuraContainer()
         button.elementSize = size
         button.isMine = isMine
 
-        -- Native border textures (Blizzard's own dispel-type-colored DebuffBorder,
-        -- etc.) are left alone here; UpdateAuraButtonStyle below decides per-call
-        -- whether to hide them (dark border style) or leave them showing stock.
+        -- This widget type has no native border texture of its own (confirmed via
+        -- runtime inspection), so we draw the border entirely on our own
+        -- borderTex below; UpdateAuraButtonStyle decides per-call whether that's
+        -- our dark border, Blizzard's real dispel-type color (debuffs), or none
+        -- at all (buffs), matching stock target frame behavior.
 
         local icon = button.icon or button:CreateTexture(nil, "ARTWORK")
         icon:ClearAllPoints()
