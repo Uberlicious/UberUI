@@ -1836,7 +1836,7 @@ SlashCmdList.UUITEST = function()
         end
     end)
     dbg.loadAuraContainerResult = okLoad and tostring(resLoad) or "pcall failed"
-    
+
     local okCreate, testContainer = pcall(function()
         return CreateFrame("AuraContainer", "UUITestContainer", UIParent, "CustomAuraContainerTemplate")
     end)

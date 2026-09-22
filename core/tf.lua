@@ -196,40 +196,25 @@ local function IsEnemyTarget()
     return not UnitIsFriend("player", "target")
 end
 
-function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
+function targetframes:UpdateAuraButtonStyle(button, isBuff)
     if not button or IsSecret(button) or SafeIsForbidden(button) then return end
 
-    local isBuff = forcedIsBuff
-    if isBuff == nil then
-        -- Dynamically ask the button or its parent group what kind of aura it's holding right now
-        if button.isBuff ~= nil and button.targetForWhichItWasSet == UnitGUID("target") then
-            isBuff = button.isBuff
-        else
-            local isEnemy = IsEnemyTarget()
-            local groupKey = button.groupKey or (button.auraGroup and button.auraGroup:GetGroupName())
-            if groupKey == "secondary" then
-                isBuff = isEnemy     -- On enemy, secondary is buff. On friend, secondary is debuff.
-            else
-                isBuff = not isEnemy -- On enemy, primary is debuff. On friend, primary is buff.
-            end
-        end
+    if isBuff ~= nil then
+        button.isBuff = isBuff
+    else
+        isBuff = button.isBuff
     end
-    button.isBuff = isBuff
-    button.targetForWhichItWasSet = UnitGUID("target")
 
     local style = "both"
     if uuidb and uuidb.general then
-        style = isBuff and (uuidb.general.aurastyle_targetbuffs or "both") or
-        (uuidb.general.aurastyle_targetdebuffs or "zoom")
+        style = isBuff and (uuidb.general.aurastyle_targetbuffs or "both") or (uuidb.general.aurastyle_targetdebuffs or "zoom")
     end
-
     local zoomEnabled = (style == "both" or style == "zoom")
     local darkBorderEnabled = (style == "both" or style == "border")
-    local zoomOnly = (style == "zoom")
 
-    for _, key in ipairs({ "Border", "border", "DebuffBorder", "DispelBorder", "BorderOverlay", "Overlay", "IconBorder", "AuraBorder" }) do
+    for _, key in ipairs({"Border", "border", "DebuffBorder", "DispelBorder", "BorderOverlay", "Overlay", "IconBorder", "AuraBorder"}) do
         local tex = button[key]
-        if tex and tex ~= button.borderTex and not IsSecret(tex) then
+        if tex and not IsSecret(tex) then
             pcall(function()
                 tex:Hide()
                 tex:SetAlpha(0)
@@ -259,8 +244,8 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
     end
 
     if button.cooldown then
-        pcall(button.cooldown.SetDrawSwipe, button.cooldown, true)
-        pcall(button.cooldown.SetDrawEdge, button.cooldown, true)
+        pcall(button.cooldown.SetDrawSwipe, button.cooldown, false)
+        pcall(button.cooldown.SetDrawEdge, button.cooldown, false)
     end
 
     if button.borderHost then
@@ -276,7 +261,6 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
             end
 
             if isBuff then
-                -- Buff styling (Applies to friendly buffs and enemy secondary buffs)
                 if darkBorderEnabled then
                     if button.ClearDispelTypeTextures then
                         pcall(button.ClearDispelTypeTextures, button)
@@ -286,8 +270,7 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                         button.borderTex:Show()
                         button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
                         button.borderTex:SetDesaturated(true)
-                        local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or
-                        { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+                        local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
                         button.borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
                     end
                 else
@@ -306,10 +289,9 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                     button.stealable:Hide()
                 end
             else
-                -- Debuff styling (Applies to enemy debuffs and friendly secondary debuffs)
+                -- Debuffs
                 if button.stealable then button.stealable:Hide() end
-
-                if darkBorderEnabled and not zoomOnly then
+                if darkBorderEnabled then
                     if button.ClearDispelTypeTextures then
                         pcall(button.ClearDispelTypeTextures, button)
                     end
@@ -318,8 +300,7 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                         button.borderTex:Show()
                         button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
                         button.borderTex:SetDesaturated(true)
-                        local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or
-                        { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+                        local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
                         button.borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
                     end
                 elseif zoomEnabled then
@@ -327,11 +308,9 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                     if button.borderTex then
                         button.borderTex:Show()
                         button.borderTex:SetDesaturated(false)
-                        button.borderTex:SetVertexColor(1, 1, 1, 1)
                     end
-                    if button.AddDispelTypeTexture then
-                        local dispelStyle = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle and
-                        (Enum.CustomAuraButtonDispelTypeTextureStyle.Border or Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset)
+                    if button.GetDispelTypeTextureCount and button:GetDispelTypeTextureCount() == 0 and button.AddDispelTypeTexture then
+                        local dispelStyle = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle and (Enum.CustomAuraButtonDispelTypeTextureStyle.Border or Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset)
                         if dispelStyle then
                             pcall(button.AddDispelTypeTexture, button, button.borderTex, {
                                 style = dispelStyle,
@@ -374,10 +353,8 @@ end
 
 local function RefreshContainerButtons(container)
     if not container or not container.allButtons then return end
-    local isEnemy = IsEnemyTarget()
     for button in pairs(container.allButtons) do
-        local isBuff = (button.groupKey == "secondary") == isEnemy
-        targetframes:UpdateAuraButtonStyle(button, isBuff)
+        targetframes:UpdateAuraButtonStyle(button)
     end
 end
 
@@ -550,9 +527,7 @@ function targetframes:UpdateAuras()
     local styleDebuffs = (uuidb and uuidb.general and uuidb.general.aurastyle_targetdebuffs) or "zoom"
     local bothNone = (styleBuffs == "none" and styleDebuffs == "none")
 
-    local blizzAuras = TargetFrame and TargetFrame.TargetFrameContent and
-    TargetFrame.TargetFrameContent.TargetFrameContentContextual and
-    TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
+    local blizzAuras = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
 
     if bothNone then
         if self.customAuras then self.customAuras:Hide() end
@@ -591,8 +566,8 @@ function targetframes:UpdateAuras()
     local maxBuffs = (styleBuffs ~= "none") and 32 or 0
     local maxDebuffs = (styleDebuffs ~= "none") and 16 or 0
 
-    -- Dynamically update group filter strings based on current target hostility
     if isEnemy then
+        -- Enemy: Row 1 = Debuffs (Harmful), Row 2 = Buffs (Helpful)
         pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_mine", "HARMFUL|PLAYER")
         pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_other", "HARMFUL|!PLAYER")
         pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "secondary", "HELPFUL")
@@ -601,6 +576,7 @@ function targetframes:UpdateAuras()
         pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "primary_other", maxDebuffs)
         pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "secondary", maxBuffs)
     else
+        -- Friendly: Row 1 = Buffs (Helpful), Row 2 = Debuffs (Harmful)
         pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_mine", "HELPFUL|PLAYER")
         pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_other", "HELPFUL|!PLAYER")
         pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "secondary", "HARMFUL")
@@ -612,7 +588,7 @@ function targetframes:UpdateAuras()
 
     pcall(self.customAuras.UpdateAllAuras, self.customAuras)
 
-    -- Force button style pass with correct hostility context for buffs vs debuffs
+    -- Direct group frame traversal: ensures buttons receive the exact isBuff state for their active group
     local function UpdateAurasInGroup(groupKey, isBuff)
         local group = self.customAuras.auraGroups and self.customAuras.auraGroups[groupKey]
         if group and group.GetFramesByIndex then
@@ -673,7 +649,7 @@ function targetframes:SetupCustomAuraContainer()
     blizzAuras:SetAlpha(0)
     blizzAuras:EnableMouse(false)
 
-    local function InitAuraButton(container, button, groupKey, isBuff, size, isMine)
+    local function InitAuraButton(container, button, groupKey, size)
         if container then
             if not container.allButtons then container.allButtons = {} end
             container.allButtons[button] = true
@@ -681,9 +657,7 @@ function targetframes:SetupCustomAuraContainer()
         end
         button:SetSize(size, size)
         button.groupKey = groupKey
-        button.isBuff = isBuff
         button.elementSize = size
-        button.isMine = isMine
 
         for _, key in ipairs({"Border", "border", "DebuffBorder", "DispelBorder", "BorderOverlay", "Overlay"}) do
             local tex = button[key]
@@ -731,7 +705,7 @@ function targetframes:SetupCustomAuraContainer()
             pcall(button.SetApplicationCount, button, count, {})
         end
 
-        local pad = (size >= 20) and 3 or 2
+        local pad = 2
         local borderHost = button.borderHost or CreateFrame("Frame", nil, button)
         borderHost:ClearAllPoints()
         borderHost:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
@@ -779,68 +753,57 @@ function targetframes:SetupCustomAuraContainer()
                 pcall(container.SetFlowLayoutSpacing, container, AURA_SPACING, AURA_SPACING + 2)
             end
 
+            -- Row 1: Primary category (large for player, small for others)
             container:AddAuraGroup("primary_mine", "HARMFUL|PLAYER", {
                 maxFrameCount = 16,
-                initializeFrame = function(btn) InitAuraButton(container, btn, "primary_mine", false, LARGE_AURA_SIZE, true) end,
+                initializeFrame = function(btn) InitAuraButton(container, btn, "primary_mine", LARGE_AURA_SIZE) end,
                 layout = MakeGroupLayout(LARGE_AURA_SIZE, AURA_SPACING, AURA_SPACING, false, 1),
             })
 
             container:AddAuraGroup("primary_other", "HARMFUL|!PLAYER", {
                 maxFrameCount = 16,
-                initializeFrame = function(btn) InitAuraButton(container, btn, "primary_other", false, SMALL_AURA_SIZE, false) end,
+                initializeFrame = function(btn) InitAuraButton(container, btn, "primary_other", SMALL_AURA_SIZE) end,
                 layout = MakeGroupLayout(SMALL_AURA_SIZE, AURA_SPACING, AURA_SPACING, false, 2),
             })
 
+            -- Row 2: Secondary category (always wraps to new row beneath Primary)
             container:AddAuraGroup("secondary", "HELPFUL", {
                 maxFrameCount = 32,
-                initializeFrame = function(btn) InitAuraButton(container, btn, "secondary", true, SMALL_AURA_SIZE, false) end,
+                initializeFrame = function(btn) InitAuraButton(container, btn, "secondary", SMALL_AURA_SIZE) end,
                 layout = MakeGroupLayout(SMALL_AURA_SIZE, AURA_SPACING, AURA_SPACING, true, 3),
             })
 
             if container.ApplyLayout then
                 hooksecurefunc(container, "ApplyLayout", function()
                     if isUpdatingAuras then return end
-                    RefreshContainerButtons(container)
+                    local isEnemy = IsEnemyTarget()
+                    local function UpdateGroupButtons(groupKey, isBuff)
+                        local group = container.auraGroups and container.auraGroups[groupKey]
+                        if group and group.GetFramesByIndex then
+                            local ok, frames = pcall(group.GetFramesByIndex, group)
+                            if ok and frames and not IsSecret(frames) then
+                                for _, btn in ipairs(frames) do
+                                    targetframes:UpdateAuraButtonStyle(btn, isBuff)
+                                end
+                            end
+                        end
+                    end
+
+                    if isEnemy then
+                        UpdateGroupButtons("primary_mine", false)
+                        UpdateGroupButtons("primary_other", false)
+                        UpdateGroupButtons("secondary", true)
+                    else
+                        UpdateGroupButtons("primary_mine", true)
+                        UpdateGroupButtons("primary_other", true)
+                        UpdateGroupButtons("secondary", false)
+                    end
                     UpdateSpellbar(TargetFrame, container)
-                    isUpdatingAuras = false
                 end)
             end
 
             container:SetUnit("target")
             container:UpdateAllAuras()
-
-            if okC and container then
-                self.customAuras = container
-                self.customBuffs = container
-                self.customDebuffs = container
-
-                container:SetSize(1, 1)
-                if TargetFrame and TargetFrame.GetFrameLevel then
-                    container:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
-                end
-                targetframes:UpdateAuraPositions()
-                container:SetFlowLayoutMaximumLineSize(122)
-                container:SetFlowLayoutPadding(0, 0, 0, 0)
-                if container.SetFlowLayoutSpacing then
-                    pcall(container.SetFlowLayoutSpacing, container, AURA_SPACING, AURA_SPACING + 2)
-                end
-
-                -- HOOK 1: Intercept UpdateAllAuras to force button styling on every container refresh
-                if container.UpdateAllAuras then
-                    hooksecurefunc(container, "UpdateAllAuras", function()
-                        if isUpdatingAuras then return end
-                        RefreshContainerButtons(container)
-                    end)
-                end
-
-                -- HOOK 2: Intercept group-level updates if available
-                if container.UpdateAuraGroup then
-                    hooksecurefunc(container, "UpdateAuraGroup", function()
-                        if isUpdatingAuras then return end
-                        RefreshContainerButtons(container)
-                    end)
-                end
-            end
         end
     end
 
