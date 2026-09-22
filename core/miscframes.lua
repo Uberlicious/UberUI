@@ -33,10 +33,15 @@ function misc:EndCaps()
     
     local function ColorEndCap(endCap)
         if not endCap then return end
-        if type(endCap.SetVertexColor) == "function" then
-            endCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        elseif endCap.Texture and type(endCap.Texture.SetVertexColor) == "function" then
+        -- These are Frames (MainMenuBarEndCaps.xml), not Textures, so
+        -- SetVertexColor lives on their .Texture child -- checking
+        -- type(endCap.SetVertexColor) here can read as a function even though
+        -- calling it directly throws "attempt to call a nil value", so we
+        -- gate the direct-call branch on the widget's real object type.
+        if endCap.Texture and type(endCap.Texture.SetVertexColor) == "function" then
             endCap.Texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        elseif endCap.IsObjectType and endCap:IsObjectType("Texture") and type(endCap.SetVertexColor) == "function" then
+            endCap:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         elseif endCap.GetRegions then
             for _, region in ipairs({endCap:GetRegions()}) do
                 if region:IsObjectType("Texture") then

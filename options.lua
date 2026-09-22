@@ -1081,6 +1081,33 @@ end
         end
     end);
 
+    -- Show Dispels for Target Buffs
+    do
+        local variable, name = "targetbuffsShowDispel", "Show Dispels for Target Buffs";
+        local tooltip =
+        "Show a white border on dispellable enemy buffs, layered on top of whichever Target Buffs style is chosen above (including Dark/Both, which otherwise hides it).";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.targetbuffs_showdispel;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.targetbuffs_showdispel = value;
+            if UberUI.targetframes then
+                UberUI.targetframes:UpdateAuras();
+            end
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "targetbuffs_showdispel", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
     -- Focus Buffs
     CreateAuraStyleDropdown("Focus Buffs", "aurastyle_focusbuffs", "Choose how to style focus buffs", true, function()
         if UberUI.buffsandauras then

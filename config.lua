@@ -99,6 +99,7 @@ local defaults = {
         aurastyle_playerdebuffs      = "zoom",
         aurastyle_targetbuffs        = "both",
         aurastyle_targetdebuffs      = "zoom",
+        targetbuffs_showdispel       = false,
         aurastyle_focusbuffs         = "both",
         aurastyle_focusdebuffs       = "zoom",
         aurastyle_partybuffs         = "both",

@@ -200,26 +200,96 @@ local function IsEnemyTarget()
     return not UnitIsFriend("player", "target")
 end
 
-function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
-    if not button or IsSecret(button) or SafeIsForbidden(button) then return end
+-- AddDispelTypeTexture is denied outright while aura data is in a "secret"/
+-- restricted window (C_Secrets.ShouldAurasBeSecret, e.g. around loading
+-- screens and zone transitions) -- it doesn't error so much as refuse to take
+-- effect, so a single attempt made once at button-creation time can silently
+-- and permanently fail if it lands in one. We instead retry on every style
+-- pass until button.dispelBorderTex actually gets set.
+--
+-- A button's group (see SetupCustomAuraContainer: debuffs_mine/debuffs_other
+-- vs buffs_mine/buffs_other) permanently fixes whether it's a buff or debuff
+-- button for its entire lifetime -- buttons are never reclassified between
+-- roles -- so only one registration, matching that fixed role, is ever
+-- needed per button.
+-- Stock target frames show a plain, always-white stealable indicator on a
+-- dispellable enemy buff -- confirmed both visually (reference screenshot,
+-- everything set to "none" -- pure stock rendering) and in source
+-- (Interface/AddOns/Blizzard_UnitFrame/Shared/TargetFrameAuraButton.xml:
+-- StealableBorder is a plain file texture, Interface\TargetingFrame\
+-- UI-TargetingFrame-Stealable, alphaMode="ADD" -- not part of the
+-- dispel-type-color system at all, just a fixed-appearance texture toggled
+-- by auraData.isStealable). We already build exactly that texture as
+-- button.stealable (same file, same ADD blend) -- it just couldn't be shown
+-- reliably because auraData.isStealable is secret to addon code for enemy
+-- units. Rather than fight AddDispelTypeTexture's color system (which is
+-- fundamentally about per-dispel-type coloring, the wrong tool for a plain
+-- binary indicator) with a customDispelColorMap override of uncertain
+-- reliability, register button.stealable itself with stealableFilter: the
+-- engine decides show/hide from the real isStealable flag, and our texture's
+-- own art (already correct, already additive) does the rest -- no color
+-- override needed at all.
+local function TryRegisterDispelBorder(button)
+    if type(button.AddDispelTypeTexture) ~= "function" then return end
+    if not (Enum and Enum.CustomAuraButtonDispelTypeTextureStyle) then return end
 
-    local isBuff = forcedIsBuff
-    if isBuff == nil then
-        -- Dynamically ask the button or its parent group what kind of aura it's holding right now
-        if button.isBuff ~= nil and button.targetForWhichItWasSet == UnitGUID("target") then
-            isBuff = button.isBuff
-        else
-            local isEnemy = IsEnemyTarget()
-            local groupKey = button.groupKey or (button.auraGroup and button.auraGroup:GetGroupName())
-            if groupKey == "secondary" then
-                isBuff = isEnemy     -- On enemy, secondary is buff. On friend, secondary is debuff.
-            else
-                isBuff = not isEnemy -- On enemy, primary is debuff. On friend, primary is buff.
-            end
+    if button.isBuff then
+        if button.stealableRegistered or not button.stealable then return end
+        local preserveAsset = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset
+        if not preserveAsset then return end
+        local options = {
+            style = preserveAsset,
+            showWhenHarmful = false,
+            showWhenHelpful = true,
+            showWithoutDispelType = true,
+            stealableFilter = Enum.CustomAuraButtonDispelTypeStealableFilter and
+            Enum.CustomAuraButtonDispelTypeStealableFilter.Stealable,
+        }
+        local okAdd, addErr = pcall(button.AddDispelTypeTexture, button, button.stealable, options)
+        if okAdd then
+            button.stealableRegistered = truee
         end
+        button.dispelRegOk = okAdd
+        button.dispelRegErr = (not okAdd) and tostring(addErr) or nil
+    else
+        if button.dispelBorderTex or not button.dispelBorderTexPending then return end
+        -- Border: hands the engine both the atlas selection and the color
+        -- (AuraUtil.SetAuraBorderAtlas + color together, the same mechanism
+        -- Blizzard's own native aura frames use for debuffs), so it doesn't
+        -- depend on our own art being tintable correctly.
+        local borderStyle = Enum.CustomAuraButtonDispelTypeTextureStyle.Border
+        if not borderStyle then return end
+        local options = {
+            style = borderStyle,
+            showWhenHarmful = true,
+            showWhenHelpful = false,
+            showWithoutDispelType = true,
+        }
+        local okAdd, addErr = pcall(button.AddDispelTypeTexture, button, button.dispelBorderTexPending, options)
+        if okAdd then
+            button.dispelBorderTex = button.dispelBorderTexPending
+            button.dispelBorderTexPending = nil
+        end
+        button.dispelRegOk = okAdd
+        button.dispelRegErr = (not okAdd) and tostring(addErr) or nil
     end
-    button.isBuff = isBuff
-    button.targetForWhichItWasSet = UnitGUID("target")
+end
+
+-- isBuff is not passed in: it's fixed permanently at button creation (see
+-- InitAuraButton) based on which of the four permanent aura groups the
+-- button belongs to, so button.isBuff is always authoritative.
+function targetframes:UpdateAuraButtonStyle(button)
+    if not button or IsSecret(button) then return end
+    -- Deliberately NOT bailing out on SafeIsForbidden(button) here: a
+    -- forbidden AuraButton rejects some addon calls (SetSize etc.) but not
+    -- necessarily all of them -- confirmed in testing, since border show/
+    -- hide reliably succeeds mid-combat while other operations sometimes
+    -- don't. Every actual widget call below is already individually
+    -- pcall-wrapped, so bailing out here only cost us whatever WOULD have
+    -- succeeded, for no added safety.
+    TryRegisterDispelBorder(button)
+
+    local isBuff = button.isBuff
 
     local style = "both"
     if uuidb and uuidb.general then
@@ -272,21 +342,41 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
             -- field of their own to fall back on (confirmed via runtime
             -- inspection -- DebuffBorder/DispelBorder/Border/border are all nil
             -- here), so "stock" for us means reproducing Blizzard's own target
-            -- frame behavior ourselves on our own borderTex: no border at all on
-            -- buffs, and a border tinted with the real dispel-type color on
-            -- debuffs -- using the exact same AuraUtil.SetAuraBorderColor call
-            -- and DEBUFF_TYPE_*_COLOR values Blizzard's own target frame code
-            -- uses for this (see TargetFrameMixin's aura update handler).
-            local function GetAuraDispelName()
-                local auraData = button.auraData
-                if auraData == nil or IsSecret(auraData) then return nil end
-                local ok, dispelName = pcall(function() return auraData.dispelName end)
-                if not ok or IsSecret(dispelName) then return nil end
-                return dispelName
-            end
-
+            -- frame behavior ourselves: no border at all on buffs, and a border
+            -- tinted with the real dispel-type color on debuffs.
+            --
+            -- We can't compute that color ourselves: auraData.dispelName reads
+            -- back as a secret value to addon code under 12.1's security model
+            -- (Blizzard's own TargetFrameDebuffButtonPrivateMixin can read it
+            -- fine because that callback runs as trusted code, not because the
+            -- field itself is open). Reading it manually (the previous fix)
+            -- silently always fell back to DEBUFF_DISPLAY_INFO["None"]'s color,
+            -- which is why every debuff -- dispellable or not -- came out the
+            -- same dark shade. The sanctioned way for addon code to get this is
+            -- CustomAuraButtonSharedMixin:AddDispelTypeTexture, which hands a
+            -- texture's Shown/VertexColor/TexCoords/Alpha over to Blizzard's own
+            -- trusted coloring code (see Blizzard_CustomAuraButton.lua). We
+            -- register button.dispelBorderTex once (below, on button
+            -- creation/recycle) and from here on just show or hide the frame
+            -- that hosts it -- we never touch its color again.
             local function ApplyDarkBorder()
                 button.borderHost:Show()
+                -- Dark/Both/Border styles normally hide the dispel overlay
+                -- entirely (a deliberate, uniform darkened look). For buffs
+                -- specifically, "Show Dispels for Target Buffs" lets the
+                -- engine-managed white stealable border show through on top
+                -- of that dark tint instead of being replaced by it --
+                -- dispelBorderHost is a child frame of borderHost, so it
+                -- renders above borderTex's texture automatically.
+                local showDispelOverlay = isBuff and uuidb and uuidb.general and
+                uuidb.general.targetbuffs_showdispel
+                if button.dispelBorderHost then
+                    if showDispelOverlay then
+                        button.dispelBorderHost:Show()
+                    else
+                        button.dispelBorderHost:Hide()
+                    end
+                end
                 if button.borderTex then
                     button.borderTex:Show()
                     button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
@@ -301,55 +391,50 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                 -- Blizzard's stock target frame never draws a border on buffs.
                 button.borderHost:Hide()
                 if button.borderTex then button.borderTex:Hide() end
+                if button.dispelBorderHost then button.dispelBorderHost:Hide() end
             end
 
-            local function ApplyNativeDebuffBorder()
-                button.borderHost:Show()
-                if button.borderTex then
-                    button.borderTex:Show()
-                    button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
-                    button.borderTex:SetDesaturated(false)
-                    local dispelName = GetAuraDispelName()
-                    local colored = false
-                    if AuraUtil and AuraUtil.SetAuraBorderColor then
-                        colored = pcall(AuraUtil.SetAuraBorderColor, button.borderTex, dispelName)
-                    end
-                    if not colored then
-                        -- Fallback if Blizzard's own helper is unavailable for
-                        -- some reason -- plain white leaves the base atlas
-                        -- showing as-is rather than an incorrect color.
-                        button.borderTex:SetVertexColor(1, 1, 1, 1)
-                    end
-                end
-            end
+            -- Used for both buffs (an enhancement over stock: a dispellable/
+            -- stealable buff gets its own dispel-colored border, which
+            -- stealableFilter on registration means the engine itself only
+            -- ever shows for buffs that are actually stealable) and debuffs
+            -- (the real dispel-type color, matching stock target frames).
+            -- Which behavior applies is entirely decided by the fixed
+            -- registration options in TryRegisterDispelBorder, not here.
+            -- local function ApplyDispelColoredBorder()
+            --     button.borderHost:Show()
+            --     if button.borderTex then button.borderTex:Hide() end
+            --     if button.dispelBorderHost then
+            --         -- Engine-managed: Blizzard colors button.dispelBorderTex
+            --         -- itself on every aura update once it's shown.
+            --         --button.dispelBorderHost:Show()
+            --     elseif button.borderTex then
+            --         -- Fallback for buttons that couldn't register a dispel-type
+            --         -- texture (e.g. AddDispelTypeTexture unavailable) -- plain
+            --         -- white leaves the base atlas showing as-is rather than an
+            --         -- incorrect color.
+            --         button.borderTex:Show()
+            --         button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
+            --         button.borderTex:SetDesaturated(true)
+            --         button.borderTex:SetVertexColor(1, 1, 1, 1)
+            --     end
+            -- end
 
-            if isBuff then
-                -- Buff styling (Applies to friendly buffs and enemy secondary buffs)
-                if darkBorderEnabled then
-                    ApplyDarkBorder()
-                else
-                    ApplyNoBorder()
-                end
-
-                local isStealable = false
-                pcall(function()
-                    if SafeBool(button.isStealable) then isStealable = true end
-                    if button.Stealable and button.Stealable.IsShown and SafeBool(button.Stealable:IsShown()) then isStealable = true end
-                end)
-                if isStealable and button.stealable then
-                    button.stealable:Show()
-                elseif button.stealable then
-                    button.stealable:Hide()
-                end
+            if darkBorderEnabled then
+                ApplyDarkBorder()
             else
-                -- Debuff styling (Applies to enemy debuffs and friendly secondary debuffs)
-                if button.stealable then button.stealable:Hide() end
+                -- ApplyDispelColoredBorder()
+            end
 
-                if darkBorderEnabled then
-                    ApplyDarkBorder()
-                else
-                    ApplyNativeDebuffBorder()
-                end
+            -- button.stealable is only ever registered (see
+            -- TryRegisterDispelBorder) for buffs, and once registered its
+            -- Shown/VertexColor/Alpha/TexCoords become engine-controlled --
+            -- we can't call :Show()/:Hide() on it ourselves anymore (that's
+            -- the whole point: the engine decides visibility from the real,
+            -- otherwise-secret isStealable flag). Debuff buttons' copy is
+            -- never registered, so it's still safe to just leave it hidden.
+            if not isBuff and button.stealable then
+                button.stealable:Hide()
             end
         end)
     end
@@ -361,6 +446,7 @@ local TOP_ON_TOP_X = 5
 local LARGE_AURA_SIZE = 21
 local SMALL_AURA_SIZE = 16
 local AURA_SPACING = 1
+local CONTAINER_GAP = 2
 
 local function MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, layoutIndex)
     return {
@@ -375,47 +461,39 @@ local function MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, la
     }
 end
 
--- Restyle every aura button currently active in a group, using the container's own
--- authoritative group membership (GetFramesByIndex) rather than any addon-cached
--- per-button state such as button.groupKey. Blizzard's AuraContainer recycles pooled
--- button widgets between groups as the target's hostility changes, and a recycled
--- widget does NOT get run back through our initializeFrame callback, so a cached
--- button.groupKey can go stale the moment a widget is handed to a different group.
--- That staleness was why target frame borders would silently stop drawing after
--- switching from an enemy target to a friendly one (or vice versa): whichever
--- hostility was targeted first got buttons freshly created with correct state, but
--- the recycled buttons used for the opposite hostility kept believing they were
--- still in their original role.
-local function ForEachActiveAuraButton(container, isEnemy, callback)
-    if not container or not container.auraGroups then return end
+-- Restyle every aura button currently active in one of a container's two
+-- permanent groups (see SetupCustomAuraContainer: each of the debuff and
+-- buff containers has its own "mine"/"other" pair), using the container's
+-- own authoritative group membership (GetAuraGroupFrameCount/GetAuraGroupFrame)
+-- rather than any addon-cached per-button state. A group's harmful/helpful
+-- identity and its container never change, so buttons are never reclassified
+-- between buff and debuff roles -- each button's role is fixed for its
+-- entire lifetime by which group it was created in.
+local function ForEachActiveAuraButton(container, keyMine, keyOther, callback)
+    if not container or type(container.GetAuraGroupFrameCount) ~= "function"
+        or type(container.GetAuraGroupFrame) ~= "function" then
+        return
+    end
 
-    local function visitGroup(groupKey, isBuff)
-        local group = container.auraGroups[groupKey]
-        if group and group.GetFramesByIndex then
-            local ok, frames = pcall(group.GetFramesByIndex, group)
-            if ok and frames and not IsSecret(frames) then
-                for _, btn in ipairs(frames) do
-                    callback(btn, isBuff)
-                end
+    local function visitGroup(groupKey)
+        local okCount, count = pcall(container.GetAuraGroupFrameCount, container, groupKey)
+        if not okCount or type(count) ~= "number" then return end
+        for i = 1, count do
+            local okFrame, btn = pcall(container.GetAuraGroupFrame, container, groupKey, i)
+            if okFrame and btn and not IsSecret(btn) then
+                callback(btn)
             end
         end
     end
 
-    if isEnemy then
-        visitGroup("primary_mine", false)
-        visitGroup("primary_other", false)
-        visitGroup("secondary", true)
-    else
-        visitGroup("primary_mine", true)
-        visitGroup("primary_other", true)
-        visitGroup("secondary", false)
-    end
+    visitGroup(keyMine)
+    visitGroup(keyOther)
 end
 
-local function RefreshContainerButtons(container)
+local function RefreshContainerButtons(container, keyMine, keyOther)
     if not container then return end
-    ForEachActiveAuraButton(container, IsEnemyTarget(), function(btn, isBuff)
-        targetframes:UpdateAuraButtonStyle(btn, isBuff)
+    ForEachActiveAuraButton(container, keyMine, keyOther, function(btn)
+        pcall(targetframes.UpdateAuraButtonStyle, targetframes, btn)
     end)
 end
 
@@ -436,7 +514,7 @@ local function GetLeaderIcon(frame)
 end
 
 local isAdjustingSpellbar = false
-local function UpdateSpellbar(frameObj, container)
+local function UpdateSpellbar(frameObj, containers)
     if InCombatLockdown() then return end
     if not frameObj then return end
     local spellbar = frameObj.spellbar or (frameObj.GetName and _G[frameObj:GetName() .. "SpellBar"])
@@ -453,26 +531,21 @@ local function UpdateSpellbar(frameObj, container)
         return
     end
 
-    if not container or not container.allButtons or not container:IsShown() then
-        frameObj.auraRows = 0
-        frameObj.spellbarAnchor = nil
-        if not isAdjustingSpellbar and spellbar.AdjustPosition then
-            isAdjustingSpellbar = true
-            pcall(spellbar.AdjustPosition, spellbar)
-            isAdjustingSpellbar = false
-        end
-        return
-    end
-
     local visibleButtons = {}
-    for button in pairs(container.allButtons) do
-        if button and not IsSecret(button) and not SafeIsForbidden(button) then
-            local okS, isShown = pcall(button.IsShown, button)
-            if okS and SafeBool(isShown) then
-                local okB, bottom = pcall(button.GetBottom, button)
-                local okL, left = pcall(button.GetLeft, button)
-                if okB and okL and bottom and left and not IsSecret(bottom) and not IsSecret(left) then
-                    table.insert(visibleButtons, { btn = button, bottom = bottom, left = left })
+    if containers then
+        for _, container in ipairs(containers) do
+            if container and container.allButtons and container:IsShown() then
+                for button in pairs(container.allButtons) do
+                    if button and not IsSecret(button) and not SafeIsForbidden(button) then
+                        local okS, isShown = pcall(button.IsShown, button)
+                        if okS and SafeBool(isShown) then
+                            local okB, bottom = pcall(button.GetBottom, button)
+                            local okL, left = pcall(button.GetLeft, button)
+                            if okB and okL and bottom and left and not IsSecret(bottom) and not IsSecret(left) then
+                                table.insert(visibleButtons, { btn = button, bottom = bottom, left = left })
+                            end
+                        end
+                    end
                 end
             end
         end
@@ -531,17 +604,39 @@ local function HookSpellbarAdjustPosition(spellbar, frameObj, getContainer)
         if isAdjustingSpellbar or InCombatLockdown() then return end
         local parent = self:GetParent()
         if parent ~= frameObj then return end
-        local container = getContainer and getContainer()
-        if container then
-            UpdateSpellbar(frameObj, container)
+        local containers = getContainer and getContainer()
+        if containers then
+            UpdateSpellbar(frameObj, containers)
         end
     end)
 end
 
+-- Which container (debuffs or buffs) sits directly under the health/mana bar
+-- ("primary") vs trails behind it ("secondary") swaps with target hostility:
+-- debuffs primary on an enemy, buffs primary on a friendly (including self).
+-- This is a plain SetPoint on a container-level frame -- not a per-AuraButton
+-- call -- so unlike resizing/recoloring individual buttons, it isn't subject
+-- to the forbidden/combat-secrecy restriction and can be redone reliably on
+-- every target switch regardless of combat state. The secondary container is
+-- anchored relative to the primary container's own edge rather than a fixed
+-- offset from TargetFrame, so it automatically re-stacks whenever the
+-- primary container's size changes (including collapsing to ~0 size when
+-- empty, which is what makes "no buffs -> debuffs sit where buffs would
+-- have been" work for free, with no addon-side row-counting needed).
 function targetframes:UpdateAuraPositions()
-    if not self.customAuras or not TargetFrame then return end
+    if not self.customDebuffs or not self.customBuffs or not TargetFrame then return end
+
+    local primary, secondary
+    if IsEnemyTarget() then
+        primary, secondary = self.customDebuffs, self.customBuffs
+    else
+        primary, secondary = self.customBuffs, self.customDebuffs
+    end
+
     local buffsOnTop = TargetFrame.buffsOnTop
-    self.customAuras:ClearAllPoints()
+    primary:ClearAllPoints()
+    secondary:ClearAllPoints()
+
     if buffsOnTop then
         local ref = (TargetFrame.TargetFrameContainer and TargetFrame.TargetFrameContainer.FrameTexture) or TargetFrame
         local offsetX = (ref == TargetFrame) and TOP_X or TOP_ON_TOP_X
@@ -560,20 +655,26 @@ function targetframes:UpdateAuraPositions()
             extraY = math.max(extraY, lh)
         end
         startY = startY + extraY
-        self.customAuras:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
-        if self.customAuras.SetFlowLayoutAnchorPoint then
-            pcall(self.customAuras.SetFlowLayoutAnchorPoint, self.customAuras, "BOTTOMLEFT")
-        end
-        if self.customAuras.SetFlowLayoutGrowthDirection then
-            pcall(self.customAuras.SetFlowLayoutGrowthDirection, self.customAuras, 1, 1)
+        primary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
+        secondary:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, CONTAINER_GAP)
+        for _, c in ipairs({ primary, secondary }) do
+            if c.SetFlowLayoutAnchorPoint then
+                pcall(c.SetFlowLayoutAnchorPoint, c, "BOTTOMLEFT")
+            end
+            if c.SetFlowLayoutGrowthDirection then
+                pcall(c.SetFlowLayoutGrowthDirection, c, 1, 1)
+            end
         end
     else
-        self.customAuras:SetPoint("TOPLEFT", TargetFrame, "BOTTOMLEFT", TOP_X, TOP_Y)
-        if self.customAuras.SetFlowLayoutAnchorPoint then
-            pcall(self.customAuras.SetFlowLayoutAnchorPoint, self.customAuras, "TOPLEFT")
-        end
-        if self.customAuras.SetFlowLayoutGrowthDirection then
-            pcall(self.customAuras.SetFlowLayoutGrowthDirection, self.customAuras, 1, -1)
+        primary:SetPoint("TOPLEFT", TargetFrame, "BOTTOMLEFT", TOP_X, TOP_Y)
+        secondary:SetPoint("TOPLEFT", primary, "BOTTOMLEFT", 0, -CONTAINER_GAP)
+        for _, c in ipairs({ primary, secondary }) do
+            if c.SetFlowLayoutAnchorPoint then
+                pcall(c.SetFlowLayoutAnchorPoint, c, "TOPLEFT")
+            end
+            if c.SetFlowLayoutGrowthDirection then
+                pcall(c.SetFlowLayoutGrowthDirection, c, 1, -1)
+            end
         end
     end
 end
@@ -593,7 +694,8 @@ function targetframes:UpdateAuras()
     TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
 
     if bothNone then
-        if self.customAuras then self.customAuras:Hide() end
+        if self.customDebuffs then self.customDebuffs:Hide() end
+        if self.customBuffs then self.customBuffs:Hide() end
         if blizzAuras then
             blizzAuras:SetAlpha(1)
             blizzAuras:EnableMouse(true)
@@ -602,7 +704,7 @@ function targetframes:UpdateAuras()
         return
     end
 
-    if not self.customAuras then
+    if not self.customDebuffs or not self.customBuffs then
         self:SetupCustomAuraContainer()
     end
 
@@ -611,51 +713,46 @@ function targetframes:UpdateAuras()
         blizzAuras:EnableMouse(false)
     end
 
-    if not self.customAuras then
+    if not self.customDebuffs or not self.customBuffs then
         isUpdatingAuras = false
         return
     end
 
     if not TargetFrame:IsShown() or not UnitExists("target") then
-        self.customAuras:Hide()
+        self.customDebuffs:Hide()
+        self.customBuffs:Hide()
         isUpdatingAuras = false
         return
     end
 
-    self.customAuras:Show()
+    self.customDebuffs:Show()
+    self.customBuffs:Show()
     self:UpdateAuraPositions()
 
-    local isEnemy = IsEnemyTarget()
-    local maxBuffs = (styleBuffs ~= "none") and 32 or 0
-    local maxDebuffs = (styleDebuffs ~= "none") and 16 or 0
+    -- Each group's harmful/helpful identity and container are permanent
+    -- (see SetupCustomAuraContainer) -- the only thing that changes with
+    -- target hostility is handled in UpdateAuraPositions (which container
+    -- anchors first). All that's left here is the "none" style hiding,
+    -- which is keyed to each group's fixed type, not to hostility.
+    local debuffCount = (styleDebuffs ~= "none") and 16 or 0
+    local buffCount = (styleBuffs ~= "none") and 32 or 0
+    pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_mine", debuffCount)
+    pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_other", debuffCount)
+    pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_mine", buffCount)
+    pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_other", buffCount)
 
-    -- Dynamically update group filter strings based on current target hostility
-    if isEnemy then
-        pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_mine", "HARMFUL|PLAYER")
-        pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_other", "HARMFUL|!PLAYER")
-        pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "secondary", "HELPFUL")
+    pcall(self.customDebuffs.UpdateAllAuras, self.customDebuffs)
+    pcall(self.customBuffs.UpdateAllAuras, self.customBuffs)
 
-        pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "primary_mine", maxDebuffs)
-        pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "primary_other", maxDebuffs)
-        pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "secondary", maxBuffs)
-    else
-        pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_mine", "HELPFUL|PLAYER")
-        pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "primary_other", "HELPFUL|!PLAYER")
-        pcall(self.customAuras.SetAuraGroupFilterString, self.customAuras, "secondary", "HARMFUL")
-
-        pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "primary_mine", maxBuffs)
-        pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "primary_other", maxBuffs)
-        pcall(self.customAuras.SetAuraGroupMaxFrameCount, self.customAuras, "secondary", maxDebuffs)
-    end
-
-    pcall(self.customAuras.UpdateAllAuras, self.customAuras)
-
-    -- Force a final button style pass with correct hostility context for buffs vs debuffs
-    ForEachActiveAuraButton(self.customAuras, isEnemy, function(btn, isBuff)
-        targetframes:UpdateAuraButtonStyle(btn, isBuff)
+    -- Force a final button style pass.
+    ForEachActiveAuraButton(self.customDebuffs, "debuffs_mine", "debuffs_other", function(btn)
+        targetframes:UpdateAuraButtonStyle(btn)
+    end)
+    ForEachActiveAuraButton(self.customBuffs, "buffs_mine", "buffs_other", function(btn)
+        targetframes:UpdateAuraButtonStyle(btn)
     end)
 
-    UpdateSpellbar(TargetFrame, self.customAuras)
+    UpdateSpellbar(TargetFrame, { self.customDebuffs, self.customBuffs })
 
     isUpdatingAuras = false
 end
@@ -672,7 +769,8 @@ function targetframes:SetupCustomAuraContainer()
     local blizzAuras = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
 
     if bothNone then
-        if self.customAuras then self.customAuras:Hide() end
+        if self.customDebuffs then self.customDebuffs:Hide() end
+        if self.customBuffs then self.customBuffs:Hide() end
         if blizzAuras then
             blizzAuras:SetAlpha(1)
             blizzAuras:EnableMouse(true)
@@ -763,9 +861,37 @@ function targetframes:SetupCustomAuraContainer()
         button.borderHost = borderHost
         button.borderTex = borderTex
 
+        -- Dedicated engine-colored border for stock-style debuffs (see the long
+        -- comment in UpdateAuraButtonStyle). The TEXTURE is created here, once,
+        -- but registering it with AddDispelTypeTexture is attempted separately
+        -- on every UpdateAuraButtonStyle pass (see TryRegisterDispelBorder)
+        -- until it succeeds -- Blizzard denies that call outright while aura
+        -- data is in a "secret"/restricted window (C_Secrets.ShouldAurasBeSecret,
+        -- e.g. around loading screens/zone transitions), and a single attempt
+        -- made at button-creation time has no way to retry if it lands in one.
+        -- button.isBuff is permanently fixed at this point (the group this
+        -- button was created in), so exactly one dispel texture is ever
+        -- needed -- TryRegisterDispelBorder picks buff-only (stealableFilter)
+        -- or debuff-only (harmful-only) registration options based on it.
+        if not button.dispelBorderHost then
+            local dispelBorderHost = CreateFrame("Frame", nil, borderHost)
+            dispelBorderHost:SetAllPoints(borderHost)
+            dispelBorderHost:EnableMouse(false)
+            dispelBorderHost:Hide()
+
+            local dispelBorderTex = dispelBorderHost:CreateTexture(nil, "OVERLAY")
+            dispelBorderTex:SetAllPoints(dispelBorderHost)
+            dispelBorderTex:SetAtlas("ui-debuff-border-default-noicon")
+            dispelBorderTex:SetDesaturated(true)
+            dispelBorderTex:SetVertexColor(1,1,1,1)
+
+            button.dispelBorderHost = dispelBorderHost
+            button.dispelBorderTexPending = dispelBorderTex
+        end
+
         local stealable = button.stealable or button:CreateTexture(nil, "OVERLAY")
         stealable:ClearAllPoints()
-        stealable:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
+        stealable:SetPoint("TOPLEFT", button, "TOPLEFT", -pad-1, pad+1)
         stealable:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
         stealable:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Stealable")
         stealable:SetBlendMode("ADD")
@@ -775,110 +901,109 @@ function targetframes:SetupCustomAuraContainer()
         targetframes:UpdateAuraButtonStyle(button)
     end
 
-    if not self.customAuras then
+    -- Two permanent, structurally-identical containers -- one for debuffs,
+    -- one for buffs -- each with its own fixed "mine" (large) / "other"
+    -- (small) group pair that's never reconfigured after creation. Which one
+    -- anchors under the health bar (vs trailing behind the other) is decided
+    -- entirely in UpdateAuraPositions via plain container-level SetPoint
+    -- calls, not by touching anything in here again.
+    local function BuildAuraContainer(namePrefix, mineKey, otherKey, mineFilter, otherFilter, frameLevelBonus)
         local okC, container = pcall(function()
-            return CreateFrame("AuraContainer", "UberUI_TargetAuras", TargetFrame, "CustomAuraContainerTemplate")
+            return CreateFrame("AuraContainer", namePrefix, TargetFrame, "CustomAuraContainerTemplate")
         end)
-        if okC and container then
-            self.customAuras = container
-            self.customBuffs = container
-            self.customDebuffs = container
+        if not okC or not container then return nil end
 
-            container:SetSize(1, 1)
-            if TargetFrame and TargetFrame.GetFrameLevel then
-                container:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
-            end
-            targetframes:UpdateAuraPositions()
-            container:SetFlowLayoutMaximumLineSize(122)
-            container:SetFlowLayoutPadding(0, 0, 0, 0)
-            if container.SetFlowLayoutSpacing then
-                pcall(container.SetFlowLayoutSpacing, container, AURA_SPACING, AURA_SPACING + 2)
-            end
+        container:SetSize(1, 1)
+        if TargetFrame and TargetFrame.GetFrameLevel then
+            container:SetFrameLevel(TargetFrame:GetFrameLevel() + frameLevelBonus)
+        end
+        container:SetFlowLayoutMaximumLineSize(122)
+        container:SetFlowLayoutPadding(0, 0, 0, 0)
+        if container.SetFlowLayoutSpacing then
+            pcall(container.SetFlowLayoutSpacing, container, AURA_SPACING, AURA_SPACING + 2)
+        end
 
-            container:AddAuraGroup("primary_mine", "HARMFUL|PLAYER", {
-                maxFrameCount = 16,
-                initializeFrame = function(btn) InitAuraButton(container, btn, "primary_mine", false, LARGE_AURA_SIZE, true) end,
-                layout = MakeGroupLayout(LARGE_AURA_SIZE, AURA_SPACING, AURA_SPACING, false, 1),
-            })
+        container:AddAuraGroup(mineKey, mineFilter, {
+            maxFrameCount = 16,
+            initializeFrame = function(btn) InitAuraButton(container, btn, mineKey, mineFilter:find("HELPFUL") ~= nil, LARGE_AURA_SIZE, true) end,
+            layout = MakeGroupLayout(LARGE_AURA_SIZE, AURA_SPACING, AURA_SPACING, false, 1),
+        })
 
-            container:AddAuraGroup("primary_other", "HARMFUL|!PLAYER", {
-                maxFrameCount = 16,
-                initializeFrame = function(btn) InitAuraButton(container, btn, "primary_other", false, SMALL_AURA_SIZE, false) end,
-                layout = MakeGroupLayout(SMALL_AURA_SIZE, AURA_SPACING, AURA_SPACING, false, 2),
-            })
+        container:AddAuraGroup(otherKey, otherFilter, {
+            maxFrameCount = 16,
+            initializeFrame = function(btn) InitAuraButton(container, btn, otherKey, otherFilter:find("HELPFUL") ~= nil, SMALL_AURA_SIZE, false) end,
+            layout = MakeGroupLayout(SMALL_AURA_SIZE, AURA_SPACING, AURA_SPACING, false, 2),
+        })
 
-            container:AddAuraGroup("secondary", "HELPFUL", {
-                maxFrameCount = 32,
-                initializeFrame = function(btn) InitAuraButton(container, btn, "secondary", true, SMALL_AURA_SIZE, false) end,
-                layout = MakeGroupLayout(SMALL_AURA_SIZE, AURA_SPACING, AURA_SPACING, true, 3),
-            })
+        if container.ApplyLayout then
+            hooksecurefunc(container, "ApplyLayout", function()
+                if isUpdatingAuras then return end
+                RefreshContainerButtons(container, mineKey, otherKey)
+                UpdateSpellbar(TargetFrame, { targetframes.customDebuffs, targetframes.customBuffs })
+                isUpdatingAuras = false
+            end)
+        end
 
-            if container.ApplyLayout then
-                hooksecurefunc(container, "ApplyLayout", function()
-                    if isUpdatingAuras then return end
-                    RefreshContainerButtons(container)
-                    UpdateSpellbar(TargetFrame, container)
-                    isUpdatingAuras = false
-                end)
-            end
+        if container.UpdateAllAuras then
+            hooksecurefunc(container, "UpdateAllAuras", function()
+                if isUpdatingAuras then return end
+                RefreshContainerButtons(container, mineKey, otherKey)
+            end)
+        end
 
-            container:SetUnit("target")
-            container:UpdateAllAuras()
+        if container.UpdateAuraGroup then
+            hooksecurefunc(container, "UpdateAuraGroup", function()
+                if isUpdatingAuras then return end
+                RefreshContainerButtons(container, mineKey, otherKey)
+            end)
+        end
 
-            if okC and container then
-                self.customAuras = container
-                self.customBuffs = container
-                self.customDebuffs = container
+        container:SetUnit("target")
+        container:UpdateAllAuras()
+        return container
+    end
 
-                container:SetSize(1, 1)
-                if TargetFrame and TargetFrame.GetFrameLevel then
-                    container:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
-                end
-                targetframes:UpdateAuraPositions()
-                container:SetFlowLayoutMaximumLineSize(122)
-                container:SetFlowLayoutPadding(0, 0, 0, 0)
-                if container.SetFlowLayoutSpacing then
-                    pcall(container.SetFlowLayoutSpacing, container, AURA_SPACING, AURA_SPACING + 2)
-                end
+    if not self.customDebuffs then
+        self.customDebuffs = BuildAuraContainer("UberUI_TargetDebuffs", "debuffs_mine", "debuffs_other", "HARMFUL|PLAYER", "HARMFUL|!PLAYER", 20)
+    end
+    if not self.customBuffs then
+        self.customBuffs = BuildAuraContainer("UberUI_TargetBuffs", "buffs_mine", "buffs_other", "HELPFUL|PLAYER", "HELPFUL|!PLAYER", 20)
+    end
 
-                -- HOOK 1: Intercept UpdateAllAuras to force button styling on every container refresh
-                if container.UpdateAllAuras then
-                    hooksecurefunc(container, "UpdateAllAuras", function()
-                        if isUpdatingAuras then return end
-                        RefreshContainerButtons(container)
-                    end)
-                end
+    if self.customDebuffs and self.customBuffs then
+        targetframes:UpdateAuraPositions()
+    end
 
-                -- HOOK 2: Intercept group-level updates if available
-                if container.UpdateAuraGroup then
-                    hooksecurefunc(container, "UpdateAuraGroup", function()
-                        if isUpdatingAuras then return end
-                        RefreshContainerButtons(container)
-                    end)
-                end
-            end
+    HookSpellbarAdjustPosition(TargetFrame.spellbar or TargetFrameSpellBar, TargetFrame,
+        function() return { targetframes.customDebuffs, targetframes.customBuffs } end)
+
+    local function ShowHideBoth(shown)
+        if self.customDebuffs then
+            if shown then self.customDebuffs:Show() else self.customDebuffs:Hide() end
+        end
+        if self.customBuffs then
+            if shown then self.customBuffs:Show() else self.customBuffs:Hide() end
         end
     end
 
-    HookSpellbarAdjustPosition(TargetFrame.spellbar or TargetFrameSpellBar, TargetFrame, function() return targetframes.customAuras end)
-
-    if TargetFrame:IsShown() then
-        if self.customAuras then self.customAuras:Show() end
-    else
-        if self.customAuras then self.customAuras:Hide() end
-    end
+    ShowHideBoth(TargetFrame:IsShown())
 
     if not self.targetFrameHooked then
         self.targetFrameHooked = true
         TargetFrame:HookScript("OnShow", function()
-            if targetframes.customAuras then
-                targetframes.customAuras:Show()
-                targetframes.customAuras:UpdateAllAuras()
+            if targetframes.customDebuffs then
+                targetframes.customDebuffs:Show()
+                targetframes.customDebuffs:UpdateAllAuras()
+            end
+            if targetframes.customBuffs then
+                targetframes.customBuffs:Show()
+                targetframes.customBuffs:UpdateAllAuras()
             end
             targetframes:UpdateAuras()
         end)
         TargetFrame:HookScript("OnHide", function()
-            if targetframes.customAuras then targetframes.customAuras:Hide() end
+            if targetframes.customDebuffs then targetframes.customDebuffs:Hide() end
+            if targetframes.customBuffs then targetframes.customBuffs:Hide() end
         end)
     end
 end
@@ -928,7 +1053,8 @@ if TargetFrame then
     end
     if TargetFrame.CreateSpellbar then
         hooksecurefunc(TargetFrame, "CreateSpellbar", function(self)
-            HookSpellbarAdjustPosition(self.spellbar or TargetFrameSpellBar, TargetFrame, function() return targetframes.customAuras end)
+            HookSpellbarAdjustPosition(self.spellbar or TargetFrameSpellBar, TargetFrame,
+                function() return { targetframes.customDebuffs, targetframes.customBuffs } end)
         end)
     end
     if TargetFrame.totFrame then
