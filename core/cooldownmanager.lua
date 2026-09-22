@@ -56,9 +56,9 @@ function cdManager:Texture()
     local applyCustomLook = false
     local texture = nil
 
-    if uuidb.general.cooldownbartextures and uuidb.general.cooldownbartexture ~= "Blizzard" then
+    if uuidb.cooldown.bartextures and uuidb.cooldown.bartexture ~= "Blizzard" then
         applyCustomLook = true
-        texture = uuidb.statusbars[uuidb.general.cooldownbartexture]
+        texture = uuidb.statusbars[uuidb.cooldown.bartexture]
     elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
         applyCustomLook = true
         texture = uuidb.statusbars[uuidb.general.texture]

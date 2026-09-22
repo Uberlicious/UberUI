@@ -23,16 +23,19 @@ UberUI:RegisterEvent("ADDON_LOADED")
 UberUI:RegisterEvent("PLAYER_LOGIN")
 UberUI:RegisterEvent("PLAYER_LOGOUT")
 UberUI:SetScript("OnEvent", function(self, event, arg1)
-    if event == "ADDON_LOADED" and arg1 == addon then
-        if not self.initialized then
-            self:Init()
-            self.initialized = true
-        end
-    elseif event == "VARIABLES_LOADED" then
-        if not self.initialized then
-            self:Init()
-            self.initialized = true
-        end
+    if event == "ADDON_LOADED" and arg1 ~= addon then
+        return
+    end
+    -- Re-run (not just once-and-lock) on every one of these: mergeDefaults
+    -- only fills in keys that are still nil, so repeat calls are harmless,
+    -- and this guards against SavedVariables becoming available later than
+    -- the first of these events fires (seen on Forever: writes on logout
+    -- succeed, but the saved values weren't showing up after a reload --
+    -- consistent with the global not being populated yet at ADDON_LOADED
+    -- time on this client, with the old single-fire Init() never
+    -- re-syncing once PLAYER_LOGIN/VARIABLES_LOADED actually had the data).
+    if event == "ADDON_LOADED" or event == "VARIABLES_LOADED" or event == "PLAYER_LOGIN" then
+        self:Init()
     elseif event == "PLAYER_LOGOUT" then
         self:Save()
     end
@@ -115,6 +118,7 @@ local defaults = {
         showExtendedBarTextures      = false,
         nameplateraidtargetscale     = 1,
         nameplateraidtargettopanchor = false,
+        smallfriendlynameplate       = false,
     },
     damagemeters = {
         background = false,
@@ -137,9 +141,6 @@ local defaults = {
     focusframes = {
         classcolorenemy = true,
         classcolorfriendly = true,
-    },
-    arenaframes = {
-        classcolor = true,
     },
     partyframes = {
         classcolor = true,

@@ -7,8 +7,6 @@
 local addon, ns = ...
 uuiopt = {}
 
-local strtobool = { ["0"] = false, ["1"] = true };
-
 local function commitValue()
     UberUI:Save();
 end
@@ -358,6 +356,87 @@ local function Register()
     end
 
     -- Focus Bar Textures
+    do
+        local cbvariable, cbname = "FocusBarTextures", "Focus Bar Textures";
+        local cbtooltip = "Retexture Focus Frame Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.focusbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.focusbartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "focusbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "FocusTexture", "Focus Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Focus frame\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                local val = uuidb.general.focusbartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.focusbartexture = value;
+            UberUI.focusframes:HealthManaBarTexture();
+        end
+
+        local proxy = { ["focusbartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "focusbartexture", proxy,
+            Settings.VarType.String,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
+        layout:AddInitializer(cbdd);
+    end
 
     -- Party Bar Textures
     do
@@ -1155,6 +1234,32 @@ end
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
+    -- Zoom Party Auras
+    do
+        local variable, name = "zoomIconParty", "Zoom Party Auras";
+        local tooltip = "Crop party member buff/debuff icons in tighter, hiding their default border art";
+        local defaultValue = false;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.zoomiconparty;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.zoomiconparty = value;
+            if UberUI.partyframes and UberUI.partyframes.ZoomAuras then
+                UberUI.partyframes:ZoomAuras();
+            end
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconparty", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
     -- Sub-group for other frames
     layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling - Other Frames (Coming Soon)"));
 
@@ -1406,7 +1511,7 @@ end
 
         local function setValue(self, value)
             uuidb.general.smallfriendlynameplate = value;
-            UberUI.misc:UpdateNameplateSize();
+            if UberUI.nameplates then UberUI.nameplates:UpdateNameplateSize() end
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "smallfriendlynameplate", uuidb.general,
@@ -1732,74 +1837,6 @@ if FocusFrame then
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 end
-
-    -- Class Color Friendly Nameplates
-    do
-        local variable, name = "ccFriendlyNameplate", "Class Color Friendly Nameplates";
-        local tooltip = "Class color friendly nameplates"
-        local defaultValue = true;
-        local cvar = "nameplateShowFriendlyClassColor";
-        local function getValue()
-            return strtobool[GetCVar(cvar)];
-        end
-
-        local function setValue(self, value)
-            SetCVar(cvar, value);
-            UberUI.misc:AllFramesHealthColor();
-        end
-
-        local setting = Settings.RegisterAddOnSetting(category, variable, cvar, uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
-
-    -- Class Color Enemy Nameplates
-    do
-        local variable, name = "ccEnemyNameplate", "Class Color Enemy Nameplates";
-        local tooltip = "Class color enemy nameplates"
-        local defaultValue = true;
-        local cvar = "nameplateShowEnemyClassColor";
-        local function getValue()
-            return strtobool[GetCVar(cvar)];
-        end
-
-        local function setValue(self, value)
-            SetCVar(cvar, value);
-            UberUI.misc:AllFramesHealthColor();
-        end
-
-        local setting = Settings.RegisterAddOnSetting(category, variable, cvar, uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
-
-
-
-    -- Class Color Arena
-    do
-        local variable, name = "ccArenaColor", "Class Color Arena Targets";
-        local tooltip = "Class color default blizzard arena health bars";
-        local defaultValue = true;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.arenaframes.classcolor;
-            else
-                return defaultValue;
-            end
-        end
-
-        local function setValue(self, value)
-            uuidb.arenaframes.classcolor = value;
-            UberUI.arenaframes:LoopFrames();
-        end
-
-        local setting = Settings.RegisterAddOnSetting(category, variable, "classcolor", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
-    end
 
     -- Class Color Party
     do

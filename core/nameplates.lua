@@ -172,17 +172,23 @@ function nameplates:ForceNameplateTexture()
     end
 end
 
-local originalNameplateWidth = nil
+local _originalPlateWidths = setmetatable({}, { __mode = "k" })
 function nameplates:UpdateNameplateSize()
     for _, nameplateFrame in ipairs(C_NamePlate.GetNamePlates()) do
-        if originalNameplateWidth == nil then
-            originalNameplateWidth = nameplateFrame:GetWidth()
-        end
         if nameplateFrame.UnitFrame and nameplateFrame.UnitFrame.isFriend and not nameplateFrame:IsForbidden() and not InCombatLockdown() then
+            -- Capture this nameplate's own native width before we ever touch
+            -- it (not a single shared value -- friendly/hostile/simplified
+            -- nameplates aren't guaranteed to share one native width), so
+            -- disabling the option restores it instead of forcing a
+            -- hardcoded size on every nameplate regardless of its own
+            -- native default.
+            if _originalPlateWidths[nameplateFrame] == nil then
+                _originalPlateWidths[nameplateFrame] = nameplateFrame:GetWidth()
+            end
             if uuidb.general.smallfriendlynameplate then
                 nameplateFrame:SetWidth(100)
             else
-                nameplateFrame:SetWidth(230)
+                nameplateFrame:SetWidth(_originalPlateWidths[nameplateFrame])
             end
         end
     end
@@ -190,9 +196,24 @@ end
 
 if NamePlateUnitFrameMixin then
     hooksecurefunc(NamePlateUnitFrameMixin, "OnLoad", function(self)
-        UberUI.nameplates:OnNamePlateLoad(self)
+        -- Deferred: for a brand-new nameplate frame, OnLoad and the
+        -- immediately-following SetUnit -> CompactUnitFrame_UpdateAll ->
+        -- health-text-update chain can happen in the same synchronous
+        -- burst. OnNamePlateLoad's texture/mask writes on the native
+        -- healthBar (CreateMaskTexture/AddMaskTexture/SetStatusBarTexture)
+        -- running inside that burst tainted the rest of it, breaking
+        -- Blizzard's own later secret-health-value comparison with
+        -- "execution tainted by 'Uber UI'". Run this on the next frame
+        -- instead, fully detached from Blizzard's in-progress chain.
+        local capturedFrame = self
+        C_Timer.After(0, function()
+            UberUI.nameplates:OnNamePlateLoad(capturedFrame)
+        end)
     end)
 end
+
+-- Forward-declared: defined further down, called from f's OnEvent below.
+local MaybeRegisterRaidTargetScaleHooks
 
 local f = CreateFrame("Frame")
 f:RegisterEvent("NAME_PLATE_UNIT_ADDED")
@@ -201,6 +222,24 @@ f:RegisterEvent("RAID_TARGET_UPDATE")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event, unit)
     if event == "NAME_PLATE_UNIT_ADDED" then
+        -- Only do this at all while the feature is actually on -- when off,
+        -- friendly nameplates just keep Blizzard's native size, no addon
+        -- intervention needed (see setValue in options.lua for the one-time
+        -- restore-to-native call when the option gets turned off).
+        --
+        -- Deferred: this event fires nested inside Blizzard's own native
+        -- nameplate-add call stack (OnNamePlateAdded -> SetUnit -> ...).
+        -- Calling SetWidth synchronously from here tainted that same chain
+        -- for the rest of its run, breaking a later secret-health-value
+        -- comparison in Blizzard's own TextStatusBar code with "execution
+        -- tainted by 'Uber UI'". C_Timer.After(0, ...) runs this on the next
+        -- frame instead, in a clean call stack fully detached from
+        -- Blizzard's in-progress one.
+        if uuidb and uuidb.general and uuidb.general.smallfriendlynameplate then
+            C_Timer.After(0, function()
+                UberUI.nameplates:UpdateNameplateSize()
+            end)
+        end
         local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
         if nameplate and nameplate.UnitFrame then
             if nameplate.UnitFrame.RaidTargetFrame then
@@ -215,6 +254,11 @@ f:SetScript("OnEvent", function(self, event, unit)
             UberUI.nameplates:UpdateRaidTargetScale(nameplate.UnitFrame)
         end
     else
+        if uuidb and uuidb.general and uuidb.general.smallfriendlynameplate then
+            C_Timer.After(0, function()
+                UberUI.nameplates:UpdateNameplateSize()
+            end)
+        end
         UberUI.nameplates:UpdateAllNameplateRaidTargetScale()
     end
 end)
@@ -240,20 +284,44 @@ function nameplates:GetSafeBgTexture(nameplateFrame)
     return nil
 end
 
-if CompactUnitFrame_UpdateAll then
-    hooksecurefunc("CompactUnitFrame_UpdateAll", function(frame)
-        if frame and frame.unit and string.find(frame.unit, "nameplate") then
-            UberUI.nameplates:UpdateRaidTargetScale(frame)
-        end
-    end)
-end
+-- Both hooks below fire synchronously as part of the same nameplate-render
+-- burst as the OnLoad hook above (CompactUnitFrame_UpdateAll/
+-- UpdateCenterStatusIcon are directly in Blizzard's OnNamePlateAdded ->
+-- SetUnit chain) -- same taint risk, deferred the same way. Only registered
+-- at all if the raid-target-scale feature is actually customized away from
+-- its no-op default (scale=1, top-anchor off) -- our own events already
+-- call UpdateRaidTargetScale/UpdateAllNameplateRaidTargetScale directly, so
+-- these two hooks only exist to catch a narrower edge case (Blizzard's own
+-- update cycle changing something ours might miss), which isn't worth the
+-- extra hook surface when the feature isn't even in use.
+local raidTargetHooksRegistered = false
+function MaybeRegisterRaidTargetScaleHooks()
+    if raidTargetHooksRegistered then return end
+    if not (uuidb and uuidb.general) then return end
+    local wantsScale = uuidb.general.nameplateraidtargetscale and uuidb.general.nameplateraidtargetscale ~= 1
+    local wantsTopAnchor = uuidb.general.nameplateraidtargettopanchor
+    if not (wantsScale or wantsTopAnchor) then return end
+    raidTargetHooksRegistered = true
 
-if CompactUnitFrame_UpdateCenterStatusIcon then
-    hooksecurefunc("CompactUnitFrame_UpdateCenterStatusIcon", function(frame)
-        if frame and frame.unit and string.find(frame.unit, "nameplate") then
-            UberUI.nameplates:UpdateRaidTargetScale(frame)
-        end
-    end)
+    if CompactUnitFrame_UpdateAll then
+        hooksecurefunc("CompactUnitFrame_UpdateAll", function(frame)
+            if frame and frame.unit and string.find(frame.unit, "nameplate") then
+                C_Timer.After(0, function()
+                    UberUI.nameplates:UpdateRaidTargetScale(frame)
+                end)
+            end
+        end)
+    end
+
+    if CompactUnitFrame_UpdateCenterStatusIcon then
+        hooksecurefunc("CompactUnitFrame_UpdateCenterStatusIcon", function(frame)
+            if frame and frame.unit and string.find(frame.unit, "nameplate") then
+                C_Timer.After(0, function()
+                    UberUI.nameplates:UpdateRaidTargetScale(frame)
+                end)
+            end
+        end)
+    end
 end
 
 UberUI.nameplates = nameplates
