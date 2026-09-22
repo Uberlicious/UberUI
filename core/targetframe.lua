@@ -200,6 +200,67 @@ local function IsEnemyTarget()
     return not UnitIsFriend("player", "target")
 end
 
+-- Stock Blizzard only shows the stealable/dispellable indicator on an enemy
+-- buff to players who can actually do something about it (Purge, Dispel
+-- Magic on an enemy, Spellsteal, Mass Dispel, Consume Magic, ...). There's no
+-- single Blizzard API that answers "can I offensively dispel" -- checking
+-- class membership against a fixed table is fragile since retail keeps
+-- adding this ability to more classes/specs over time. Instead check known-
+-- spell state directly, the same approach other current addons use: if the
+-- player knows any spell that removes a Magic-type buff from an enemy, they
+-- can offensively dispel. (Only "Magic" matters here -- stealable/dispellable
+-- buffs are Magic-type effects, not Enrage-type.)
+--
+-- Split by project ID (same gate options.lua already uses elsewhere): these
+-- are spell IDs, and a handful of the retail entries are for classes/specs
+-- that don't exist on classic (Demon Hunter) or that classic content may not
+-- have reached yet -- IsSpellKnown just returns false for those, harmless --
+-- but kept split so classic's list stays a known-safe minimal set rather
+-- than depending on unverified retail-only IDs.
+local OFFENSIVE_MAGIC_DISPEL_SPELLS = {
+    370,    -- Purge (Shaman)
+    528,    -- Dispel Magic (Priest)
+    30449,  -- Spellsteal (Mage)
+}
+
+if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
+    local retailOnly = {
+        378773, -- Greater Purge (Shaman)
+        32375,  -- Mass Dispel (Priest)
+        278326, -- Consume Magic (Demon Hunter)
+        19801,  -- Tranquilizing Shot (Hunter)
+    }
+    for _, spellID in ipairs(retailOnly) do
+        table.insert(OFFENSIVE_MAGIC_DISPEL_SPELLS, spellID)
+    end
+end
+
+local PLAYER_CAN_OFFENSIVE_DISPEL = false
+local function RefreshPlayerCanOffensiveDispel()
+    local bank = Enum and Enum.SpellBookSpellBank
+    if not (C_SpellBook and C_SpellBook.IsSpellKnown and bank) then
+        PLAYER_CAN_OFFENSIVE_DISPEL = false
+        return
+    end
+    for _, spellID in ipairs(OFFENSIVE_MAGIC_DISPEL_SPELLS) do
+        local ok, known = pcall(C_SpellBook.IsSpellKnown, spellID, bank.Player)
+        if ok and known then
+            PLAYER_CAN_OFFENSIVE_DISPEL = true
+            return
+        end
+    end
+    PLAYER_CAN_OFFENSIVE_DISPEL = false
+end
+
+-- Talents/specs can change known spells mid-session, so re-check instead of
+-- computing once at load.
+local dispelCapabilityWatcher = CreateFrame("Frame")
+dispelCapabilityWatcher:RegisterEvent("SPELLS_CHANGED")
+dispelCapabilityWatcher:RegisterEvent("TRAIT_CONFIG_UPDATED")
+dispelCapabilityWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+dispelCapabilityWatcher:SetScript("OnEvent", RefreshPlayerCanOffensiveDispel)
+RefreshPlayerCanOffensiveDispel()
+
 -- AddDispelTypeTexture is denied outright while aura data is in a "secret"/
 -- restricted window (C_Secrets.ShouldAurasBeSecret, e.g. around loading
 -- screens and zone transitions) -- it doesn't error so much as refuse to take
@@ -212,42 +273,58 @@ end
 -- button for its entire lifetime -- buttons are never reclassified between
 -- roles -- so only one registration, matching that fixed role, is ever
 -- needed per button.
--- Stock target frames show a plain, always-white stealable indicator on a
+-- Stock target frames show a plain white stealable indicator on a
 -- dispellable enemy buff -- confirmed both visually (reference screenshot,
 -- everything set to "none" -- pure stock rendering) and in source
 -- (Interface/AddOns/Blizzard_UnitFrame/Shared/TargetFrameAuraButton.xml:
--- StealableBorder is a plain file texture, Interface\TargetingFrame\
--- UI-TargetingFrame-Stealable, alphaMode="ADD" -- not part of the
--- dispel-type-color system at all, just a fixed-appearance texture toggled
--- by auraData.isStealable). We already build exactly that texture as
--- button.stealable (same file, same ADD blend) -- it just couldn't be shown
--- reliably because auraData.isStealable is secret to addon code for enemy
--- units. Rather than fight AddDispelTypeTexture's color system (which is
--- fundamentally about per-dispel-type coloring, the wrong tool for a plain
--- binary indicator) with a customDispelColorMap override of uncertain
--- reliability, register button.stealable itself with stealableFilter: the
--- engine decides show/hide from the real isStealable flag, and our texture's
--- own art (already correct, already additive) does the rest -- no color
--- override needed at all.
+-- StealableBorder is a plain fixed-appearance texture toggled purely by
+-- auraData.isStealable, not part of the dispel-type-color system at all).
+-- button.stealable (Blizzard's own native StealableBorder texture, see
+-- InitAuraButton -- no custom asset of ours) is what we show for this --
+-- registered here with stealableFilter so the ENGINE decides show/hide from
+-- the real, otherwise-secret isStealable flag.
+--
+-- Style = CustomAsset, not PreserveAsset: PreserveAsset calls
+-- AuraUtil.SetAuraBorderColor, which sets the REAL per-dispel-type color
+-- (verified: every style EXCEPT PreserveAsset unconditionally sets
+-- texture:SetVertexColor(1,1,1,1) as part of its own logic -- Border,
+-- BorderWithIcon, Icon, and CustomAsset all do this regardless of dispel
+-- type). CustomAsset additionally lets us supply our own texture via
+-- customDispelAssetMap -- plain {asset=path} tables, never any object with
+-- a method the engine needs to call on it (unlike customDispelColorMap,
+-- which requires a live color:GetRGBA() and never worked reliably here,
+-- through two different attempts at supplying a color object). Every real
+-- dispel type key maps to Blizzard's own stealable texture so it looks
+-- identical regardless of which type the buff actually has.
+local WHITE_DISPEL_ASSET_MAP = {
+    Magic = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" },
+    Curse = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" },
+    Poison = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" },
+    Disease = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" },
+    Bleed = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" },
+    None = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" },
+}
+
 local function TryRegisterDispelBorder(button)
     if type(button.AddDispelTypeTexture) ~= "function" then return end
     if not (Enum and Enum.CustomAuraButtonDispelTypeTextureStyle) then return end
 
     if button.isBuff then
         if button.stealableRegistered or not button.stealable then return end
-        local preserveAsset = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset
-        if not preserveAsset then return end
+        local customAsset = Enum.CustomAuraButtonDispelTypeTextureStyle.CustomAsset
+        if not customAsset then return end
         local options = {
-            style = preserveAsset,
+            style = customAsset,
             showWhenHarmful = false,
             showWhenHelpful = true,
             showWithoutDispelType = true,
             stealableFilter = Enum.CustomAuraButtonDispelTypeStealableFilter and
             Enum.CustomAuraButtonDispelTypeStealableFilter.Stealable,
+            customDispelAssetMap = WHITE_DISPEL_ASSET_MAP,
         }
         local okAdd, addErr = pcall(button.AddDispelTypeTexture, button, button.stealable, options)
         if okAdd then
-            button.stealableRegistered = truee
+            button.stealableRegistered = true
         end
         button.dispelRegOk = okAdd
         button.dispelRegErr = (not okAdd) and tostring(addErr) or nil
@@ -361,22 +438,7 @@ function targetframes:UpdateAuraButtonStyle(button)
             -- that hosts it -- we never touch its color again.
             local function ApplyDarkBorder()
                 button.borderHost:Show()
-                -- Dark/Both/Border styles normally hide the dispel overlay
-                -- entirely (a deliberate, uniform darkened look). For buffs
-                -- specifically, "Show Dispels for Target Buffs" lets the
-                -- engine-managed white stealable border show through on top
-                -- of that dark tint instead of being replaced by it --
-                -- dispelBorderHost is a child frame of borderHost, so it
-                -- renders above borderTex's texture automatically.
-                local showDispelOverlay = isBuff and uuidb and uuidb.general and
-                uuidb.general.targetbuffs_showdispel
-                if button.dispelBorderHost then
-                    if showDispelOverlay then
-                        button.dispelBorderHost:Show()
-                    else
-                        button.dispelBorderHost:Hide()
-                    end
-                end
+                if button.dispelBorderHost then button.dispelBorderHost:Hide() end
                 if button.borderTex then
                     button.borderTex:Show()
                     button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
@@ -394,47 +456,62 @@ function targetframes:UpdateAuraButtonStyle(button)
                 if button.dispelBorderHost then button.dispelBorderHost:Hide() end
             end
 
-            -- Used for both buffs (an enhancement over stock: a dispellable/
-            -- stealable buff gets its own dispel-colored border, which
-            -- stealableFilter on registration means the engine itself only
-            -- ever shows for buffs that are actually stealable) and debuffs
-            -- (the real dispel-type color, matching stock target frames).
-            -- Which behavior applies is entirely decided by the fixed
-            -- registration options in TryRegisterDispelBorder, not here.
-            -- local function ApplyDispelColoredBorder()
-            --     button.borderHost:Show()
-            --     if button.borderTex then button.borderTex:Hide() end
-            --     if button.dispelBorderHost then
-            --         -- Engine-managed: Blizzard colors button.dispelBorderTex
-            --         -- itself on every aura update once it's shown.
-            --         --button.dispelBorderHost:Show()
-            --     elseif button.borderTex then
-            --         -- Fallback for buttons that couldn't register a dispel-type
-            --         -- texture (e.g. AddDispelTypeTexture unavailable) -- plain
-            --         -- white leaves the base atlas showing as-is rather than an
-            --         -- incorrect color.
-            --         button.borderTex:Show()
-            --         button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
-            --         button.borderTex:SetDesaturated(true)
-            --         button.borderTex:SetVertexColor(1, 1, 1, 1)
-            --     end
-            -- end
-
-            if darkBorderEnabled then
-                ApplyDarkBorder()
-            else
-                -- ApplyDispelColoredBorder()
+            -- Debuffs only: the real dispel-type color, matching stock target
+            -- frames (see the long comment above). Buffs no longer use
+            -- dispelBorderHost at all -- their dispellable/stealable
+            -- indicator is the separate button.stealable mechanism below,
+            -- shown/hidden independently of base style.
+            local function ApplyDispelColoredBorder()
+                button.borderHost:Show()
+                if button.borderTex then button.borderTex:Hide() end
+                if button.dispelBorderHost then
+                    -- Engine-managed: Blizzard colors button.dispelBorderTex
+                    -- itself on every aura update once it's shown.
+                    button.dispelBorderHost:Show()
+                elseif button.borderTex then
+                    -- Fallback for buttons that couldn't register a dispel-type
+                    -- texture (e.g. AddDispelTypeTexture unavailable) -- plain
+                    -- white leaves the base atlas showing as-is rather than an
+                    -- incorrect color.
+                    button.borderTex:Show()
+                    button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
+                    button.borderTex:SetDesaturated(false)
+                    button.borderTex:SetVertexColor(1, 1, 1, 1)
+                end
             end
 
-            -- button.stealable is only ever registered (see
-            -- TryRegisterDispelBorder) for buffs, and once registered its
-            -- Shown/VertexColor/Alpha/TexCoords become engine-controlled --
-            -- we can't call :Show()/:Hide() on it ourselves anymore (that's
-            -- the whole point: the engine decides visibility from the real,
-            -- otherwise-secret isStealable flag). Debuff buttons' copy is
-            -- never registered, so it's still safe to just leave it hidden.
-            if not isBuff and button.stealable then
-                button.stealable:Hide()
+            if isBuff then
+                if darkBorderEnabled then
+                    ApplyDarkBorder()
+                else
+                    ApplyNoBorder()
+                end
+            elseif darkBorderEnabled then
+                ApplyDarkBorder()
+            else
+                ApplyDispelColoredBorder()
+            end
+
+            -- button.stealable: a dispellable/stealable enemy buff gets a
+            -- plain white border.tga ring, matching stock target frames
+            -- (which show a fixed-appearance indicator toggled purely by
+            -- auraData.isStealable -- not part of the dispel-type-color
+            -- system at all, see TryRegisterDispelBorder). Registered once
+            -- (stealableFilter), so the engine alone decides whether the
+            -- texture itself renders anything; button.stealableHost is OUR
+            -- frame, never registered, so it's what "Show Dispels for Target
+            -- Buffs" actually gates -- independent of the base style chosen
+            -- above, layered on top of it (child frame of borderHost).
+            -- Also gated on PLAYER_CAN_OFFENSIVE_DISPEL: stock only shows
+            -- this to classes that can actually do something about it.
+            if button.stealableHost then
+                local showStealable = isBuff and PLAYER_CAN_OFFENSIVE_DISPEL and
+                uuidb and uuidb.general and uuidb.general.targetbuffs_showdispel
+                if showStealable then
+                    button.stealableHost:Show()
+                else
+                    button.stealableHost:Hide()
+                end
             end
         end)
     end
@@ -869,11 +946,10 @@ function targetframes:SetupCustomAuraContainer()
         -- data is in a "secret"/restricted window (C_Secrets.ShouldAurasBeSecret,
         -- e.g. around loading screens/zone transitions), and a single attempt
         -- made at button-creation time has no way to retry if it lands in one.
-        -- button.isBuff is permanently fixed at this point (the group this
-        -- button was created in), so exactly one dispel texture is ever
-        -- needed -- TryRegisterDispelBorder picks buff-only (stealableFilter)
-        -- or debuff-only (harmful-only) registration options based on it.
-        if not button.dispelBorderHost then
+        -- Debuffs only: buffs use the separate button.stealable mechanism
+        -- below instead (a plain stealable indicator isn't part of the
+        -- dispel-type-color system stock target frames use for this at all).
+        if not isBuff and not button.dispelBorderHost then
             local dispelBorderHost = CreateFrame("Frame", nil, borderHost)
             dispelBorderHost:SetAllPoints(borderHost)
             dispelBorderHost:EnableMouse(false)
@@ -882,21 +958,35 @@ function targetframes:SetupCustomAuraContainer()
             local dispelBorderTex = dispelBorderHost:CreateTexture(nil, "OVERLAY")
             dispelBorderTex:SetAllPoints(dispelBorderHost)
             dispelBorderTex:SetAtlas("ui-debuff-border-default-noicon")
-            dispelBorderTex:SetDesaturated(true)
-            dispelBorderTex:SetVertexColor(1,1,1,1)
 
             button.dispelBorderHost = dispelBorderHost
             button.dispelBorderTexPending = dispelBorderTex
         end
 
-        local stealable = button.stealable or button:CreateTexture(nil, "OVERLAY")
-        stealable:ClearAllPoints()
-        stealable:SetPoint("TOPLEFT", button, "TOPLEFT", -pad-1, pad+1)
-        stealable:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
-        stealable:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Stealable")
-        stealable:SetBlendMode("ADD")
-        stealable:Hide()
-        button.stealable = stealable
+        -- Buffs only: a dispellable/stealable enemy buff gets the same
+        -- indicator stock target frames use -- Blizzard's own
+        -- TargetFrameAuraButton.xml StealableBorder texture
+        -- (Interface\TargetingFrame\UI-TargetingFrame-Stealable, ADD blend),
+        -- not a custom asset of ours (no border.tga reskin). The base
+        -- border underneath is left alone -- see UpdateAuraButtonStyle's
+        -- ApplyDarkBorder/ApplyNoBorder -- this is a separate overlay.
+        -- stealableHost is OUR frame, never registered, so "Show Dispels for
+        -- Target Buffs" can reliably show/hide it regardless of what the
+        -- (also-registered) button.stealable texture is doing internally.
+        if isBuff and not button.stealableHost then
+            local stealableHost = CreateFrame("Frame", nil, borderHost)
+            stealableHost:SetAllPoints(borderHost)
+            stealableHost:EnableMouse(false)
+            stealableHost:Hide()
+
+            local stealable = stealableHost:CreateTexture(nil, "OVERLAY")
+            stealable:SetAllPoints(stealableHost)
+            stealable:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Stealable")
+            stealable:SetBlendMode("ADD")
+
+            button.stealableHost = stealableHost
+            button.stealable = stealable
+        end
 
         targetframes:UpdateAuraButtonStyle(button)
     end

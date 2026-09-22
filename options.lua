@@ -1085,8 +1085,8 @@ end
     do
         local variable, name = "targetbuffsShowDispel", "Show Dispels for Target Buffs";
         local tooltip =
-        "Show a white border on dispellable enemy buffs, layered on top of whichever Target Buffs style is chosen above (including Dark/Both, which otherwise hides it).";
-        local defaultValue = false;
+        "Show a white border on enemy buffs your class can Purge/Dispel/Spellsteal, layered on top of whichever Target Buffs style is chosen above (including Dark/Both, which otherwise hides it). Matches stock Blizzard behavior: only shown if your class actually has a way to remove it.";
+        local defaultValue = true;
         local function getValue()
             if (uuidb.general) then
                 return uuidb.general.targetbuffs_showdispel;
