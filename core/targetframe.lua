@@ -225,17 +225,6 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
 
     local zoomEnabled = (style == "both" or style == "zoom")
     local darkBorderEnabled = (style == "both" or style == "border")
-    local zoomOnly = (style == "zoom")
-
-    for _, key in ipairs({ "Border", "border", "DebuffBorder", "DispelBorder", "BorderOverlay", "Overlay", "IconBorder", "AuraBorder" }) do
-        local tex = button[key]
-        if tex and tex ~= button.borderTex and not IsSecret(tex) then
-            pcall(function()
-                tex:Hide()
-                tex:SetAlpha(0)
-            end)
-        end
-    end
 
     if button.icon then
         pcall(function()
@@ -275,24 +264,49 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                 button.borderTex:SetAllPoints(button.borderHost)
             end
 
+            -- Whichever native border texture Blizzard's own aura button template
+            -- provides (dispel-type colored on debuffs, out of the box). We never
+            -- recolor it ourselves: it's only hidden while our own dark border is
+            -- in use, and otherwise left exactly as Blizzard drives it -- except
+            -- for resizing it to hug the icon when the zoom setting is enabled.
+            local nativeBorder = button.DebuffBorder or button.DispelBorder or button.Border or button.border
+
+            local function ApplyDarkBorder()
+                button.borderHost:Show()
+                if button.borderTex then
+                    button.borderTex:Show()
+                    button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
+                    button.borderTex:SetDesaturated(true)
+                    local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or
+                    { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+                    button.borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                end
+                if nativeBorder and not IsSecret(nativeBorder) then
+                    nativeBorder:Hide()
+                    nativeBorder:SetAlpha(0)
+                end
+            end
+
+            local function ApplyStockBorder()
+                button.borderHost:Hide()
+                if button.borderTex then button.borderTex:Hide() end
+                if nativeBorder and not IsSecret(nativeBorder) then
+                    nativeBorder:Show()
+                    nativeBorder:SetAlpha(1)
+                    if zoomEnabled then
+                        nativeBorder:ClearAllPoints()
+                        nativeBorder:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
+                        nativeBorder:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
+                    end
+                end
+            end
+
             if isBuff then
                 -- Buff styling (Applies to friendly buffs and enemy secondary buffs)
                 if darkBorderEnabled then
-                    if button.ClearDispelTypeTextures then
-                        pcall(button.ClearDispelTypeTextures, button)
-                    end
-                    button.borderHost:Show()
-                    if button.borderTex then
-                        button.borderTex:Show()
-                        button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
-                        button.borderTex:SetDesaturated(true)
-                        local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or
-                        { r = 0.4, g = 0.4, b = 0.4, a = 1 }
-                        button.borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                    end
+                    ApplyDarkBorder()
                 else
-                    button.borderHost:Hide()
-                    if button.borderTex then button.borderTex:Hide() end
+                    ApplyStockBorder()
                 end
 
                 local isStealable = false
@@ -309,43 +323,10 @@ function targetframes:UpdateAuraButtonStyle(button, forcedIsBuff)
                 -- Debuff styling (Applies to enemy debuffs and friendly secondary debuffs)
                 if button.stealable then button.stealable:Hide() end
 
-                if darkBorderEnabled and not zoomOnly then
-                    if button.ClearDispelTypeTextures then
-                        pcall(button.ClearDispelTypeTextures, button)
-                    end
-                    button.borderHost:Show()
-                    if button.borderTex then
-                        button.borderTex:Show()
-                        button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
-                        button.borderTex:SetDesaturated(true)
-                        local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or
-                        { r = 0.4, g = 0.4, b = 0.4, a = 1 }
-                        button.borderTex:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                    end
-                elseif zoomEnabled then
-                    button.borderHost:Show()
-                    if button.borderTex then
-                        button.borderTex:Show()
-                        button.borderTex:SetDesaturated(false)
-                        button.borderTex:SetVertexColor(1, 1, 1, 1)
-                    end
-                    if button.AddDispelTypeTexture then
-                        local dispelStyle = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle and
-                        (Enum.CustomAuraButtonDispelTypeTextureStyle.Border or Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset)
-                        if dispelStyle then
-                            pcall(button.AddDispelTypeTexture, button, button.borderTex, {
-                                style = dispelStyle,
-                                showWhenHarmful = true,
-                                showWhenHelpful = false,
-                                showWithoutDispelType = true,
-                            })
-                            button.borderTex:ClearAllPoints()
-                            button.borderTex:SetAllPoints(button.borderHost)
-                        end
-                    end
+                if darkBorderEnabled then
+                    ApplyDarkBorder()
                 else
-                    button.borderHost:Hide()
-                    if button.borderTex then button.borderTex:Hide() end
+                    ApplyStockBorder()
                 end
             end
         end)
@@ -702,15 +683,9 @@ function targetframes:SetupCustomAuraContainer()
         button.elementSize = size
         button.isMine = isMine
 
-        for _, key in ipairs({"Border", "border", "DebuffBorder", "DispelBorder", "BorderOverlay", "Overlay"}) do
-            local tex = button[key]
-            if tex and not IsSecret(tex) then
-                pcall(function()
-                    tex:Hide()
-                    tex:SetAlpha(0)
-                end)
-            end
-        end
+        -- Native border textures (Blizzard's own dispel-type-colored DebuffBorder,
+        -- etc.) are left alone here; UpdateAuraButtonStyle below decides per-call
+        -- whether to hide them (dark border style) or leave them showing stock.
 
         local icon = button.icon or button:CreateTexture(nil, "ARTWORK")
         icon:ClearAllPoints()
