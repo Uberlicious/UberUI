@@ -15,6 +15,7 @@ config.lua
 options.lua
 
 core\generalfunctions.lua
+core\aurakit.lua
 core\playerframe.lua
 core\targetframe.lua
 core\focusframe.lua

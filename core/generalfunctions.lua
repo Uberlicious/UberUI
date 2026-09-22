@@ -118,6 +118,81 @@ function general:SetHealthColor(healthBar, unit, db)
     end
 end
 
+-- Offensive dispel capability (Purge/Dispel Magic on an enemy/Spellsteal),
+-- shared by targetframe.lua and focusframe.lua rather than duplicated per
+-- file. Stock Blizzard only shows the stealable/dispellable indicator to
+-- classes that can act on it, and there's no direct Blizzard API for "can I
+-- offensively dispel" -- so this checks known-spell state
+-- (C_SpellBook.IsSpellKnown) against the Purge/Dispel Magic/Spellsteal
+-- family instead of a class table, so it stays correct as more specs gain
+-- the ability. Classic-safe IDs only; retail-only specs/spells (e.g. Demon
+-- Hunter) are added separately -- IsSpellKnown just returns false where they
+-- don't apply, so this is purely additive.
+local OFFENSIVE_MAGIC_DISPEL_SPELLS = {
+    370,    -- Purge (Shaman)
+    528,    -- Dispel Magic (Priest)
+    30449,  -- Spellsteal (Mage)
+}
+
+if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
+    local retailOnly = {
+        378773, -- Greater Purge (Shaman)
+        32375,  -- Mass Dispel (Priest)
+        278326, -- Consume Magic (Demon Hunter)
+        19801,  -- Tranquilizing Shot (Hunter)
+    }
+    for _, spellID in ipairs(retailOnly) do
+        table.insert(OFFENSIVE_MAGIC_DISPEL_SPELLS, spellID)
+    end
+end
+
+local playerCanOffensiveDispel = false
+local function RefreshPlayerCanOffensiveDispel()
+    local bank = Enum and Enum.SpellBookSpellBank
+    if not (C_SpellBook and C_SpellBook.IsSpellKnown and bank) then
+        playerCanOffensiveDispel = false
+        return
+    end
+    for _, spellID in ipairs(OFFENSIVE_MAGIC_DISPEL_SPELLS) do
+        local ok, known = pcall(C_SpellBook.IsSpellKnown, spellID, bank.Player)
+        if ok and known then
+            playerCanOffensiveDispel = true
+            return
+        end
+    end
+    playerCanOffensiveDispel = false
+end
+
+-- Talents/specs can change known spells mid-session, so re-check instead of
+-- computing once at load.
+local dispelCapabilityWatcher = CreateFrame("Frame")
+dispelCapabilityWatcher:RegisterEvent("SPELLS_CHANGED")
+dispelCapabilityWatcher:RegisterEvent("TRAIT_CONFIG_UPDATED")
+dispelCapabilityWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+dispelCapabilityWatcher:SetScript("OnEvent", RefreshPlayerCanOffensiveDispel)
+RefreshPlayerCanOffensiveDispel()
+
+function general:PlayerCanOffensiveDispel()
+    return playerCanOffensiveDispel
+end
+
+-- Blizzard's own StealableBorder texture (same one stock target/focus frames
+-- use, see TargetFrameAuraButton.xml), used as a CustomAsset dispel-type
+-- texture map so every dispel-type key renders the same fixed indicator.
+local STEALABLE_ASSET = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" }
+local STEALABLE_DISPEL_ASSET_MAP = {
+    Magic = STEALABLE_ASSET,
+    Curse = STEALABLE_ASSET,
+    Poison = STEALABLE_ASSET,
+    Disease = STEALABLE_ASSET,
+    Bleed = STEALABLE_ASSET,
+    None = STEALABLE_ASSET,
+}
+
+function general:GetStealableDispelAssetMap()
+    return STEALABLE_DISPEL_ASSET_MAP
+end
+
 -- Safer ApplyIconZoom in Uber UI/core/generalfunctions.lua
 function general:ApplyIconZoom(textureObject, enable)
     -- Check if the object is actually a texture before attempting the call

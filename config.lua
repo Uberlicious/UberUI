@@ -102,6 +102,7 @@ local defaults = {
         targetbuffs_showdispel       = true,
         aurastyle_focusbuffs         = "both",
         aurastyle_focusdebuffs       = "zoom",
+        focusbuffs_showdispel        = true,
         aurastyle_partybuffs         = "both",
         aurastyle_partydebuffs       = "zoom",
         aurastyle_compactbuffs       = "both",
