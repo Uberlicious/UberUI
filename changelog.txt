@@ -21,3 +21,14 @@
 12.1.0:
     - Fixed UI taint and errors during combat by deferring frame updates until combat ends (arena, party, player, and target frames).
     - Updated class color retrieval methods for improved compatibility.
+    - Target frame debuffs now show Blizzard's real dispel-type border colors, and dispellable/stealable enemy buffs show the native white border -- only for classes that can actually Purge/Dispel Magic/Spellsteal.
+    - Rebuilt Focus frame buffs/debuffs on the same reliable system as Target frame, fixing longstanding sizing and display bugs.
+    - Added "Show Dispels for Target Buffs" and "Show Dispels for Focus Buffs" options (on by default).
+    - Added "Focus Bar Textures" option (the feature already worked, it was just missing from the menu).
+    - Added "Zoom Party Auras" option.
+    - Fixed "Small Friendly Nameplates" not applying, and fixed a follow-up bug that was forcing all friendly nameplates to a fixed large size by default.
+    - Fixed "Cooldown Bar Textures" option not applying to Cooldown Manager viewer bars.
+    - Fixed settings occasionally not being read back correctly after a UI reload.
+    - Fixed a Lua taint error affecting nameplate health text.
+    - Removed the non-functional "Class Color Arena Targets" and "Class Color Friendly/Enemy Nameplates" options (redundant with current Blizzard defaults).
+    - Removed leftover internal debug tooling.

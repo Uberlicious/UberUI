@@ -221,6 +221,7 @@ f:RegisterEvent("PLAYER_TARGET_CHANGED")
 f:RegisterEvent("RAID_TARGET_UPDATE")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event, unit)
+    MaybeRegisterRaidTargetScaleHooks()
     if event == "NAME_PLATE_UNIT_ADDED" then
         -- Only do this at all while the feature is actually on -- when off,
         -- friendly nameplates just keep Blizzard's native size, no addon
