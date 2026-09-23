@@ -60,27 +60,153 @@ function misc:EndCaps()
     end
 end
 
+-- StatusTrackingBarTemplate's own nested StatusBar is named ".StatusBar" on
+-- retail 12.1, but that's evidently not universal -- rather than hardcode
+-- another guess, walk the bar itself, its common field names, and finally
+-- its direct children looking for whichever one is actually a StatusBar
+-- object (that's the only thing SetStatusBarTexture can ever legally live
+-- on).
+local function FindStatusBarWidget(bar, depth)
+    if not bar then return nil end
+    if bar.GetObjectType and bar:GetObjectType() == "StatusBar" then
+        return bar
+    end
+    if depth and depth <= 0 then return nil end
+    for _, key in ipairs({ "StatusBar", "Bar", "statusBar", "Status" }) do
+        local candidate = bar[key]
+        if candidate then
+            local found = FindStatusBarWidget(candidate, (depth or 1) - 1)
+            if found then return found end
+        end
+    end
+    if bar.GetChildren then
+        local ok, kids = pcall(function() return { bar:GetChildren() } end)
+        if ok then
+            for _, child in ipairs(kids) do
+                local found = FindStatusBarWidget(child, (depth or 1) - 1)
+                if found then return found end
+            end
+        end
+    end
+    return nil
+end
+
+-- Confirmed against the live Blizzard_StatusTrackingBar source (Shared/
+-- ExpBar.lua + Mainline/ExpBarOverrides.lua + Mainline/ReputationBarOverrides.lua,
+-- which the "Family" toc line loads for BOTH mainline retail and Forever's
+-- "camelot" game type): XP and reputation have no vertex-color tint at all.
+-- ExpBarMixin:UpdateStatusBarTextures(isRested) and
+-- ReputationStatusBarMixin:UpdateBarTextures(reactionLevel, overrideUseBlueBar)
+-- both just swap in a different pre-colored ATLAS via self.StatusBar:SetBarTexture(...)
+-- -- for XP, "rested" vs not; for reputation, one atlas per FACTION_BAR_COLORS
+-- reaction level. Both mixins call this from their own :Update(), which
+-- fires on essentially every XP/rep change -- so a one-shot texture swap
+-- gets silently clobbered back to Blizzard's atlas the next time either
+-- fires. Hooking the real function is what makes the flat texture (and a
+-- matching tint) actually stick.
+-- Sampled directly from the exported UIExperienceBarCamelot.BLP pixel data
+-- (BLP2, uncompressed BGRA8888) at the atlas's real texture-coordinate
+-- rectangle -- this client's native XP fill is actually a warm gold/amber,
+-- not the blue of vanilla-era clients.
+local XP_BAR_COLOR = { r = 0.89, g = 0.76, b = 0.55 }
+local FACTION_REACTION_BLUE = { r = 0.10, g = 0.60, b = 0.95 } -- major faction/friendship "blue bar" case, not yet sampled
+
+local function ApplyBarSkin(statusBar, color)
+    local applyCustomLook = (uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard")
+    if not applyCustomLook then return end
+    local texture = uuidb.statusbars[uuidb.general.texture]
+    if not (texture and statusBar and statusBar.BarTexture and statusBar.BarTexture.SetTexture) then return end
+    statusBar.BarTexture:SetTexture(texture)
+    if color then
+        statusBar.BarTexture:SetVertexColor(color.r, color.g, color.b)
+    end
+end
+
+local _uberBarHooksInstalled = false
+local function EnsureBarHooks()
+    if _uberBarHooksInstalled then return end
+    _uberBarHooksInstalled = true
+
+    if ExpBarMixin and ExpBarMixin.UpdateStatusBarTextures then
+        hooksecurefunc(ExpBarMixin, "UpdateStatusBarTextures", function(self)
+            ApplyBarSkin(FindStatusBarWidget(self, 2), XP_BAR_COLOR)
+        end)
+    end
+
+    if ReputationStatusBarMixin and ReputationStatusBarMixin.UpdateBarTextures then
+        hooksecurefunc(ReputationStatusBarMixin, "UpdateBarTextures", function(self, reactionLevel, overrideUseBlueBar)
+            local color = FACTION_REACTION_BLUE
+            if not overrideUseBlueBar and reactionLevel and FACTION_BAR_COLORS and FACTION_BAR_COLORS[reactionLevel] then
+                local c = FACTION_BAR_COLORS[reactionLevel]
+                color = { r = c.r, g = c.g, b = c.b }
+            end
+            ApplyBarSkin(FindStatusBarWidget(self, 2), color)
+        end)
+    end
+end
+
 function misc:StatusTrackingBars()
     local dc = uuidb.general.darkencolor
+    local applyCustomLook = (uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard")
+    local texture = applyCustomLook and uuidb.statusbars[uuidb.general.texture]
 
+    EnsureBarHooks()
+
+    -- XP/reputation/honor (retail 12.1 AND Forever 1.60.1 both use this
+    -- shared container system) render as children of these containers, but
+    -- each child (StatusTrackingBarTemplate) is a plain Frame wrapping the
+    -- actual StatusBar rather than being one itself -- see
+    -- FindStatusBarWidget above.
     local containers = { MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }
     for _, container in ipairs(containers) do
         if container then
             if container.BarFrameTexture then container.BarFrameTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
 
             for _, bar in ipairs({ container:GetChildren() }) do
-                if bar.barIndex and StatusTrackingBarInfo and bar.barIndex == StatusTrackingBarInfo.BarsEnum.Experience and bar.ExhaustionTick and bar.ExhaustionTick.Normal then
+                local isExperience = bar.barIndex and StatusTrackingBarInfo and bar.barIndex == StatusTrackingBarInfo.BarsEnum.Experience
+                local isReputation = bar.barIndex and StatusTrackingBarInfo and bar.barIndex == StatusTrackingBarInfo.BarsEnum.Reputation
+                if isExperience and bar.ExhaustionTick and bar.ExhaustionTick.Normal then
                     bar.ExhaustionTick.Normal:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                end
+
+                if isExperience and texture and bar.UpdateStatusBarTextures then
+                    -- ExpBarMixin:Update() only reaches UpdateStatusBarTextures
+                    -- when the player is capped at max level -- for a normal
+                    -- leveling character it just updates the bar's fill value
+                    -- and never touches the texture at all. Call the real
+                    -- function directly instead, with the same isRested
+                    -- Blizzard itself would compute.
+                    pcall(bar.UpdateStatusBarTextures, bar, GetRestState() == 1)
+                elseif isReputation and texture and bar.Update then
+                    -- ReputationStatusBarMixin:Update() calls UpdateBarTextures
+                    -- unconditionally, so nudging it is enough here.
+                    pcall(bar.Update, bar)
+                elseif texture then
+                    local statusBar = FindStatusBarWidget(bar, 2)
+                    if statusBar then
+                        -- Confirmed in-game: this bar's fill is exposed as
+                        -- StatusBar.BarTexture (a plain Texture region), not
+                        -- via a working SetStatusBarTexture() call -- set
+                        -- the region directly, and still try the method as
+                        -- a harmless belt-and-suspenders fallback.
+                        if statusBar.BarTexture and statusBar.BarTexture.SetTexture then
+                            statusBar.BarTexture:SetTexture(texture)
+                        elseif statusBar.SetStatusBarTexture then
+                            statusBar:SetStatusBarTexture(texture)
+                        end
+                    end
                 end
             end
         end
     end
-    
-    if MainMenuExpBar and MainMenuExpBar.Texture then
-        -- Handle classic exp bar if needed
+
+    -- Classic-family (Forever): XP/reputation are their own standalone
+    -- StatusBar widgets, not children of a shared container.
+    if texture and MainMenuExpBar and MainMenuExpBar.SetStatusBarTexture then
+        MainMenuExpBar:SetStatusBarTexture(texture)
     end
-    if ReputationWatchBar and ReputationWatchBar.StatusBar then
-        -- Handle classic rep bar if needed
+    if texture and ReputationWatchBar and ReputationWatchBar.StatusBar and ReputationWatchBar.StatusBar.SetStatusBarTexture then
+        ReputationWatchBar.StatusBar:SetStatusBarTexture(texture)
     end
 end
 
@@ -252,6 +378,8 @@ function misc:AllFramesHealthManaTexture()
     if UberUI.playerframes then UberUI.playerframes:ColorAlternatePower() end
     if UberUI.arenaframes then UberUI.arenaframes:LoopFrames() end
     if UberUI.personalresource then UberUI.personalresource:ForceTexture() end
+    if UberUI.nameplates then UberUI.nameplates:ForceNameplateTexture() end
+    misc:StatusTrackingBars()
 end
 
 UberUI.misc = misc

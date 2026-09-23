@@ -31,3 +31,4 @@ core\buffsandauras.lua
 core\cooldownmanager.lua
 core\damagemeter.lua
 core\personalresource.lua
+core\uuidebug.lua

@@ -1,25 +1,23 @@
 local addon, ns = ...
 local nameplates = {}
 
-local _uberMasks = setmetatable({}, {__mode = "k"})
-local _maskedFills = setmetatable({}, {__mode = "k"})
 local _uberOriginalPoints = setmetatable({}, {__mode = "k"})
 
-local function GetMaskTexture()
-    if uuidb and uuidb.masks and uuidb.masks.cdm_mask then
-        return uuidb.masks.cdm_mask
-    end
-    return [[Interface\AddOns\Uber UI\textures\statusbars\cdm_bar_mask.tga]]
-end
-
-local MASK_OPTS = {
-    insetL = 0,  -- left crop
-    insetT = 0,  -- top crop (raise top edge)
-    insetR = 0,  -- right crop (pull right edge inward more)
-    insetB = -1, -- bottom crop
-    shiftX = 0,  -- whole mask shift on X
-    shiftY = 0,  -- whole mask shift on Y (raise mask slightly)
-}
+-- No masking here at all, by design: Blizzard's own nameplate
+-- healthBar.barTexture (Blizzard_NamePlates.xml) is anchored with a plain
+-- setAllPoints and uses no mask whatsoever -- confirmed against the live
+-- client source. Two things were tried and ruled out with actual pixel
+-- data before landing here: (1) masking with the atlas
+-- ("UI-HUD-CoolDownManager-Bar") Blizzard uses for that same barTexture --
+-- dumping the exported UICooldownManager.BLP showed that atlas region is
+-- almost entirely alpha=0, not a usable shape to mask with; (2) the
+-- addon's original hand-made cdm_bar_mask.tga -- dumping that TGA's alpha
+-- channel showed it's just a near-fully-opaque rectangle with a few-pixel
+-- edge feather, not a rounded pill either, and stretching its 38px-tall
+-- source down to a ~10px nameplate bar was producing visible seam
+-- artifacts (the reported gaps, then a stray dark line) with no shape
+-- benefit to justify it. Matching Blizzard's real (unmasked) approach
+-- avoids all of that.
 
 function nameplates:OnNamePlateLoad(unitFrame)
     if not unitFrame or not unitFrame.healthBar then
@@ -44,39 +42,6 @@ function nameplates:OnNamePlateLoad(unitFrame)
 
     if textureToApply and type(textureToApply) == "string" then
         healthBar:SetStatusBarTexture(textureToApply)
-    end
-
-    -- MASKING LOGIC
-    if healthBar.CreateMaskTexture and healthBar.GetStatusBarTexture then
-        local opts = MASK_OPTS
-        local L, T, R, B = opts.insetL or 0, opts.insetT or 0, opts.insetR or 0, opts.insetB or 0
-        local SX, SY = opts.shiftX or 0, opts.shiftY or 0
-
-        if not _uberMasks[healthBar] then
-            local m = healthBar:CreateMaskTexture(nil, "OVERLAY")
-            if m and m.SetTexture then
-                m:SetTexture(GetMaskTexture(), "CLAMPTOBLACK", "CLAMPTOBLACK")
-                if m.SetSnapToPixelGrid then m:SetSnapToPixelGrid(true) end
-                if m.SetTexelSnappingBias then m:SetTexelSnappingBias(0) end
-                if m.SetHorizTile then m:SetHorizTile(false) end
-                if m.SetVertTile then m:SetVertTile(false) end
-                _uberMasks[healthBar] = m
-            end
-        end
-        local m = _uberMasks[healthBar]
-
-        if m and m.ClearAllPoints and m.SetPoint then
-            m:ClearAllPoints()
-            m:SetPoint("TOPLEFT", healthBar, "TOPLEFT", L + SX, -(T - SY))
-            m:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", -R + SX, B + SY)
-        end
-
-        -- Apply the mask to the fill texture
-        local fill = healthBar:GetStatusBarTexture()
-        if fill and m and fill.AddMaskTexture and not _maskedFills[fill] then
-            fill:AddMaskTexture(m)
-            _maskedFills[fill] = true
-        end
     end
 
     -- Secondary texture logic for absorbs and heals
@@ -249,6 +214,20 @@ f:SetScript("OnEvent", function(self, event, unit)
         end
         local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
         if nameplate and nameplate.UnitFrame then
+            -- Nameplate frames are pooled and reused across many different
+            -- units -- OnLoad (which OnNamePlateLoad's texture/mask setup
+            -- normally rides on) only fires once, the first time a given
+            -- pooled frame is ever created. Every later reuse for a new
+            -- unit only fires NAME_PLATE_UNIT_ADDED, and Blizzard's own
+            -- SetUnit-driven refresh resets the health bar back to its
+            -- default texture in the process -- so without reapplying here
+            -- too, the custom texture quietly reverts as plates get
+            -- recycled while running around. Same deferral as the OnLoad
+            -- hook, for the same taint reason.
+            local capturedFrame = nameplate.UnitFrame
+            C_Timer.After(0, function()
+                UberUI.nameplates:OnNamePlateLoad(capturedFrame)
+            end)
             if nameplate.UnitFrame.RaidTargetFrame then
                 if _uberOriginalPoints[nameplate.UnitFrame.RaidTargetFrame] then
                     nameplate.UnitFrame.RaidTargetFrame:ClearAllPoints()
