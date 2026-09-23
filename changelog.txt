@@ -1,3 +1,5 @@
+=== Retail / Classic ===
+
 12.0.0.0:
     - Update 12.0.0.
     - Added "Icon Zoom" options to enlarge aura icons on Player, Target, Party, and Raid frames.
@@ -32,3 +34,9 @@
     - Fixed a Lua taint error affecting nameplate health text.
     - Removed the non-functional "Class Color Arena Targets" and "Class Color Friendly/Enemy Nameplates" options (redundant with current Blizzard defaults).
     - Removed leftover internal debug tooling.
+
+=== WoW Forever ===
+
+1.60.1:
+    - Initial update/compatibility pass for the WoW Forever client, build 1.60.1.
+    - See 12.1.0 above for the full list of changes -- all developed and tested on this build.
