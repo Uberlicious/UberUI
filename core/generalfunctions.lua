@@ -31,6 +31,12 @@ function general:PvPIcon(frame)
             if frame.PvPBackgroundCircle and frame.PvPBackgroundCircle.SetVertexColor then
                 frame.PvPBackgroundCircle:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
             end
+            -- PlayerFrame has no PvPBackgroundCircle of its own -- its PvP
+            -- status badge is PrestigePortrait (the round backdrop behind
+            -- the honor icon), which needs the same darken treatment.
+            if frame.PrestigePortrait and frame.PrestigePortrait.SetVertexColor then
+                frame.PrestigePortrait:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            end
         end
     end
 end

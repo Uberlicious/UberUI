@@ -114,6 +114,27 @@ function targetframes:Color()
     elseif TargetFrameToTTextureFrameTexture then
         ApplyDarkenColor(TargetFrameToTTextureFrameTexture)
     end
+
+    self:ColorComboPoints()
+end
+
+-- WoW Forever 1.60.1 (like every classic-family client back through Cata --
+-- see blizzard_source/Blizzard_UnitFrame/ComboFrame.xml/.lua) renders combo
+-- points through the shared native ComboFrame: a standalone global anchored
+-- to TargetFrame, not the retail-only PlayerFrame-anchored
+-- RogueComboPointBarFrame/DruidComboPointBarFrame pair. Each of its 9
+-- ComboPoint children only names its Highlight/Shine overlay layers -- the
+-- always-visible base diamond (the "border" users see per pip) has no
+-- parentKey, so it's picked up via GetRegions() by elimination.
+function targetframes:ColorComboPoints()
+    if not (ComboFrame and ComboFrame.ComboPoints) then return end
+    for _, cp in ipairs(ComboFrame.ComboPoints) do
+        for _, region in ipairs({ cp:GetRegions() }) do
+            if region ~= cp.Highlight and region ~= cp.Shine and region.SetVertexColor then
+                ApplyDarkenColor(region)
+            end
+        end
+    end
 end
 
 function targetframes:HealthBarColor()
@@ -354,7 +375,10 @@ function targetframes:SetupCustomAuraContainer()
             updateStyleFn = updateStyleFn,
             isUpdating = function() return isUpdatingAuras end,
             clearUpdating = function() isUpdatingAuras = false end,
-            onApplyLayout = function() aurakit.UpdateSpellbar(TargetFrame, aurakit.GetAuraContainers(targetframes)) end,
+            onApplyLayout = function()
+                targetframes:UpdateAuraPositions()
+                aurakit.UpdateSpellbar(TargetFrame, aurakit.GetAuraContainers(targetframes))
+            end,
         })
     end
     if not self.customBuffs then
@@ -373,7 +397,10 @@ function targetframes:SetupCustomAuraContainer()
             updateStyleFn = updateStyleFn,
             isUpdating = function() return isUpdatingAuras end,
             clearUpdating = function() isUpdatingAuras = false end,
-            onApplyLayout = function() aurakit.UpdateSpellbar(TargetFrame, aurakit.GetAuraContainers(targetframes)) end,
+            onApplyLayout = function()
+                targetframes:UpdateAuraPositions()
+                aurakit.UpdateSpellbar(TargetFrame, aurakit.GetAuraContainers(targetframes))
+            end,
         })
     end
 

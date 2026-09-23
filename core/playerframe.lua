@@ -32,6 +32,10 @@ playerframes:RegisterEvent("PLAYER_GAINS_VEHICLE_DATA")
 playerframes:RegisterEvent("PVP_MATCH_ACTIVE")
 playerframes:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 playerframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+-- Without this, a totem's border only gets darkened if some other
+-- registered event happens to fire after it's summoned -- nothing here
+-- previously reacted to totems actually being placed/cleared.
+playerframes:RegisterEvent("PLAYER_TOTEM_UPDATE")
 playerframes:SetScript("OnEvent", function(self, event)
     if InCombatLockdown() then
         self:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -71,6 +75,11 @@ function playerframes:Color()
             if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvPBackgroundCircle then
                 ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvPBackgroundCircle)
             end
+            -- WoW Forever names this field with a lowercase "Pvp" (unlike
+            -- Target/Focus's "PvP"), so it never matched the check above.
+            if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvpBackgroundCircle then
+                ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvpBackgroundCircle)
+            end
         end
         if PlayerFrame.LevelBackgroundCircle then
             ApplyDarkenColor(PlayerFrame.LevelBackgroundCircle)
@@ -99,6 +108,13 @@ function playerframes:Color()
         self:ColorTotems();
         self:ColorHolyPower();
     elseif (class == "Rogue") then
+        self:ColorComboPoints();
+    elseif (class == "Druid") then
+        -- Retail Mainline: Feral's combo points render through the same
+        -- shared RogueComboPointBarFrame Rogues use. Not relevant on
+        -- Forever 1.60.1 -- that client (like every classic-family build)
+        -- shows combo points via the native ComboFrame anchored to
+        -- TargetFrame instead; see targetframes:ColorComboPoints().
         self:ColorComboPoints();
     elseif (class == "Warlock") then
         self:ColorSoulShards();
@@ -234,6 +250,8 @@ function playerframes:ColorComboPoints()
         for _, cp in pairs({ RogueComboPointBarFrame:GetChildren() }) do
             if cp.BGInactive then ApplyDarkenColor(cp.BGInactive) end
             if cp.BGActive then ApplyDarkenColor(cp.BGActive) end
+            if cp.Border then ApplyDarkenColor(cp.Border) end
+            if cp.ComboPointBorder then ApplyDarkenColor(cp.ComboPointBorder) end
         end
     end
 end

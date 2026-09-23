@@ -376,7 +376,10 @@ function focusframes:SetupCustomAuraContainer()
             updateStyleFn = updateStyleFn,
             isUpdating = function() return isUpdatingAuras end,
             clearUpdating = function() isUpdatingAuras = false end,
-            onApplyLayout = function() aurakit.UpdateSpellbar(FocusFrame, aurakit.GetAuraContainers(focusframes)) end,
+            onApplyLayout = function()
+                focusframes:UpdateAuraPositions()
+                aurakit.UpdateSpellbar(FocusFrame, aurakit.GetAuraContainers(focusframes))
+            end,
         })
     end
     if not self.customBuffs then
@@ -395,7 +398,10 @@ function focusframes:SetupCustomAuraContainer()
             updateStyleFn = updateStyleFn,
             isUpdating = function() return isUpdatingAuras end,
             clearUpdating = function() isUpdatingAuras = false end,
-            onApplyLayout = function() aurakit.UpdateSpellbar(FocusFrame, aurakit.GetAuraContainers(focusframes)) end,
+            onApplyLayout = function()
+                focusframes:UpdateAuraPositions()
+                aurakit.UpdateSpellbar(FocusFrame, aurakit.GetAuraContainers(focusframes))
+            end,
         })
     end
 

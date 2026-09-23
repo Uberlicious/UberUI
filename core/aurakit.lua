@@ -540,13 +540,41 @@ end
 -- collapsing to ~0 when empty -- "no buffs -> debuffs sit where buffs
 -- would've been" for free, no row-counting needed.
 --
+-- Real pixel extent (top, bottom) of a container's currently-visible aura
+-- buttons. The native container frame's own GetHeight()/anchor edges can
+-- lag behind (or simply not collapse to zero when) a group empties out --
+-- ApplyLayout doesn't resize it synchronously with the button visibility
+-- change -- so anchoring off the container's own edge can leave a stale,
+-- too-large gap. Measuring the buttons directly (same forbidden/secret-safe
+-- read-only pattern as UpdateSpellbar below) sidesteps that. Returns nil,
+-- nil if nothing is currently visible.
+function aurakit.GetContainerAuraExtent(container)
+    if not container or not container.allButtons then return nil, nil end
+    local top, bottom
+    for button in pairs(container.allButtons) do
+        if button and not IsSecret(button) and not SafeIsForbidden(button) then
+            local okS, isShown = pcall(button.IsShown, button)
+            if okS and SafeBool(isShown) then
+                local okT, t = pcall(button.GetTop, button)
+                local okB, b = pcall(button.GetBottom, button)
+                if okT and okB and t and b and not IsSecret(t) and not IsSecret(b) then
+                    if not top or t > top then top = t end
+                    if not bottom or b < bottom then bottom = b end
+                end
+            end
+        end
+    end
+    return top, bottom
+end
+
 -- opts: { frameObj, refFrame, isEnemyFn(), buffsOnTop, topX, topY, topOnTopX, containerGap }
 function aurakit.UpdatePairedPositions(opts)
     local frameObj, refFrame = opts.frameObj, opts.refFrame
     if not frameObj.customDebuffs or not frameObj.customBuffs or not refFrame then return end
 
+    local isEnemy = opts.isEnemyFn()
     local primary, secondary
-    if opts.isEnemyFn() then
+    if isEnemy then
         primary, secondary = frameObj.customDebuffs, frameObj.customBuffs
     else
         primary, secondary = frameObj.customBuffs, frameObj.customDebuffs
@@ -554,6 +582,22 @@ function aurakit.UpdatePairedPositions(opts)
 
     primary:ClearAllPoints()
     secondary:ClearAllPoints()
+
+    -- The ask was narrow: on an enemy with no debuff, nudge its (secondary)
+    -- buff row up closer to the frame instead of leaving it hanging off
+    -- where the empty debuff row would have been. Everything else --
+    -- including the friendly side, where buffs are primary and debuffs
+    -- trail -- keeps the original unconditional chain (secondary anchored
+    -- straight off primary's own edge, live-updating with zero extra calls
+    -- as primary's row count changes). Scoping the bypass to isEnemy only
+    -- avoids the friendly-side regression where an over-eager "is primary
+    -- empty" check picked the wrong anchor and stacked debuffs on top of
+    -- buffs instead of below them.
+    local primaryIsEmpty = false
+    if isEnemy then
+        local pTop, pBottom = aurakit.GetContainerAuraExtent(primary)
+        primaryIsEmpty = not (pTop and pBottom)
+    end
 
     if opts.buffsOnTop then
         local ref = (refFrame.TargetFrameContainer and refFrame.TargetFrameContainer.FrameTexture) or refFrame
@@ -574,7 +618,11 @@ function aurakit.UpdatePairedPositions(opts)
         end
         startY = startY + extraY
         primary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
-        secondary:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, opts.containerGap)
+        if primaryIsEmpty then
+            secondary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY + opts.containerGap)
+        else
+            secondary:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, opts.containerGap)
+        end
         for _, c in ipairs({ primary, secondary }) do
             if c.SetFlowLayoutAnchorPoint then
                 pcall(c.SetFlowLayoutAnchorPoint, c, "BOTTOMLEFT")
@@ -585,7 +633,11 @@ function aurakit.UpdatePairedPositions(opts)
         end
     else
         primary:SetPoint("TOPLEFT", refFrame, "BOTTOMLEFT", opts.topX, opts.topY)
-        secondary:SetPoint("TOPLEFT", primary, "BOTTOMLEFT", 0, -opts.containerGap)
+        if primaryIsEmpty then
+            secondary:SetPoint("TOPLEFT", refFrame, "BOTTOMLEFT", opts.topX, opts.topY - opts.containerGap)
+        else
+            secondary:SetPoint("TOPLEFT", primary, "BOTTOMLEFT", 0, -opts.containerGap)
+        end
         for _, c in ipairs({ primary, secondary }) do
             if c.SetFlowLayoutAnchorPoint then
                 pcall(c.SetFlowLayoutAnchorPoint, c, "TOPLEFT")

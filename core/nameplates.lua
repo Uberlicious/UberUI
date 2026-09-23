@@ -25,6 +25,12 @@ function nameplates:OnNamePlateLoad(unitFrame)
     if not unitFrame or not unitFrame.healthBar then
         return
     end
+    -- Some nameplates (e.g. other players' in certain content) come up
+    -- fully Forbidden -- CreateMaskTexture/AddMaskTexture below throw
+    -- "Attempt to access forbidden object" on those, deferred timer or not.
+    if unitFrame:IsForbidden() or unitFrame.healthBar:IsForbidden() then
+        return
+    end
 
     local healthBar = unitFrame.healthBar
 
