@@ -111,6 +111,11 @@ end
 local XP_BAR_COLOR = { r = 0.89, g = 0.76, b = 0.55 }
 local FACTION_REACTION_BLUE = { r = 0.10, g = 0.60, b = 0.95 } -- major faction/friendship "blue bar" case, not yet sampled
 
+-- Disabled for now -- not working correctly, revisit later. Code below is
+-- left in place (helpers, hooks, color sampling all already done) so this
+-- is a one-line flip to re-enable rather than a redo.
+local XP_REP_RETEXTURE_ENABLED = false
+
 local function ApplyBarSkin(statusBar, color)
     local applyCustomLook = (uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard")
     if not applyCustomLook then return end
@@ -124,6 +129,7 @@ end
 
 local _uberBarHooksInstalled = false
 local function EnsureBarHooks()
+    if not XP_REP_RETEXTURE_ENABLED then return end
     if _uberBarHooksInstalled then return end
     _uberBarHooksInstalled = true
 
@@ -169,7 +175,7 @@ function misc:StatusTrackingBars()
                     bar.ExhaustionTick.Normal:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
                 end
 
-                if isExperience and texture and bar.UpdateStatusBarTextures then
+                if isExperience and XP_REP_RETEXTURE_ENABLED and texture and bar.UpdateStatusBarTextures then
                     -- ExpBarMixin:Update() only reaches UpdateStatusBarTextures
                     -- when the player is capped at max level -- for a normal
                     -- leveling character it just updates the bar's fill value
@@ -177,11 +183,11 @@ function misc:StatusTrackingBars()
                     -- function directly instead, with the same isRested
                     -- Blizzard itself would compute.
                     pcall(bar.UpdateStatusBarTextures, bar, GetRestState() == 1)
-                elseif isReputation and texture and bar.Update then
+                elseif isReputation and XP_REP_RETEXTURE_ENABLED and texture and bar.Update then
                     -- ReputationStatusBarMixin:Update() calls UpdateBarTextures
                     -- unconditionally, so nudging it is enough here.
                     pcall(bar.Update, bar)
-                elseif texture then
+                elseif not isExperience and not isReputation and texture then
                     local statusBar = FindStatusBarWidget(bar, 2)
                     if statusBar then
                         -- Confirmed in-game: this bar's fill is exposed as
@@ -202,10 +208,10 @@ function misc:StatusTrackingBars()
 
     -- Classic-family (Forever): XP/reputation are their own standalone
     -- StatusBar widgets, not children of a shared container.
-    if texture and MainMenuExpBar and MainMenuExpBar.SetStatusBarTexture then
+    if XP_REP_RETEXTURE_ENABLED and texture and MainMenuExpBar and MainMenuExpBar.SetStatusBarTexture then
         MainMenuExpBar:SetStatusBarTexture(texture)
     end
-    if texture and ReputationWatchBar and ReputationWatchBar.StatusBar and ReputationWatchBar.StatusBar.SetStatusBarTexture then
+    if XP_REP_RETEXTURE_ENABLED and texture and ReputationWatchBar and ReputationWatchBar.StatusBar and ReputationWatchBar.StatusBar.SetStatusBarTexture then
         ReputationWatchBar.StatusBar:SetStatusBarTexture(texture)
     end
 end
