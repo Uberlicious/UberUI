@@ -224,6 +224,30 @@ function misc:ObjectiveTrackerFrames()
     end
 end
 
+-- Finds a bag/keyring button's actual normal-texture region. Blizzard
+-- names these three different ways depending on template/game type: an
+-- auto-generated global ("<buttonName>NormalTexture", the classic
+-- <NormalTexture> XML convention -- e.g. MainMenuBarBackpackButtonNormalTexture),
+-- a parentKey field, or only reachable through the Button API's own
+-- GetNormalTexture(). Tries all three so darkening doesn't silently no-op
+-- if a beta client's template chain (Forever/"camelot" excludes some of
+-- the templates other game types load) leaves one path broken.
+local function FindBagNormalTexture(bag)
+    if not bag then return nil end
+    local okName, name = pcall(bag.GetName, bag)
+    if okName and name and _G[name .. "NormalTexture"] then
+        return _G[name .. "NormalTexture"]
+    end
+    if bag.NormalTexture then
+        return bag.NormalTexture
+    end
+    if bag.GetNormalTexture then
+        local ok, nt = pcall(bag.GetNormalTexture, bag)
+        if ok and nt then return nt end
+    end
+    return nil
+end
+
 function misc:BagSlots()
     local dc = uuidb.general.darkencolor
 
@@ -236,7 +260,7 @@ function misc:BagSlots()
                     r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
                 end
 
-                local nt = (self.GetName and self:GetName() and _G[self:GetName() .. "NormalTexture"]) or self.NormalTexture or (self.GetNormalTexture and self:GetNormalTexture())
+                local nt = FindBagNormalTexture(self)
                 if nt then nt:SetVertexColor(r, g, b, dc.a) end
             end)
         end
@@ -255,10 +279,21 @@ function misc:BagSlots()
         if isBackpack then
             r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
         end
-        local nt = (bag.GetName and bag:GetName() and _G[bag:GetName() .. "NormalTexture"]) or bag.NormalTexture or (bag.GetNormalTexture and bag:GetNormalTexture())
+        local nt = FindBagNormalTexture(bag)
         if nt then nt:SetVertexColor(r, g, b, dc.a) end
         if bag.IconBorder then bag.IconBorder:SetVertexColor(r, g, b, dc.a) end
         if bag.SlotHighlightTexture then bag.SlotHighlightTexture:SetVertexColor(r, g, b, dc.a) end
+    end
+
+    -- Explicit belt-and-suspenders: MainMenuBarBackpackButtonBase (the
+    -- mixin/template MainMenuBarBackpackButton is supposed to inherit) is
+    -- only defined for the "mainline" game type in Blizzard's own .toc --
+    -- excluded for Forever's "camelot" type, whose own XML still tries to
+    -- inherit from it. If that leaves GetNormalTexture() unreliable on
+    -- this button specifically, the raw auto-named global still isn't.
+    if MainMenuBarBackpackButtonNormalTexture then
+        local r, g, b = (dc.r + 1) / 2, (dc.g + 1) / 2, (dc.b + 1) / 2
+        MainMenuBarBackpackButtonNormalTexture:SetVertexColor(r, g, b, dc.a)
     end
 
     if BagsBar and BagsBar.BorderArt then
