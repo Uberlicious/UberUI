@@ -28,6 +28,16 @@ targetframes:RegisterUnitEvent("UNIT_MAXPOWER", "target")
 targetframes:RegisterUnitEvent("UNIT_AURA", "target")
 targetframes:RegisterEvent("GROUP_ROSTER_UPDATE")
 targetframes:RegisterEvent("PARTY_LEADER_CHANGED")
+-- The engine's PLAYER/!PLAYER caster classification (see
+-- aurakit.HasAmbiguousMineMatch) goes ambiguous or clears back up a few
+-- seconds after a zone transition, not instantly at the event -- these
+-- three events cover both crossing a zone boundary and moving between
+-- indoor/outdoor areas within one, and UpdateAuras() itself is re-run a
+-- few times with delay below to actually catch the transition whichever
+-- direction it goes.
+targetframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+targetframes:RegisterEvent("ZONE_CHANGED")
+targetframes:RegisterEvent("ZONE_CHANGED_INDOORS")
 targetframes:SetScript("OnEvent", function(self, event, unit)
     if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         targetframes:SetupCustomAuraContainer()
@@ -47,6 +57,11 @@ targetframes:SetScript("OnEvent", function(self, event, unit)
     elseif event == "UNIT_AURA" then
         targetframes:UpdateAuras()
         C_Timer.After(0.05, function() targetframes:UpdateAuras() end)
+    elseif event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" then
+        targetframes:UpdateAuras()
+        C_Timer.After(1, function() targetframes:UpdateAuras() end)
+        C_Timer.After(3, function() targetframes:UpdateAuras() end)
+        C_Timer.After(5, function() targetframes:UpdateAuras() end)
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- Force a correctness pass once combat lockdown lifts, in case any
         -- styling was skipped or failed while we were in combat.
@@ -306,9 +321,16 @@ function targetframes:UpdateAuras()
     -- left is "none" style hiding, keyed to each group's fixed type.
     local debuffCount = (styleDebuffs ~= "none") and 16 or 0
     local buffCount = (styleBuffs ~= "none") and 32 or 0
-    pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_mine", debuffCount)
+    -- "mine" gets forced to 0 specifically when the engine's PLAYER/!PLAYER
+    -- caster classification is currently ambiguous for this unit (see
+    -- aurakit.HasAmbiguousMineMatch -- confirmed tied to the unit being in
+    -- a different zone from the local player). "other" is left untouched,
+    -- so the aura stays visible there instead of duplicating OR vanishing.
+    local debuffMineCount = aurakit.GetSafeMineMaxFrameCount("target", true, debuffCount)
+    local buffMineCount = aurakit.GetSafeMineMaxFrameCount("target", false, buffCount)
+    pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_mine", debuffMineCount)
     pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_other", debuffCount)
-    pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_mine", buffCount)
+    pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_mine", buffMineCount)
     pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_other", buffCount)
 
     pcall(self.customDebuffs.UpdateAllAuras, self.customDebuffs)

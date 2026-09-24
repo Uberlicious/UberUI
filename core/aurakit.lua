@@ -29,6 +29,54 @@ aurakit.IsSecret = IsSecret
 aurakit.SafeBool = SafeBool
 aurakit.SafeIsForbidden = SafeIsForbidden
 
+-- Detects the "sourceUnit resolution failed" engine state that causes an
+-- aura to satisfy both "<base>|PLAYER" and "<base>|!PLAYER" simultaneously
+-- -- confirmed (via /uuidebugoverlapwatch) to be triggered specifically by
+-- the unit being in a different zone than the local player, on BOTH WoW
+-- Forever and retail. auraData.sourceUnit goes nil for the affected aura
+-- when this happens; the two filter-string queries then both admit it
+-- instead of exactly one.
+--
+-- Queries C_UnitAuras.GetUnitAuraInstanceIDs DIRECTLY -- no container/
+-- button involved -- so this can be checked cheaply before deciding
+-- whether it's safe to show the "mine" group at all. When ambiguous,
+-- hiding "mine" (see aurakit.GetSafeMineMaxFrameCount below) leaves the
+-- aura visible via the correctly-populated "other" group instead of
+-- either duplicating it or -- like Blizzard's own default UI does under
+-- the same condition -- losing it entirely.
+function aurakit.HasAmbiguousMineMatch(unit, isHarmful)
+    if not unit or not UnitExists(unit) then return false end
+    if not (C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs) then return false end
+
+    local base = isHarmful and "HARMFUL" or "HELPFUL"
+    local okMine, mineIDs = pcall(C_UnitAuras.GetUnitAuraInstanceIDs, unit, base .. "|PLAYER")
+    local okOther, otherIDs = pcall(C_UnitAuras.GetUnitAuraInstanceIDs, unit, base .. "|!PLAYER")
+    if not okMine or not okOther or not mineIDs or not otherIDs then return false end
+    if IsSecret(mineIDs) or IsSecret(otherIDs) then return false end
+
+    local mineSet = {}
+    for _, id in ipairs(mineIDs) do
+        if not IsSecret(id) then mineSet[id] = true end
+    end
+    for _, id in ipairs(otherIDs) do
+        if id and not IsSecret(id) and mineSet[id] then
+            return true
+        end
+    end
+    return false
+end
+
+-- Caller passes its normal (style-driven) max count for the "mine" group;
+-- this returns 0 instead whenever HasAmbiguousMineMatch is true for that
+-- unit, and the normal count otherwise. Callers apply this identically to
+-- how they already apply the "none" style's max-count override.
+function aurakit.GetSafeMineMaxFrameCount(unit, isHarmful, normalMaxCount)
+    if aurakit.HasAmbiguousMineMatch(unit, isHarmful) then
+        return 0
+    end
+    return normalMaxCount
+end
+
 function aurakit.MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, layoutIndex)
     spacingX = spacingX or 1
     spacingY = spacingY or 1
