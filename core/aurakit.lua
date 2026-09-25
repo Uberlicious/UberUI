@@ -122,6 +122,7 @@ function aurakit.ForEachActiveAuraButton(container, keyMine, keyOther, callback)
     end
 
     local function visitGroup(groupKey)
+        if not groupKey then return end
         local okCount, count = pcall(container.GetAuraGroupFrameCount, container, groupKey)
         if not okCount or type(count) ~= "number" then return end
         for i = 1, count do
@@ -141,6 +142,18 @@ function aurakit.RefreshContainerButtons(container, keyMine, keyOther, updateSty
     aurakit.ForEachActiveAuraButton(container, keyMine, keyOther, function(btn)
         pcall(updateStyleFn, btn)
     end)
+end
+
+-- Same as RefreshContainerButtons, for containers built with
+-- BuildGroupedAuraContainer (any number of groups, not a fixed mine/other
+-- pair).
+function aurakit.RefreshGroupButtons(container, groupKeys, updateStyleFn)
+    if not container or not updateStyleFn or not groupKeys then return end
+    for _, key in ipairs(groupKeys) do
+        aurakit.ForEachActiveAuraButton(container, key, nil, function(btn)
+            pcall(updateStyleFn, btn)
+        end)
+    end
 end
 
 -- Offensive dispel capability and the stealable-border asset map live in
@@ -559,6 +572,123 @@ function aurakit.BuildAuraContainer(opts)
     container:SetUnit(opts.unitToken)
     container:UpdateAllAuras()
     return container
+end
+
+-- Generic container with any number of groups, for frames that don't use
+-- the target/focus mine/other pair (compact party/raid frames). Each group
+-- description:
+--   { key, filter, isBuff, size, maxFrameCount, layoutIndex,
+--     sortMethod, candidateFilters }
+-- isBuff is explicit (not derived from the filter) because Blizzard's
+-- ProcessAura classification can put a HELPFUL aura (boss buffs) in a
+-- debuff-styled group.
+--
+-- opts: {
+--   name, parentFrame, frameLevelBonus, spacing, maxLineSize,
+--   processAura,       -- optional SetAuraProcessingPolicy(ProcessAura) options
+--   groups,            -- array of group descriptions (above)
+--   updateStyleFn(button),
+-- }
+--
+-- Unit starts as "none" (the engine's null binding). Callers point it at a
+-- real unit with container:SetUnit() -- never "player" as a placeholder, or
+-- an unassigned container shows the player's own auras.
+function aurakit.BuildGroupedAuraContainer(opts)
+    local okC, container = pcall(function()
+        return CreateFrame("AuraContainer", opts.name, opts.parentFrame, "CustomAuraContainerTemplate")
+    end)
+    if not okC or not container then return nil end
+
+    container:SetSize(1, 1)
+    if opts.parentFrame and opts.parentFrame.GetFrameLevel then
+        container:SetFrameLevel(opts.parentFrame:GetFrameLevel() + (opts.frameLevelBonus or 0))
+    end
+    container:SetFlowLayoutMaximumLineSize(opts.maxLineSize)
+    container:SetFlowLayoutPadding(0, 0, 0, 0)
+    if container.SetFlowLayoutSpacing then
+        pcall(container.SetFlowLayoutSpacing, container, opts.spacing, opts.spacing)
+    end
+
+    -- Must be set before any group exists: AddAuraGroup parses immediately,
+    -- and processedAuraType candidate filters hide everything without it.
+    if opts.processAura and container.SetAuraProcessingPolicy and CustomAuraContainerAuraProcessingPolicy then
+        pcall(container.SetAuraProcessingPolicy, container,
+            CustomAuraContainerAuraProcessingPolicy.ProcessAura, opts.processAura)
+    end
+
+    container.uuGroups = {}
+    container.uuGroupKeys = {}
+    container.uuSpacing = opts.spacing
+
+    for index, group in ipairs(opts.groups) do
+        local def = {
+            key = group.key,
+            isBuff = group.isBuff,
+            size = group.size,
+            layoutIndex = group.layoutIndex or index,
+        }
+        container.uuGroups[group.key] = def
+        container.uuGroupKeys[#container.uuGroupKeys + 1] = group.key
+
+        local groupOptions = {
+            maxFrameCount = group.maxFrameCount or 0,
+            -- Reads def.size at init time, not a captured copy, so buttons
+            -- created after a SetGroupedContainerSizes call get the new size.
+            initializeFrame = function(btn)
+                aurakit.InitAuraButton(container, btn, def.key, def.isBuff, def.size, false, opts.updateStyleFn)
+            end,
+            layout = aurakit.MakeGroupLayout(def.size, opts.spacing, opts.spacing, false, def.layoutIndex),
+        }
+        if group.sortMethod ~= nil and AuraContainerSortDirection then
+            groupOptions.sortMethod = group.sortMethod
+            groupOptions.sortDirection = AuraContainerSortDirection.Normal
+        end
+        if group.candidateFilters then
+            groupOptions.candidateFilters = group.candidateFilters
+        end
+
+        local okG, errG = pcall(container.AddAuraGroup, container, group.key, group.filter, groupOptions)
+        if not okG then
+            container.uuGroupErrors = container.uuGroupErrors or {}
+            container.uuGroupErrors[group.key] = tostring(errG)
+        end
+    end
+
+    local function refresh()
+        aurakit.RefreshGroupButtons(container, container.uuGroupKeys, opts.updateStyleFn)
+    end
+    if container.ApplyLayout then hooksecurefunc(container, "ApplyLayout", refresh) end
+    if container.UpdateAllAuras then hooksecurefunc(container, "UpdateAllAuras", refresh) end
+    if container.UpdateAuraGroup then hooksecurefunc(container, "UpdateAuraGroup", refresh) end
+
+    return container
+end
+
+-- Resize groups of a BuildGroupedAuraContainer container in place (Edit Mode
+-- icon size % changed). sizes = { [groupKey] = size }. Updates the group's
+-- flow layout and every button already created for it; buttons created
+-- later pick the new size up from the group def.
+function aurakit.SetGroupedContainerSizes(container, sizes, updateStyleFn)
+    if not container or not container.uuGroups then return end
+    for key, size in pairs(sizes) do
+        local def = container.uuGroups[key]
+        if def and def.size ~= size then
+            def.size = size
+            if container.SetAuraGroupLayout then
+                pcall(container.SetAuraGroupLayout, container, key,
+                    aurakit.MakeGroupLayout(size, container.uuSpacing, container.uuSpacing, false, def.layoutIndex))
+            end
+            if container.allButtons then
+                for btn in pairs(container.allButtons) do
+                    if btn.groupKey == key then
+                        btn.elementSize = size
+                        pcall(btn.SetSize, btn, size, size)
+                        if updateStyleFn then pcall(updateStyleFn, btn) end
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- Shared show/hide for both permanent containers together. frameObj is

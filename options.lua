@@ -1234,6 +1234,52 @@ end
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
+if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
+    -- Compact Raid/Party frames. "None" hands that aura type back to
+    -- Blizzard's native display (restores the raid frame option we turned
+    -- off), so each of these doubles as the on/off switch for testing.
+    local function RefreshCompactAuras()
+        if UberUI.compactauras and UberUI.compactauras.Refresh then
+            UberUI.compactauras:Refresh();
+        end
+    end
+
+    -- Compact Raid/Party Buffs
+    CreateAuraStyleDropdown("Compact Raid/Party Buffs", "aurastyle_compactbuffs",
+        "Choose how to style compact raid and party buffs.\n\n\"None\" turns off Uber UI's buffs and restores Blizzard's own.",
+        true, RefreshCompactAuras);
+
+    -- Compact Raid/Party Debuffs
+    CreateAuraStyleDropdown("Compact Raid/Party Debuffs", "aurastyle_compactdebuffs",
+        "Choose how to style compact raid and party debuffs, including private boss debuffs.\n\n\"None\" turns off Uber UI's debuffs and restores Blizzard's own.",
+        true, RefreshCompactAuras);
+
+    -- Compact Big Defensive
+    do
+        local variable, name = "compactBigDefensive", "Style Compact Raid/Party Big Defensive";
+        local tooltip =
+        "Replace the large defensive cooldown icon in the center of compact raid and party frames with Uber UI's, styled like Compact Raid/Party Buffs. Size follows Blizzard's Edit Mode Big Defensive size.\n\nWhen off, Blizzard's own icon is restored.";
+        local defaultValue = true;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.compactbigdefensive;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.compactbigdefensive = value;
+            RefreshCompactAuras();
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "compactbigdefensive", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+end
+
     -- Zoom Party Auras
     do
         local variable, name = "zoomIconParty", "Zoom Party Auras";
@@ -1268,12 +1314,6 @@ end
 
     -- Party Debuffs
     CreateAuraStyleDropdown("Party Debuffs", "aurastyle_partydebuffs", "Choose how to style standard party debuffs", false);
-
-    -- Compact Raid/Party Buffs
-    CreateAuraStyleDropdown("Compact Raid/Party Buffs", "aurastyle_compactbuffs", "Choose how to style compact raid and party buffs", false);
-
-    -- Compact Raid/Party Debuffs
-    CreateAuraStyleDropdown("Compact Raid/Party Debuffs", "aurastyle_compactdebuffs", "Choose how to style compact raid and party debuffs", false);
 
     -- Nameplate Buffs
     CreateAuraStyleDropdown("Nameplate Buffs", "aurastyle_nameplatebuffs", "Choose how to style nameplate buffs", false);

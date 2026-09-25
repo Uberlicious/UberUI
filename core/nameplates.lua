@@ -83,6 +83,28 @@ function nameplates:UpdateRaidTargetScale(unitFrame)
     if unitFrame and unitFrame.RaidTargetFrame and not unitFrame:IsForbidden() then
         local raidTargetFrame = unitFrame.RaidTargetFrame
 
+        -- Feature at its no-op default (scale 1, top anchor off): don't
+        -- touch Blizzard's nameplate layout at all. Re-anchoring/rescaling
+        -- the native RaidTargetFrame from addon code on every plate add was
+        -- the only nameplate layout write left at default settings, and is
+        -- the prime suspect for the "execution tainted by 'Uber UI'" secret
+        -- health compare errors in Blizzard's SetUnit chain. If we changed
+        -- this frame earlier (feature was on), restore it once and forget it.
+        local wantsScale = uuidb.general.nameplateraidtargetscale and uuidb.general.nameplateraidtargetscale ~= 1
+        local wantsTopAnchor = uuidb.general.nameplateraidtargettopanchor
+        if not (wantsScale or wantsTopAnchor) then
+            local original = _uberOriginalPoints[raidTargetFrame]
+            if original then
+                raidTargetFrame:ClearAllPoints()
+                for _, point in ipairs(original) do
+                    raidTargetFrame:SetPoint(unpack(point))
+                end
+                raidTargetFrame:SetScale(1)
+                _uberOriginalPoints[raidTargetFrame] = nil
+            end
+            return
+        end
+
         if not _uberOriginalPoints[raidTargetFrame] and raidTargetFrame:GetNumPoints() > 0 then
             _uberOriginalPoints[raidTargetFrame] = {}
             for i = 1, raidTargetFrame:GetNumPoints() do

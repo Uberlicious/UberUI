@@ -254,6 +254,16 @@ local function FindBagNormalTexture(bag)
     return nil
 end
 
+-- Bag border art lives on the NormalTexture. Retail uses the round
+-- "bag-border" atlases and Forever the square
+-- "ui-hud-actionbar-iconframe-bags" ones, but both set them through
+-- BaseBagSlotButtonMixin:UpdateTextures on the same region, so one tint
+-- covers both game types.
+local function TintBagSlotArt(bag, r, g, b, a)
+    local nt = FindBagNormalTexture(bag)
+    if nt then nt:SetVertexColor(r, g, b, a) end
+end
+
 function misc:BagSlots()
     local dc = uuidb.general.darkencolor
 
@@ -262,12 +272,8 @@ function misc:BagSlots()
             hooksecurefunc(BaseBagSlotButtonMixin, "UpdateTextures", function(self)
                 local dc = uuidb.general.darkencolor
                 local r, g, b = dc.r, dc.g, dc.b
-                if self:GetName() == "MainMenuBarBackpackButton" then
-                    r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
-                end
 
-                local nt = FindBagNormalTexture(self)
-                if nt then nt:SetVertexColor(r, g, b, dc.a) end
+                TintBagSlotArt(self, r, g, b, dc.a)
             end)
         end
 
@@ -279,14 +285,10 @@ function misc:BagSlots()
         misc.hookedBags = true
     end
 
-    local function DarkenBag(bag, isBackpack)
+    local function DarkenBag(bag)
         if not bag then return end
         local r, g, b = dc.r, dc.g, dc.b
-        if isBackpack then
-            r, g, b = (r + 1) / 2, (g + 1) / 2, (b + 1) / 2
-        end
-        local nt = FindBagNormalTexture(bag)
-        if nt then nt:SetVertexColor(r, g, b, dc.a) end
+        TintBagSlotArt(bag, r, g, b, dc.a)
         if bag.IconBorder then bag.IconBorder:SetVertexColor(r, g, b, dc.a) end
         if bag.SlotHighlightTexture then bag.SlotHighlightTexture:SetVertexColor(r, g, b, dc.a) end
     end
@@ -298,13 +300,17 @@ function misc:BagSlots()
     -- inherit from it. If that leaves GetNormalTexture() unreliable on
     -- this button specifically, the raw auto-named global still isn't.
     if MainMenuBarBackpackButtonNormalTexture then
-        local r, g, b = (dc.r + 1) / 2, (dc.g + 1) / 2, (dc.b + 1) / 2
-        MainMenuBarBackpackButtonNormalTexture:SetVertexColor(r, g, b, dc.a)
+        MainMenuBarBackpackButtonNormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 
     if BagsBar and BagsBar.BorderArt then
         BagsBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
+
+    -- Forever's bags bar has dividers between the bag buttons, same pooled
+    -- setup as the main action bar (retail's has none; HookDividers skips
+    -- bars without UpdateDividers).
+    UberUI.general:HookDividers(BagsBar)
 
     local bagNames = {
         "CharacterBag0Slot",
@@ -313,15 +319,15 @@ function misc:BagSlots()
         "CharacterBag3Slot",
         "CharacterReagentBag0Slot",
         "MainMenuBarBackpackButton",
+        "KeyRingButton", -- Classic / Forever
     }
 
     for _, bagName in ipairs(bagNames) do
         local bag = _G[bagName]
         if bag then
-            local isBackpack = (bagName == "MainMenuBarBackpackButton")
-            DarkenBag(bag, isBackpack)
+            DarkenBag(bag)
             if not bag._uberHooked and bag.UpdateTextures then
-                hooksecurefunc(bag, "UpdateTextures", function(self) DarkenBag(self, isBackpack) end)
+                hooksecurefunc(bag, "UpdateTextures", function(self) DarkenBag(self) end)
                 bag._uberHooked = true
             end
         end
@@ -339,12 +345,6 @@ function misc:BagSlots()
             local nt = (rBag.GetName and rBag:GetName() and _G[rBag:GetName() .. "NormalTexture"]) or rBag.NormalTexture or (rBag.GetNormalTexture and rBag:GetNormalTexture())
             if nt then nt:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
         end
-    end
-    
-    -- Keyring (Classic / Forever)
-    if KeyRingButton then
-        local nt = (KeyRingButton.GetName and KeyRingButton:GetName() and _G[KeyRingButton:GetName() .. "NormalTexture"]) or KeyRingButton.NormalTexture or (KeyRingButton.GetNormalTexture and KeyRingButton:GetNormalTexture())
-        if nt then nt:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
     end
 end
 
@@ -393,6 +393,9 @@ end
 function misc:AllFramesColor()
     self:EndCaps();
     self:MicroButtons();
+    self:BagSlots();
+    self:ObjectiveTrackerFrames();
+    if UberUI.partyframes then UberUI.partyframes:Color() end
     UberUI.playerframes:Color();
     UberUI.targetframes:Color();
     if UberUI.focusframes then UberUI.focusframes:Color() end

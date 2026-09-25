@@ -22,6 +22,7 @@ core\focusframe.lua
 core\miscframes.lua
 core\nameplates.lua
 core\compactunitframe.lua
+core\compactauras.lua
 core\partyframes.lua
 core\arenaframes.lua
 core\raidframes.lua

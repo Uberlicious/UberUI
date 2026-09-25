@@ -41,6 +41,7 @@ function actionbars:Color()
 
     if MainActionBar and MainActionBar.BorderArt then
         MainActionBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a);
+        UberUI.general:HookDividers(MainActionBar);
     else
         for i = 0, 3 do
             local tex = _G["MainMenuBarTexture"..i]

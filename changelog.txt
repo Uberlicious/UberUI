@@ -34,6 +34,13 @@
     - Fixed a Lua taint error affecting nameplate health text.
     - Removed the non-functional "Class Color Arena Targets" and "Class Color Friendly/Enemy Nameplates" options (redundant with current Blizzard defaults).
     - Removed leftover internal debug tooling.
+    - Added styled buffs, debuffs and the center Big Defensive icon for compact raid/party frames, including boss (private) debuffs. Set a style to "None" to go back to Blizzard's own.
+    - Fixed the player mana bar reverting to Blizzard's texture during combat.
+    - Mana cost prediction on the player mana bar is now lighter so it stands out on custom textures.
+    - The darkness slider now updates bag slots, objective tracker headers and party frames immediately.
+    - The backpack is now darkened the same as the other bag slots, and the keyring keeps its darkening.
+    - Darkened the dividers between buttons on the main action bar (and the bags bar in WoW Forever).
+    - Possible fix for a Lua taint error on nameplates when entering an area with many units.
 
 === WoW Forever ===
 

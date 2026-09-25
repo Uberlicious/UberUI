@@ -1040,3 +1040,158 @@ SlashCmdList["UBERUIDEBUGOVERLAPLOG"] = function()
     end
     ShowReport(table.concat(lines, "\n"))
 end
+
+-- Taint scanner for the nameplate "attempt to compare a secret number value
+-- (execution tainted by 'Uber UI')" errors. Those errors mean some value
+-- Blizzard's nameplate SetUnit chain reads (a frame field, an options
+-- table entry, a global) was last written by Uber UI code -- deferring our
+-- own calls doesn't help if a stored value is already tainted. This asks
+-- the client directly (issecurevariable) which keys are tainted, so the
+-- actual source shows up instead of being guessed at.
+-- Usage: /uuidebugtaint   (have a few nameplates on screen first)
+local function ScanTable(add, label, t, seen)
+    if type(t) ~= "table" or seen[t] then return end
+    seen[t] = true
+    if t.IsForbidden and t:IsForbidden() then
+        add("  " .. label .. ": FORBIDDEN, skipped")
+        return
+    end
+    local hits = 0
+    for k in pairs(t) do
+        if type(k) == "string" or type(k) == "number" then
+            local secure, taintedBy = issecurevariable(t, k)
+            if not secure then
+                hits = hits + 1
+                add(string.format("  %s.%s  tainted by %s", label, tostring(k), tostring(taintedBy)))
+            end
+        end
+    end
+    if hits == 0 then add("  " .. label .. ": clean") end
+end
+
+local function BuildTaintReport()
+    local lines = {}
+    local function add(s) lines[#lines + 1] = s end
+    local seen = {}
+
+    add("==== globals tainted by an addon (Blizzard-looking names only) ====")
+    for k in pairs(_G) do
+        if type(k) == "string" and (k:find("NamePlate") or k:find("CompactUnitFrame") or k:find("TextStatusBar")
+            or k:find("PixelUtil") or k:find("UnitFrame")) then
+            local secure, taintedBy = issecurevariable(k)
+            if not secure then add("  _G." .. k .. "  tainted by " .. tostring(taintedBy)) end
+        end
+    end
+
+    add("")
+    add("==== shared option tables / mixins ====")
+    for _, name in ipairs({ "NamePlateSetupOptions", "NamePlateFriendlyFrameOptions", "NamePlateEnemyFrameOptions",
+        "NamePlateUnitFrameMixin", "NamePlateBaseMixin", "NamePlateDriverMixin", "TextStatusBarMixin",
+        "NamePlateDriverFrame", "PixelUtil" }) do
+        if _G[name] then ScanTable(add, name, _G[name], seen) else add("  " .. name .. ": (nil)") end
+    end
+
+    add("")
+    add("==== live nameplates ====")
+    for i, plate in ipairs(C_NamePlate.GetNamePlates()) do
+        local plabel = (plate.GetName and plate:GetName()) or ("plate" .. i)
+        add(plabel .. " unit=" .. tostring(plate.unitToken))
+        ScanTable(add, plabel, plate, seen)
+        local uf = plate.UnitFrame
+        if uf then
+            ScanTable(add, plabel .. ".UnitFrame", uf, seen)
+            ScanTable(add, plabel .. ".UnitFrame.optionTable", uf.optionTable, seen)
+            ScanTable(add, plabel .. ".UnitFrame.customOptions", uf.customOptions, seen)
+            ScanTable(add, plabel .. ".UnitFrame.healthBar", uf.healthBar, seen)
+            ScanTable(add, plabel .. ".UnitFrame.HealthBarsContainer", uf.HealthBarsContainer, seen)
+            ScanTable(add, plabel .. ".UnitFrame.RaidTargetFrame", uf.RaidTargetFrame, seen)
+            ScanTable(add, plabel .. ".UnitFrame.castBar", uf.castBar, seen)
+            ScanTable(add, plabel .. ".UnitFrame.AurasFrame", uf.AurasFrame, seen)
+        end
+    end
+    return table.concat(lines, "\n")
+end
+
+SLASH_UBERUIDEBUGTAINT1 = "/uuidebugtaint"
+SlashCmdList["UBERUIDEBUGTAINT"] = function()
+    local ok, report = pcall(BuildTaintReport)
+    if not ok then
+        report = "ERROR building taint report: " .. tostring(report)
+    end
+    print("|cff33ff99UberUI debug|r taint report ready -- see the popup window (Ctrl+A, Ctrl+C to copy).")
+    ShowReport(report)
+end
+
+-- Compact party/raid aura containers (core/compactauras.lua): which frames
+-- got containers, what unit each points at, how many aura buttons are
+-- active per group, any AddAuraGroup errors, and the native raid frame
+-- CVars we've saved/overridden.
+-- Usage: /uuidebugcompact
+local function BuildCompactReport()
+    local lines = {}
+    local function add(s) lines[#lines + 1] = s end
+    local ca = UberUI.compactauras
+    if not ca or not ca.GetDebugInfo then return "compactauras module not loaded" end
+    local info = ca:GetDebugInfo()
+
+    add("==== compact auras ====")
+    add("supported=" .. tostring(info.supported) .. " pendingCVars=" .. tostring(info.pendingCVars))
+    local g = uuidb and uuidb.general or {}
+    add(string.format("settings: buffs=%s debuffs=%s bigdefensive=%s",
+        tostring(g.aurastyle_compactbuffs), tostring(g.aurastyle_compactdebuffs),
+        tostring(g.compactbigdefensive)))
+
+    add("")
+    add("==== native CVars (current / saved original) ====")
+    local saved = (uuidb and uuidb.cuf and uuidb.cuf.nativecvars) or {}
+    for _, cvar in ipairs({ "raidFramesDisplayBuffs", "raidFramesDisplayDebuffs", "raidFramesCenterBigDefensive",
+        "raidFramesDisplayOnlyDispellableDebuffs" }) do
+        add(string.format("  %s = %s  (saved: %s)", cvar, tostring(C_CVar.GetCVar(cvar)), tostring(saved[cvar])))
+    end
+
+    add("")
+    add("==== frames with containers (" .. #info.frames .. ") ====")
+    table.sort(info.frames, function(a, b) return (a.frame:GetName() or "") < (b.frame:GetName() or "") end)
+    for _, entry in ipairs(info.frames) do
+        local frame, state = entry.frame, entry.state
+        add(string.format("%s unit=%s displayedUnit=%s shown=%s", frame:GetName() or "?",
+            tostring(frame.unit), tostring(frame.displayedUnit), tostring(frame:IsShown())))
+        for _, key in ipairs({ "debuffs", "buffs", "bigDefensive" }) do
+            local c = state[key]
+            if c then
+                local parts = {}
+                for _, groupKey in ipairs(c.uuGroupKeys or {}) do
+                    local ok, count = pcall(c.GetAuraGroupFrameCount, c, groupKey)
+                    local def = c.uuGroups and c.uuGroups[groupKey]
+                    parts[#parts + 1] = string.format("%s=%s@%.1fpx", groupKey, ok and tostring(count) or "err",
+                        def and def.size or 0)
+                end
+                local okU, unit = pcall(c.GetUnit, c)
+                add(string.format("  %s: unit=%s shown=%s %s", key, okU and tostring(unit) or "err",
+                    tostring(c:IsShown()), table.concat(parts, " ")))
+                if c.uuGroupErrors then
+                    for groupKey, err in pairs(c.uuGroupErrors) do
+                        add("    GROUP ERROR " .. groupKey .. ": " .. err)
+                    end
+                end
+            end
+        end
+    end
+
+    if #info.pending > 0 then
+        add("")
+        add("==== waiting for combat to end (" .. #info.pending .. ") ====")
+        for _, frame in ipairs(info.pending) do add("  " .. (frame:GetName() or "?")) end
+    end
+    return table.concat(lines, "\n")
+end
+
+SLASH_UBERUIDEBUGCOMPACT1 = "/uuidebugcompact"
+SlashCmdList["UBERUIDEBUGCOMPACT"] = function()
+    local ok, report = pcall(BuildCompactReport)
+    if not ok then
+        report = "ERROR building compact report: " .. tostring(report)
+    end
+    print("|cff33ff99UberUI debug|r compact aura report ready -- see the popup window (Ctrl+A, Ctrl+C to copy).")
+    ShowReport(report)
+end

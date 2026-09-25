@@ -110,6 +110,7 @@ local defaults = {
         aurastyle_partydebuffs       = "zoom",
         aurastyle_compactbuffs       = "both",
         aurastyle_compactdebuffs     = "zoom",
+        compactbigdefensive          = true,
         aurastyle_nameplatebuffs     = "both",
         aurastyle_nameplatedebuffs   = "zoom",
         aurastyle_arenabuffs         = "both",

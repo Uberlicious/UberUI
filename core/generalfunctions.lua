@@ -215,4 +215,45 @@ function general:ApplyIconZoom(textureObject, enable)
     end
 end
 
+-- Divider pieces between buttons on the main action bar (retail and
+-- Forever) and Forever's bags bar. Both bars keep them in two frame pools
+-- (HorizontalDividersPool / VerticalDividersPool) that UpdateDividers()
+-- releases and re-acquires whenever the visible buttons change, so callers
+-- re-run this from a post-hook on UpdateDividers. The dividers are
+-- three-slice layouts: TopEdge/Center/BottomEdge on a horizontal bar,
+-- LeftEdge/Center/RightEdge on a vertical one.
+local DIVIDER_PIECES = { "TopEdge", "Center", "BottomEdge", "LeftEdge", "RightEdge" }
+
+function general:DarkenDividers(bar)
+    if not bar then return end
+    local dc = uuidb.general.darkencolor
+    for _, poolKey in ipairs({ "HorizontalDividersPool", "VerticalDividersPool" }) do
+        local pool = bar[poolKey]
+        if pool and pool.EnumerateActive then
+            for divider in pool:EnumerateActive() do
+                for _, key in ipairs(DIVIDER_PIECES) do
+                    local piece = divider[key]
+                    if piece and piece.SetVertexColor then
+                        piece:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Hooks bar:UpdateDividers once so new dividers get darkened as Blizzard
+-- creates them, then darkens the ones already showing.
+function general:HookDividers(bar)
+    if not bar or not bar.UpdateDividers then return end
+    if not self.hookedDividerBars then
+        self.hookedDividerBars = setmetatable({}, { __mode = "k" })
+    end
+    if not self.hookedDividerBars[bar] then
+        self.hookedDividerBars[bar] = true
+        hooksecurefunc(bar, "UpdateDividers", function(b) general:DarkenDividers(b) end)
+    end
+    self:DarkenDividers(bar)
+end
+
 UberUI.general = general

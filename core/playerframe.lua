@@ -138,18 +138,56 @@ function playerframes:HealthBarColor()
     PetFrameHealthBar:SetStatusBarColor(0, 1, 0, 1);
 end
 
+local function GetPlayerBarTexture()
+    if uuidb.general.playerbartextures then
+        if uuidb.general.playerbartexture ~= "Blizzard" then
+            return uuidb.statusbars[uuidb.general.playerbartexture]
+        end
+    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+        return uuidb.statusbars[uuidb.general.texture]
+    end
+end
+
+-- How far the mana cost prediction tint is pushed from the power color
+-- toward white (0 = same as the bar, 1 = white).
+local MANA_COST_PREDICTION_LIGHTEN = 0.35
+
+-- Blizzard tints the cost prediction segment once, at load, with
+-- MANAPREDICTIONBLUE -- on a flat/custom texture that ends up nearly the same
+-- blue as the mana bar under it. Tint it a lightened copy of the bar's own
+-- power color instead so the spell cost stands out, and follows form/power
+-- type changes.
+local function LightenManaCostPrediction(manaBar, unit)
+    local prediction = manaBar and manaBar.ManaCostPredictionBar
+    local fill = prediction and prediction.Fill
+    if not fill then return end
+    local powerType = UnitPowerType(unit);
+    local pc = powerType and PowerBarColor[powerType]
+    if not pc then return end
+    local f = MANA_COST_PREDICTION_LIGHTEN
+    fill:SetDesaturated(true);
+    fill:SetVertexColor(pc.r + (1 - pc.r) * f, pc.g + (1 - pc.g) * f, pc.b + (1 - pc.b) * f, 1);
+end
+
+-- Mana/rage/focus/energy only (power types 0-3); other power types keep
+-- Blizzard's own art.
+local function ApplyManaBarTexture(manaBar, unit, textureToApply)
+    if not manaBar or not textureToApply then return end
+    local powerType = UnitPowerType(unit);
+    if (powerType and powerType < 4) then
+        manaBar:SetStatusBarTexture(textureToApply);
+        local pc = PowerBarColor[powerType];
+        manaBar:SetStatusBarDesaturated(true);
+        manaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
+        LightenManaCostPrediction(manaBar, unit);
+    end
+end
+
 function playerframes:HealthManaBarTexture(force)
     local healthBar = PlayerFrame_GetHealthBar();
     local manaBar = PlayerFrame_GetManaBar();
 
-    local textureToApply
-    if uuidb.general.playerbartextures then
-        if uuidb.general.playerbartexture ~= "Blizzard" then
-            textureToApply = uuidb.statusbars[uuidb.general.playerbartexture]
-        end
-    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
-        textureToApply = uuidb.statusbars[uuidb.general.texture]
-    end
+    local textureToApply = GetPlayerBarTexture()
 
     if textureToApply then
         healthBar:SetStatusBarTexture(textureToApply);
@@ -157,24 +195,13 @@ function playerframes:HealthManaBarTexture(force)
             healthBar.AnimatedLossBar:SetStatusBarTexture(textureToApply);
         end
 
-        local playerPowerType = UnitPowerType("player");
-        if (playerPowerType and playerPowerType < 4) then
-            manaBar:SetStatusBarTexture(textureToApply);
-            local pc = PowerBarColor[playerPowerType];
-            manaBar:SetStatusBarDesaturated(true);
-            manaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
-        end
+        ApplyManaBarTexture(manaBar, "player", textureToApply);
         healthBar.styled = true;
 
         if PetFrameHealthBar then
             PetFrameHealthBar:SetStatusBarTexture(textureToApply);
         end
-        local petPowerType = UnitPowerType("pet");
-        if (petPowerType and petPowerType < 4) and PetFrameManaBar then
-            PetFrameManaBar:SetStatusBarTexture(textureToApply);
-            local pc = PowerBarColor[petPowerType];
-            PetFrameManaBar:SetStatusBarColor(pc.r, pc.g, pc.b);
-        end
+        ApplyManaBarTexture(PetFrameManaBar, "pet", textureToApply);
     end
     local secondaryTextureToApply
     if uuidb.general.secondarybartextures then
@@ -201,6 +228,7 @@ function playerframes:HealthManaBarTexture(force)
         end
         if manaBar.ManaCostPredictionBar then
             manaBar.ManaCostPredictionBar.Fill:SetTexture(secondaryTextureToApply);
+            LightenManaCostPrediction(manaBar, manaBar.unit or "player");
         end
         if manaBar.FeedbackFrame and manaBar.FeedbackFrame.BarTexture then
             manaBar.FeedbackFrame.BarTexture:SetTexture(secondaryTextureToApply);
@@ -271,6 +299,28 @@ function playerframes:ColorMonkChi()
             if chi.Chi_BG_Active then ApplyDarkenColor(chi.Chi_BG_Active) end
         end
     end
+end
+
+-- Blizzard's UnitFrameManaBar_Update calls UnitFrameManaBar_UpdateType on
+-- every mana bar update, which puts its own atlas back on the bar. Out of
+-- combat our event handler above re-applies ours often enough to hide that,
+-- but it skips everything in combat, so the bar showed Blizzard's texture
+-- for the whole fight. Re-applying right after UpdateType fixes that in and
+-- out of combat. Texture/color calls only -- no writes to Blizzard's
+-- frame fields.
+if UnitFrameManaBar_UpdateType then
+    hooksecurefunc("UnitFrameManaBar_UpdateType", function(manaBar)
+        if not manaBar or not uuidb or not uuidb.general then return end
+        local unit
+        if manaBar == PlayerFrame_GetManaBar() then
+            unit = manaBar.unit or "player" -- "vehicle" while in one
+        elseif PetFrameManaBar and manaBar == PetFrameManaBar then
+            unit = manaBar.unit or "pet"
+        else
+            return
+        end
+        ApplyManaBarTexture(manaBar, unit, GetPlayerBarTexture())
+    end)
 end
 
 UberUI.playerframes = playerframes
