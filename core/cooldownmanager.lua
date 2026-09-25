@@ -134,9 +134,34 @@ function cdManager:Color()
     end
 
     local dc = uuidb.general.darkencolor
-    local tx = MultiBarBottomRightButton1NormalTexture and MultiBarBottomRightButton1NormalTexture:GetAtlas()
 
-    local function CreateBorder(parent, anchor, tl, br)
+    -- Same border atlas AND the same proportional padding formula the rest
+    -- of the addon's aura borders use (buffsandauras.lua's StyleAuraButton:
+    -- 5px of padding at a 30px reference icon width), instead of a fixed
+    -- pixel offset tuned for one specific icon size. Cooldown Viewer icons
+    -- have their own user-adjustable size/padding per category in Edit Mode,
+    -- so the border has to be computed from -- and kept in sync with -- each
+    -- icon's actual current width, not a hardcoded constant.
+    local AURA_BORDER_ATLAS = "ui-debuff-border-default-noicon"
+
+    -- Tighter than the 5/30 ratio buffsandauras.lua uses elsewhere -- the
+    -- border extends outward past the icon's own bounds on every side, and
+    -- Cooldown Viewer icons can sit right next to each other (icon padding
+    -- set to 0), so a bigger pad here means neighboring borders overlap.
+    local function GetBorderPad(anchor)
+        local width = anchor.GetWidth and anchor:GetWidth()
+        if type(width) ~= "number" or width <= 0 then return 3 end
+        return math.max(1, math.floor(width * (3 / 30) + 0.5))
+    end
+
+    local function PositionBorder(border, anchor)
+        local pad = GetBorderPad(anchor)
+        border:ClearAllPoints()
+        border:SetPoint("TOPLEFT", anchor, "TOPLEFT", -pad, pad)
+        border:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", pad, -pad)
+    end
+
+    local function CreateBorder(parent, anchor)
         local holder
         if anchor:IsObjectType("Frame") then
             holder = anchor
@@ -145,10 +170,21 @@ function cdManager:Color()
         end
 
         local borderTexture = holder:CreateTexture(nil, "OVERLAY", nil, -8)
-        borderTexture:SetPoint("TOPLEFT", anchor, "TOPLEFT", tl, -tl)
-        borderTexture:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", br, -br)
-        if tx then borderTexture:SetAtlas(tx) end
+        borderTexture:SetAtlas(AURA_BORDER_ATLAS)
+        borderTexture:SetDesaturated(true)
         borderTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        PositionBorder(borderTexture, anchor)
+
+        -- Edit Mode's icon size/padding sliders resize the icon frame
+        -- directly and don't otherwise notify us -- keep the border in sync
+        -- with that instead of only ever sizing it once at creation.
+        if not holder._uberBorderSized then
+            holder._uberBorderSized = true
+            holder:HookScript("OnSizeChanged", function()
+                PositionBorder(borderTexture, anchor)
+            end)
+        end
+
         return borderTexture
     end
 
@@ -176,14 +212,14 @@ function cdManager:Color()
                 end
 
                 if iconTexture then
-                    f.uberBorder = CreateBorder(f, iconFrame, 0, 4)
+                    f.uberBorder = CreateBorder(f, iconFrame)
                     f.styled = true
                 end
             end
         end
     end
 
-    local function ApplyBordersToIconViewer(viewer, tl, br)
+    local function ApplyBordersToIconViewer(viewer)
         if viewer then
             local children = { viewer:GetChildren() }
             for _, f in ipairs(children) do
@@ -201,13 +237,13 @@ function cdManager:Color()
                         end
 
                         if iconTexture then
-                            f.uberBorder = CreateBorder(f, iconFrame, tl, br)
+                            f.uberBorder = CreateBorder(f, iconFrame)
                             f.styled = true
                         end
                     elseif icon:IsObjectType("Texture") then
                         -- Handle case where f.Icon is a texture
                         local iconTexture = icon
-                        f.uberBorder = CreateBorder(f, iconTexture, tl, br)
+                        f.uberBorder = CreateBorder(f, iconTexture)
                         f.styled = true
                     end
                 end
@@ -215,9 +251,9 @@ function cdManager:Color()
         end
     end
 
-    ApplyBordersToIconViewer(BuffIconCooldownViewer, .5, 5)
-    ApplyBordersToIconViewer(UtilityCooldownViewer, .5, 5)
-    ApplyBordersToIconViewer(EssentialCooldownViewer, .5, 5)
+    ApplyBordersToIconViewer(BuffIconCooldownViewer)
+    ApplyBordersToIconViewer(UtilityCooldownViewer)
+    ApplyBordersToIconViewer(EssentialCooldownViewer)
 end
 
 -- Register the specific callback we need

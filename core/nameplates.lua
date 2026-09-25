@@ -70,10 +70,8 @@ function nameplates:OnNamePlateLoad(unitFrame)
         healthBar.bgTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 
-    if (uuidb.general.hidenameplateglow) then
-        if healthBar.selectedBorder then
-            healthBar.selectedBorder:SetAlpha(0);
-        end
+    if healthBar.selectedBorder then
+        healthBar.selectedBorder:SetAlpha(uuidb.general.hidenameplateglow and 0 or 1);
     end
 
     self:UpdateRaidTargetScale(unitFrame)

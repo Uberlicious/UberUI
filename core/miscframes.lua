@@ -399,6 +399,7 @@ function misc:AllFramesColor()
     UberUI.playerframes:Color();
     UberUI.targetframes:Color();
     if UberUI.focusframes then UberUI.focusframes:Color() end
+    if UberUI.bossframes then UberUI.bossframes:Color() end
     if UberUI.minimap then UberUI.minimap:Color() end
     if UberUI.actionbars then UberUI.actionbars:Color() end
     if UberUI.cdManager then UberUI.cdManager:Color() end
@@ -411,14 +412,23 @@ function misc:AllFramesHealthColor()
     UberUI.targetframes:HealthBarColor();
     UberUI.focusframes:HealthBarColor();
     UberUI.partyframes:HealthBarColor();
+    if UberUI.bossframes then UberUI.bossframes:HealthBarColor() end
+    -- NOTE: arenaframes has no HealthBarColor of its own (arena health-bar
+    -- coloring is left to Blizzard's native CompactUnitFrame handling) --
+    -- LoopFrames() here only reapplies bar TEXTURES, a pre-existing mismatch
+    -- against this function's name. Left as-is (harmless/idempotent); flagged
+    -- during the settings audit rather than changed, since untangling arena's
+    -- color model is out of scope for that fix.
     UberUI.arenaframes:LoopFrames();
 end
 
 function misc:AllFramesHealthManaTexture()
+    if UberUI.cuf then UberUI.cuf:EnsureTextureHook() end
     if UberUI.playerframes then UberUI.playerframes:HealthManaBarTexture() end
     if UberUI.targetframes then UberUI.targetframes:HealthManaBarTexture() end
     if UberUI.focusframes then UberUI.focusframes:HealthManaBarTexture() end
     if UberUI.partyframes then UberUI.partyframes:HealthManaBarTexture() end
+    if UberUI.bossframes then UberUI.bossframes:HealthManaBarTexture() end
     if UberUI.playerframes then UberUI.playerframes:ColorAlternatePower() end
     if UberUI.arenaframes then UberUI.arenaframes:LoopFrames() end
     if UberUI.personalresource then UberUI.personalresource:ForceTexture() end

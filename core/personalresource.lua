@@ -126,46 +126,70 @@ function prd:StylePRD(frame)
     end
 end
 
--- Hook for Class Colors
-local function RegisterPRDHooks()
-    if prd.hooksRegistered then return end
-    prd.hooksRegistered = true
+-- hooksecurefunc can't be undone, so these two independent Setup hooks are
+-- only installed once their own setting is actually active. Both toggles
+-- already route through ForceTexture() below on change (directly, or via
+-- misc:AllFramesHealthManaTexture()), so re-checking here from ForceTexture()
+-- gives full live on/off with no reload ever required.
+local darkenHookInstalled = false
+local function EnsureDarkenHook()
+    if darkenHookInstalled then return end
+    if not (PersonalResourceDisplayMixin and type(PersonalResourceDisplayMixin.Setup) == "function") then return end
+    if not (uuidb and uuidb.general and uuidb.general.darkenpersonalresourceborder) then return end
+    darkenHookInstalled = true
 
     -- Hook for Darkening Borders (In 12.1, PRD borders are actually atlased on the StatusBar)
-    if PersonalResourceDisplayMixin and type(PersonalResourceDisplayMixin.Setup) == "function" then
-        hooksecurefunc(PersonalResourceDisplayMixin, "Setup", function(self)
-            if uuidb.general.darkenpersonalresourceborder then
-                local dc = uuidb.general.darkencolor
+    hooksecurefunc(PersonalResourceDisplayMixin, "Setup", function(self)
+        if uuidb.general.darkenpersonalresourceborder then
+            local dc = uuidb.general.darkencolor
 
-                -- Darken Health Bar border/background
-                if self.HealthBarsContainer and self.HealthBarsContainer.healthBar then
-                    local regions = { self.HealthBarsContainer.healthBar:GetRegions() }
-                    for _, region in ipairs(regions) do
-                        if region:GetObjectType() == "Texture" and (region:GetAtlas() == "UI-HUD-CoolDownManager-Bar" or region:GetAtlas() == "UI-HUD-CoolDownManager-Bar-BG") then
-                            region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                        end
-                    end
-                end
-
-                -- Darken Power Bar border/background
-                if self.PowerBar then
-                    local regions = { self.PowerBar:GetRegions() }
-                    for _, region in ipairs(regions) do
-                        if region:GetObjectType() == "Texture" and (region:GetAtlas() == "UI-HUD-CoolDownManager-Bar" or region:GetAtlas() == "UI-HUD-CoolDownManager-Bar-BG") then
-                            region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                        end
+            -- Darken Health Bar border/background
+            if self.HealthBarsContainer and self.HealthBarsContainer.healthBar then
+                local regions = { self.HealthBarsContainer.healthBar:GetRegions() }
+                for _, region in ipairs(regions) do
+                    if region:GetObjectType() == "Texture" and (region:GetAtlas() == "UI-HUD-CoolDownManager-Bar" or region:GetAtlas() == "UI-HUD-CoolDownManager-Bar-BG") then
+                        region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
                     end
                 end
             end
-        end)
-    end
+
+            -- Darken Power Bar border/background
+            if self.PowerBar then
+                local regions = { self.PowerBar:GetRegions() }
+                for _, region in ipairs(regions) do
+                    if region:GetObjectType() == "Texture" and (region:GetAtlas() == "UI-HUD-CoolDownManager-Bar" or region:GetAtlas() == "UI-HUD-CoolDownManager-Bar-BG") then
+                        region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function IsPRDTextureActive()
+    if not uuidb or not uuidb.general then return false end
+    local g = uuidb.general
+    return (g.personalresourcebartextures and g.personalresourcebartexture ~= "Blizzard")
+        or (g.allbartextures and g.texture ~= "Blizzard")
+        or (g.secondarybartextures and g.secondarybartexture ~= "Blizzard")
+end
+
+local textureHookInstalled = false
+local function EnsureTextureHook()
+    if textureHookInstalled then return end
+    if not (PersonalResourceDisplayMixin and type(PersonalResourceDisplayMixin.Setup) == "function") then return end
+    if not IsPRDTextureActive() then return end
+    textureHookInstalled = true
 
     -- Hook to apply textures when the PRD is loaded/updated
-    if PersonalResourceDisplayMixin and type(PersonalResourceDisplayMixin.Setup) == "function" then
-        hooksecurefunc(PersonalResourceDisplayMixin, "Setup", function(self)
-            UberUI.personalresource:StylePRD(self)
-        end)
-    end
+    hooksecurefunc(PersonalResourceDisplayMixin, "Setup", function(self)
+        UberUI.personalresource:StylePRD(self)
+    end)
+end
+
+local function RegisterPRDHooks()
+    EnsureDarkenHook()
+    EnsureTextureHook()
 end
 
 local f = CreateFrame("Frame")
@@ -184,6 +208,8 @@ f:SetScript("OnEvent", function(self, event, loadedAddon)
     end
 end)
 function prd:ForceTexture()
+    EnsureDarkenHook()
+    EnsureTextureHook()
     -- Apply the update to the PRD if it currently exists
     if PersonalResourceDisplayFrame then
         self:StylePRD(PersonalResourceDisplayFrame)

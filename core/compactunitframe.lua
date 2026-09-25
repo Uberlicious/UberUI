@@ -8,8 +8,6 @@ cuf:SetScript("OnEvent", function(self)
     self:HideRaidFrameTitles()
 end)
 
-local default_hook = false
-
 cuf.default = function(self)
     if not self or not self.healthBar or self:IsForbidden() then return end
 
@@ -65,23 +63,56 @@ cuf.default = function(self)
     end
 end
 
-function cuf:set_hook()
-    if not default_hook then
-        if type(CompactUnitFrame_UpdateHealthColor) == "function" then
-            hooksecurefunc("CompactUnitFrame_UpdateHealthColor", cuf.default)
-        elseif CompactUnitFrameMixin and type(CompactUnitFrameMixin.UpdateHealthColor) == "function" then
-            hooksecurefunc(CompactUnitFrameMixin, "UpdateHealthColor", cuf.default)
-        end
-        if type(CompactUnitFrame_UpdateAll) == "function" then
-            hooksecurefunc("CompactUnitFrame_UpdateAll", cuf.HideRaidFrameTitles)
-        elseif CompactUnitFrameMixin and type(CompactUnitFrameMixin.UpdateAll) == "function" then
-            hooksecurefunc(CompactUnitFrameMixin, "UpdateAll", cuf.HideRaidFrameTitles)
-        end
-        default_hook = true
+-- hooksecurefunc can't be undone, so these two independent hooks are only
+-- installed once their own setting is actually active, and installed lazily
+-- (idempotent Ensure* calls) if the setting is turned on later without a
+-- reload -- EnsureTextureHook() is called again from
+-- misc:AllFramesHealthManaTexture() (which the Raid/Secondary/All Bar
+-- Textures settings already refresh through on change), and EnsureTitleHook()
+-- from HideRaidFrameTitles() itself (which the Hide Raid Frame Titles
+-- checkbox already calls directly on change). Both toggles work live either
+-- direction; nothing here needs a reload.
+local function IsCompactBarTextureActive()
+    if not uuidb or not uuidb.general then return false end
+    local g = uuidb.general
+    return (g.raidbartextures and g.raidbartexture ~= "Blizzard")
+        or (g.allbartextures and g.texture ~= "Blizzard")
+        or (g.secondarybartextures and g.secondarybartexture ~= "Blizzard")
+end
+
+local textureHookInstalled = false
+function cuf:EnsureTextureHook()
+    if textureHookInstalled or not IsCompactBarTextureActive() then return end
+    if type(CompactUnitFrame_UpdateHealthColor) == "function" then
+        hooksecurefunc("CompactUnitFrame_UpdateHealthColor", cuf.default)
+    elseif CompactUnitFrameMixin and type(CompactUnitFrameMixin.UpdateHealthColor) == "function" then
+        hooksecurefunc(CompactUnitFrameMixin, "UpdateHealthColor", cuf.default)
+    else
+        return
     end
+    textureHookInstalled = true
+end
+
+local titleHookInstalled = false
+local function EnsureTitleHook()
+    if titleHookInstalled or not (uuidb and uuidb.cuf and uuidb.cuf.hideRaidTitle) then return end
+    if type(CompactUnitFrame_UpdateAll) == "function" then
+        hooksecurefunc("CompactUnitFrame_UpdateAll", cuf.HideRaidFrameTitles)
+    elseif CompactUnitFrameMixin and type(CompactUnitFrameMixin.UpdateAll) == "function" then
+        hooksecurefunc(CompactUnitFrameMixin, "UpdateAll", cuf.HideRaidFrameTitles)
+    else
+        return
+    end
+    titleHookInstalled = true
+end
+
+function cuf:set_hook()
+    self:EnsureTextureHook()
+    EnsureTitleHook()
 end
 
 function cuf:HideRaidFrameTitles()
+    EnsureTitleHook()
     if not uuidb or not uuidb.cuf then return end
     for i = 1, 8 do
         local frame = _G["CompactRaidGroup" .. i]

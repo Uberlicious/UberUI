@@ -103,7 +103,49 @@ local function GetPartyMemberPvPBadgeElements(p)
     return { pvpIcon = overlay.PVPIcon }
 end
 
+-- hooksecurefunc can never be undone, so we don't install these until Hide
+-- Honor is actually turned on -- installed lazily (once) from RefreshHideHonor
+-- below the first time it runs with the setting enabled, the same pattern
+-- nameplates.lua uses for its raid-target-icon hooks. This means enabling the
+-- setting live (no reload) still gets full coverage; only re-disabling it
+-- leaves the (now harmless, since ApplyHideHonor no-ops when hidehonor is
+-- false) hooks installed for the rest of the session.
+local hideHonorHooksInstalled = false
+local function EnsureHideHonorHooks()
+    if hideHonorHooksInstalled then return end
+    hideHonorHooksInstalled = true
+
+    -- Forever's shared delegate, when present.
+    if UnitFrameUtil and UnitFrameUtil.UpdateUnitPvPIndicator then
+        hooksecurefunc(UnitFrameUtil, "UpdateUnitPvPIndicator", function(elements)
+            ApplyHideHonor(elements)
+        end)
+    end
+
+    -- Retail 12.1's separate per-frame update functions -- present under the
+    -- same names on Forever too, so these hooks are harmless (redundant with
+    -- the delegate hook above) there, and load-bearing on retail.
+    if PlayerFrame_UpdatePvPStatus then
+        hooksecurefunc("PlayerFrame_UpdatePvPStatus", function()
+            ApplyHideHonor(GetPlayerPvPBadgeElements())
+        end)
+    end
+    if TargetFrameMixin and TargetFrameMixin.CheckFaction then
+        hooksecurefunc(TargetFrameMixin, "CheckFaction", function(self)
+            ApplyHideHonor(GetFramePvPBadgeElements(self))
+        end)
+    end
+    if PartyMemberFrameMixin and PartyMemberFrameMixin.UpdatePvPStatus then
+        hooksecurefunc(PartyMemberFrameMixin, "UpdatePvPStatus", function(self)
+            ApplyHideHonor(GetPartyMemberPvPBadgeElements(self))
+        end)
+    end
+end
+
 function general:RefreshHideHonor()
+    if uuidb and uuidb.general and uuidb.general.hidehonor then
+        EnsureHideHonorHooks()
+    end
     ApplyHideHonor(GetPlayerPvPBadgeElements())
     ApplyHideHonor(GetFramePvPBadgeElements(TargetFrame))
     ApplyHideHonor(GetFramePvPBadgeElements(FocusFrame))
@@ -112,32 +154,6 @@ function general:RefreshHideHonor()
             ApplyHideHonor(GetPartyMemberPvPBadgeElements(p))
         end
     end
-end
-
--- Forever's shared delegate, when present.
-if UnitFrameUtil and UnitFrameUtil.UpdateUnitPvPIndicator then
-    hooksecurefunc(UnitFrameUtil, "UpdateUnitPvPIndicator", function(elements)
-        ApplyHideHonor(elements)
-    end)
-end
-
--- Retail 12.1's separate per-frame update functions -- present under the
--- same names on Forever too, so these hooks are harmless (redundant with
--- the delegate hook above) there, and load-bearing on retail.
-if PlayerFrame_UpdatePvPStatus then
-    hooksecurefunc("PlayerFrame_UpdatePvPStatus", function()
-        ApplyHideHonor(GetPlayerPvPBadgeElements())
-    end)
-end
-if TargetFrameMixin and TargetFrameMixin.CheckFaction then
-    hooksecurefunc(TargetFrameMixin, "CheckFaction", function(self)
-        ApplyHideHonor(GetFramePvPBadgeElements(self))
-    end)
-end
-if PartyMemberFrameMixin and PartyMemberFrameMixin.UpdatePvPStatus then
-    hooksecurefunc(PartyMemberFrameMixin, "UpdatePvPStatus", function(self)
-        ApplyHideHonor(GetPartyMemberPvPBadgeElements(self))
-    end)
 end
 
 -- Belt-and-suspenders: don't rely solely on successfully hooking Blizzard's

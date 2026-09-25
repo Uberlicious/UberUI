@@ -5,3 +5,9 @@
     - Hide Honor (hides the PvP badge/icon) now works correctly on Player, Target, Focus, and Party frames, on both retail and WoW Forever.
     - Fixed UI taint and errors during combat by deferring frame updates until combat ends (arena, party, player, target, and nameplate frames).
     - Compatibility pass for the WoW Forever client (build 1.60.1) alongside retail.
+    - Arena Nameplate Numbers: shows 1/2/3 over enemy nameplates instead of their name while inside an arena.
+    - Most settings that used to need a UI reload to take effect (Hide Honor, Arena Nameplate Numbers, compact raid/party bar textures, Hide Raid Frame Titles, Personal Resource border/texture) now apply live, and stale "requires reload" tooltips were corrected.
+    - Cooldown Manager icon borders now use the same border style and sizing logic as the rest of the addon's aura borders, and stay correctly sized when Edit Mode's icon size/padding settings change.
+    - Fixed Hide Nameplate Selection Glow not restoring the glow when turned back off.
+    - Reduced unnecessary hook installation addon-wide for better taint hygiene: optional features no longer install their hooks unless actually enabled.
+    - Deduplicated the Bar Textures settings code (12 near-identical blocks reduced to one shared helper).

@@ -183,7 +183,48 @@ local function ApplyManaBarTexture(manaBar, unit, textureToApply)
     end
 end
 
+-- Blizzard's UnitFrameManaBar_Update calls UnitFrameManaBar_UpdateType on
+-- every mana bar update, which puts its own atlas back on the bar. Out of
+-- combat our event handler above re-applies ours often enough to hide that,
+-- but it skips everything in combat, so the bar showed Blizzard's texture
+-- for the whole fight. Re-applying right after UpdateType fixes that in and
+-- out of combat. Texture/color calls only -- no writes to Blizzard's
+-- frame fields.
+--
+-- Only worth installing if a custom player bar texture is actually active --
+-- hooksecurefunc can't be undone, so this is gated on GetPlayerBarTexture()
+-- rather than installed unconditionally. Can't check that at file-load time
+-- though: uuidb is still the empty placeholder table from config.lua here
+-- (this addon's own ADDON_LOADED/PLAYER_LOGIN handler, which swaps in the
+-- real SavedVariables and populates uuidb.general, hasn't run yet -- that's
+-- what crashed with "attempt to index field 'general' (a nil value)" when
+-- this checked it directly at the top level). Deferred into
+-- EnsureManaBarCombatHook() instead, called from HealthManaBarTexture()
+-- below, which only ever runs from playerframes' own OnEvent handler or an
+-- options.lua toggle -- both always after uuidb is populated. The Player/All
+-- Bar Textures tooltips already warn a reload is needed to properly attach,
+-- which covers turning this on after load too.
+local manaBarCombatHookInstalled = false
+local function EnsureManaBarCombatHook()
+    if manaBarCombatHookInstalled or not UnitFrameManaBar_UpdateType or not GetPlayerBarTexture() then return end
+    manaBarCombatHookInstalled = true
+    hooksecurefunc("UnitFrameManaBar_UpdateType", function(manaBar)
+        if not manaBar or not uuidb or not uuidb.general then return end
+        local unit
+        if manaBar == PlayerFrame_GetManaBar() then
+            unit = manaBar.unit or "player" -- "vehicle" while in one
+        elseif PetFrameManaBar and manaBar == PetFrameManaBar then
+            unit = manaBar.unit or "pet"
+        else
+            return
+        end
+        ApplyManaBarTexture(manaBar, unit, GetPlayerBarTexture())
+    end)
+end
+
 function playerframes:HealthManaBarTexture(force)
+    EnsureManaBarCombatHook()
+
     local healthBar = PlayerFrame_GetHealthBar();
     local manaBar = PlayerFrame_GetManaBar();
 
@@ -301,26 +342,5 @@ function playerframes:ColorMonkChi()
     end
 end
 
--- Blizzard's UnitFrameManaBar_Update calls UnitFrameManaBar_UpdateType on
--- every mana bar update, which puts its own atlas back on the bar. Out of
--- combat our event handler above re-applies ours often enough to hide that,
--- but it skips everything in combat, so the bar showed Blizzard's texture
--- for the whole fight. Re-applying right after UpdateType fixes that in and
--- out of combat. Texture/color calls only -- no writes to Blizzard's
--- frame fields.
-if UnitFrameManaBar_UpdateType then
-    hooksecurefunc("UnitFrameManaBar_UpdateType", function(manaBar)
-        if not manaBar or not uuidb or not uuidb.general then return end
-        local unit
-        if manaBar == PlayerFrame_GetManaBar() then
-            unit = manaBar.unit or "player" -- "vehicle" while in one
-        elseif PetFrameManaBar and manaBar == PetFrameManaBar then
-            unit = manaBar.unit or "pet"
-        else
-            return
-        end
-        ApplyManaBarTexture(manaBar, unit, GetPlayerBarTexture())
-    end)
-end
 
 UberUI.playerframes = playerframes

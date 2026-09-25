@@ -59,10 +59,97 @@ function arenaframes:HideOldArenaFrames()
     end
 end
 
-uui_nn_hook = false
+-- Arena Nameplate Numbers: shows "1"/"2"/"3" instead of the player's name on
+-- enemy nameplates during an arena match, matching the arena roster's own
+-- numbering. Reference: EllesmereUI PR #1701 (EllesmereGaming/EllesmereUI),
+-- which does the equivalent for their own custom-built nameplates -- their
+-- exact code doesn't transfer (their nameplates are fully custom; ours hooks
+-- Blizzard's native ones), but the approach does: identify the nameplate's
+-- arena slot via UnitIsUnit(unit, "arenaN") (a plain unit-identity
+-- comparison -- Blizzard's own secrecy docs list these as "generally not
+-- secret", unlike reading/comparing aura or health data), then override the
+-- displayed text.
+--
+-- Their PR's own fix commit ("avoid comparing or reading secret strings")
+-- was for a name-string-comparison FALLBACK their custom nameplate code
+-- needed for a reason specific to their implementation. We don't need it:
+-- UnitIsUnit alone is sufficient and avoids that whole class of risk.
+--
+-- Hooks CompactUnitFrame_UpdateName -- the same shared function already
+-- hooked in this file's own MaybeRegisterRaidTargetScaleHooks, filtered to
+-- frame.unit containing "nameplate" so this never touches the arena roster
+-- frames (CompactArenaFrameMember1-5), only nameplates. Deferred via
+-- C_Timer.After(0, ...), same taint-avoidance convention as every other
+-- nameplate write in core/nameplates.lua: CompactUnitFrame_UpdateName runs
+-- inside Blizzard's own synchronous update chain, and frame.unit is
+-- re-checked fresh inside the deferred callback (not cached beforehand) so
+-- a nameplate recycled for a different unit by the time the callback fires
+-- self-corrects instead of mislabeling it.
+--
+-- Reactive, not manually triggered: toggling the setting mid-match doesn't
+-- retroactively relabel already-visible nameplates until Blizzard's own code
+-- next calls CompactUnitFrame_UpdateName on them (name updates aren't
+-- continuous) -- calling that function ourselves to force an immediate
+-- refresh would be the exact "call Blizzard's own update function directly
+-- from insecure code" pattern that caused the arena taint bug earlier this
+-- session, so this intentionally doesn't do that.
+local function ApplyArenaNameplateNumber(frame)
+    if not frame or not frame.unit or not frame.name then return end
+    if not (uuidb and uuidb.general and uuidb.general.arenanumbers) then return end
+
+    local okType, isNameplate = pcall(string.find, frame.unit, "nameplate")
+    if not okType or not isNameplate then return end
+
+    local okInst, _, instanceType = pcall(IsInInstance)
+    if not okInst or instanceType ~= "arena" then return end
+
+    for i = 1, 3 do
+        local okMatch, isMatch = pcall(UnitIsUnit, frame.unit, "arena" .. i)
+        if okMatch and isMatch then
+            frame.name:SetText(tostring(i))
+            return
+        end
+    end
+end
+
+-- CompactUnitFrame_UpdateName is the busiest shared function in the addon --
+-- it fires for every nameplate/party/raid/arena name update, constantly, for
+-- a feature that only ever matters inside an arena instance. hooksecurefunc
+-- can't be undone, so only install it if the setting is actually on; if the
+-- user enables it later without reload, EnsureArenaNameplateNumberHook()
+-- (called from NameplateNumbers() below, which the options.lua checkbox
+-- already calls on toggle) installs it lazily then -- full live on/off, no
+-- reload ever required.
+-- Not checked at the top level here: uuidb is still config.lua's empty
+-- placeholder table at file-load time (this addon's own ADDON_LOADED/
+-- PLAYER_LOGIN handler, which populates uuidb.general, hasn't run yet), so
+-- uuidb.general.arenanumbers would always read nil regardless of the saved
+-- value. Installed from NameplateNumbers() below instead, which this file's
+-- own PLAYER_ENTERING_WORLD/etc. event handler already calls every time it
+-- fires -- always after uuidb is populated -- covering both "already enabled
+-- at login" and "enabled later without reload".
+local arenaNameplateNumberHookInstalled = false
+local function EnsureArenaNameplateNumberHook()
+    if arenaNameplateNumberHookInstalled or not CompactUnitFrame_UpdateName then return end
+    arenaNameplateNumberHookInstalled = true
+    hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
+        if not frame or not frame.unit then return end
+        local okType, isNameplate = pcall(string.find, frame.unit, "nameplate")
+        if not okType or not isNameplate then return end
+        C_Timer.After(0, function()
+            ApplyArenaNameplateNumber(frame)
+        end)
+    end)
+end
+
+-- Called by the options.lua checkbox on toggle, and by this file's own
+-- event handler on every relevant event. Lazily installs the hook the first
+-- time the setting is seen on; disabling it is already fully live since
+-- ApplyArenaNameplateNumber() re-checks the setting on every call.
 function arenaframes:NameplateNumbers()
-    -- Hook removed or untouched for now
-    uui_nn_hook = true
+    if uuidb and uuidb.general and uuidb.general.arenanumbers then
+        EnsureArenaNameplateNumberHook()
+    end
 end
 
 function arenaframes:LoopFrames()
