@@ -17,7 +17,7 @@ partyframes:SetScript("OnEvent", function(self, event)
     partyframes:Color();
     partyframes:HealthBarColor();
     partyframes:HealthManaBarTexture();
-    partyframes:ZoomAuras();
+    partyframes:ColorBuffTooltip();
 end)
 
 function partyframes:IteratePartyFrames()
@@ -108,83 +108,151 @@ function partyframes:HealthManaBarTexture()
     end
 end
 
-function partyframes:ZoomAuras()
-    local enable = uuidb.general.zoomiconparty
-    local frames = self:IteratePartyFrames()
-    if #frames == 0 then return end
+-- Party member aura styling. Unlike compact/raid frames (forbidden native
+-- renderer) or target/focus (custom AuraContainer widgets), the classic
+-- party frame's aura buttons are plain, addon-visible PartyAuraFrameTemplate
+-- buttons -- see docs/compact-frame-auras.md for the compact-frame design
+-- this deliberately does NOT need. Blizzard's own PartyAuraFrameMixin:Setup
+-- is the single choke point every one of these buttons passes through: the
+-- on-frame debuffs (AuraFrameContainer), pet debuffs (PetFrame.
+-- AuraFrameContainer), and the on-hover PartyMemberBuffTooltip's buff/debuff
+-- icons all call button:Setup(unit, aura, isBuff) -- confirmed identical
+-- between retail 12.1 and WoW Forever 1.60.1 (Shared/PartyMemberFrame.lua).
+-- Hooking it once covers all four, styled exactly when their content
+-- actually changes -- no per-tick re-application needed.
+--
+-- Buffs never appear on the frame itself (MAX_PARTY_TOOLTIP_BUFFS==0 means
+-- Setup is only ever called with isBuff=true for the hover tooltip); only up
+-- to MAX_PARTY_DEBUFFS debuffs show directly on the frame, each already
+-- carrying Blizzard's own real dispel-colored DebuffBorder (AuraUtil.
+-- SetAuraBorderColor, done by Blizzard's own Setup before our hook runs).
+--
+-- "Dark Border" style reuses that same DebuffBorder widget (retinting it)
+-- rather than drawing a separate custom texture. A first attempt drew our
+-- own overlay using the "ui-debuff-border-default-noicon" atlas -- the same
+-- one aurakit.lua uses for target/focus/compact -- but that atlas is tuned
+-- for their much larger (20-40px) icons; at party's tiny 15x15 size its ring
+-- proportions don't scale down cleanly and render oversized/misshapen.
+-- DebuffBorder is already exactly sized and anchored for this button by
+-- Blizzard, so retinting it sidesteps the problem entirely, for both buffs
+-- and debuffs (Blizzard hides it on buff buttons by default, but nothing
+-- stops us from showing/tinting it as a plain flat border there too).
+function partyframes:StyleAuraButton(button, isBuff)
+    if not button or not button.DebuffBorder then return end
+    local style = (isBuff and uuidb.general.aurastyle_partybuffs or uuidb.general.aurastyle_partydebuffs)
+        or (isBuff and "both" or "zoom")
+    local zoomEnabled = (style == "both" or style == "zoom")
+    local darkBorderEnabled = (style == "both" or style == "border")
 
-    for _, p in pairs(frames) do
-        -- Main party member debuffs
-        if p.AuraFrameContainer then
-            for _, child in pairs({ p.AuraFrameContainer:GetChildren() }) do
-                if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
-            end
-        else
-            for i = 1, 4 do
-                if p.GetName and p:GetName() then
-                    local debuff = _G[p:GetName().."Debuff"..i]
-                    if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
+    if button.Icon then
+        UberUI.general:ApplyIconZoom(button.Icon, zoomEnabled)
+    end
+
+    if darkBorderEnabled then
+        local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+        button.DebuffBorder:SetDesaturated(true)
+        button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        button.DebuffBorder:Show()
+    elseif isBuff then
+        -- Native "no border on buffs" look.
+        button.DebuffBorder:Hide()
+    else
+        -- Restore Blizzard's real per-dispel-type color. We may have
+        -- overwritten it with the dark tint above on a previous style
+        -- change, so re-derive it from the aura instead of assuming the
+        -- widget still holds it.
+        --
+        -- GetAuraDataByAuraInstanceID doesn't just return a secret value
+        -- when the aura is secret while the CALLER is tainted (as ours is,
+        -- running inside a hooksecurefunc) -- it throws ("Auras cannot be
+        -- accessed when secret while tainted by 'Uber UI'"), confirmed live.
+        -- core/buffsandauras.lua already established the correct three-layer
+        -- guard for this exact API elsewhere in this addon (secret-check the
+        -- ID, pcall the call itself, secret-check the result) -- mirrored
+        -- here.
+        button.DebuffBorder:SetDesaturated(false)
+        local dispelName
+        local instID = button.auraInstanceID
+        local isSecretID = issecretvalue and issecretvalue(instID)
+        if button.unit and instID and not isSecretID and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+            local aura
+            pcall(function()
+                aura = C_UnitAuras.GetAuraDataByAuraInstanceID(button.unit, instID)
+            end)
+            if aura and not (issecretvalue and issecretvalue(aura)) then
+                dispelName = aura.dispelName
+                if issecretvalue and issecretvalue(dispelName) then
+                    dispelName = nil
                 end
             end
         end
+        pcall(AuraUtil.SetAuraBorderColor, button.DebuffBorder, dispelName)
+        button.DebuffBorder:Show()
+    end
+end
 
-        -- Pet debuffs
-        if p.PetFrame then
-            if p.PetFrame.AuraFrameContainer then
-                for _, child in pairs({ p.PetFrame.AuraFrameContainer:GetChildren() }) do
-                    if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
-                end
-            else
-                for i = 1, 4 do
-                    if p.PetFrame.GetName and p.PetFrame:GetName() then
-                        local debuff = _G[p.PetFrame:GetName().."Debuff"..i]
-                        if debuff and debuff.Icon then UberUI.general:ApplyIconZoom(debuff.Icon, enable) end
-                    end
-                end
+-- Restyles every currently-active button across every pool (on-frame,
+-- pet, and tooltip) immediately -- used when the style dropdown changes,
+-- since the Setup hook alone only re-styles buttons the next time their
+-- aura content actually changes.
+function partyframes:RefreshAuraStyle()
+    for _, p in pairs(self:IteratePartyFrames()) do
+        if p.AuraFramePool then
+            for btn in p.AuraFramePool:EnumerateActive() do
+                self:StyleAuraButton(btn, btn.isBuff)
+            end
+        end
+        if p.PetFrame and p.PetFrame.AuraFramePool then
+            for btn in p.PetFrame.AuraFramePool:EnumerateActive() do
+                self:StyleAuraButton(btn, btn.isBuff)
             end
         end
     end
-
     if PartyMemberBuffTooltip then
-        local dc = uuidb.general.darkencolor
-        if PartyMemberBuffTooltip.NineSlice then
-            PartyMemberBuffTooltip.NineSlice:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        end
-        if PartyMemberBuffTooltip.BuffContainer then
-            for _, child in pairs({ PartyMemberBuffTooltip.BuffContainer:GetChildren() }) do
-                if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
+        if PartyMemberBuffTooltip.PartyMemberBuffPool then
+            for btn in PartyMemberBuffTooltip.PartyMemberBuffPool:EnumerateActive() do
+                self:StyleAuraButton(btn, true)
             end
         end
-        if PartyMemberBuffTooltip.DebuffContainer then
-            for _, child in pairs({ PartyMemberBuffTooltip.DebuffContainer:GetChildren() }) do
-                if child.Icon then UberUI.general:ApplyIconZoom(child.Icon, enable) end
+        if PartyMemberBuffTooltip.PartyMemberDebuffPool then
+            for btn in PartyMemberBuffTooltip.PartyMemberDebuffPool:EnumerateActive() do
+                self:StyleAuraButton(btn, false)
             end
         end
     end
 end
 
 function partyframes:ForceZoom()
-    self:ZoomAuras()
+    self:RefreshAuraStyle()
+end
+
+-- Tooltip border darkening -- unrelated to aura style, just the addon's
+-- usual darken-color treatment applied to the tooltip's own frame art.
+function partyframes:ColorBuffTooltip()
+    if not PartyMemberBuffTooltip or not PartyMemberBuffTooltip.NineSlice then return end
+    local dc = uuidb.general.darkencolor
+    if dc then
+        PartyMemberBuffTooltip.NineSlice:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
 end
 
 if PartyMemberFrameMixin then
     hooksecurefunc(PartyMemberFrameMixin, "OnUpdate", function(self)
         UberUI.partyframes:Color()
-        UberUI.partyframes:ZoomAuras()
         UberUI.partyframes:HealthBarColor()
         UberUI.partyframes:HealthManaBarTexture()
     end)
 end
 
-if PartyMemberPetFrameMixin then
-    hooksecurefunc(PartyMemberPetFrameMixin, "UpdateAuras", function(self)
-        UberUI.partyframes:ZoomAuras()
+if PartyAuraFrameMixin then
+    hooksecurefunc(PartyAuraFrameMixin, "Setup", function(self, unit, aura, isBuff)
+        UberUI.partyframes:StyleAuraButton(self, isBuff)
     end)
 end
 
 if PartyMemberBuffTooltip then
     hooksecurefunc(PartyMemberBuffTooltip, "UpdateTooltip", function()
-        UberUI.partyframes:ZoomAuras()
+        UberUI.partyframes:ColorBuffTooltip()
     end)
 end
 

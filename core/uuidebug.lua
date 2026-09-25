@@ -1195,3 +1195,16 @@ SlashCmdList["UBERUIDEBUGCOMPACT"] = function()
     print("|cff33ff99UberUI debug|r compact aura report ready -- see the popup window (Ctrl+A, Ctrl+C to copy).")
     ShowReport(report)
 end
+
+-- Opens Edit Mode so you can check its "Show Arena Frames" account setting
+-- yourself -- see arenaframes:ShowFakeFrames in core/arenaframes.lua for why
+-- this can't be done directly from addon code (a real click is required to
+-- avoid tainting a secret-value range check on the arena-classified frame).
+SLASH_UBERUIDEBUGARENA1 = "/uuidebugarena"
+SlashCmdList["UBERUIDEBUGARENA"] = function()
+    if not (UberUI and UberUI.arenaframes) then
+        print("|cff33ff99UberUI debug|r arenaframes module not loaded.")
+        return
+    end
+    UberUI.arenaframes:ShowFakeFrames()
+end

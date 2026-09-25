@@ -438,6 +438,89 @@ local function Register()
         layout:AddInitializer(cbdd);
     end
 
+    -- Boss Bar Textures
+    do
+        local cbvariable, cbname = "BossBarTextures", "Boss Bar Textures";
+        local cbtooltip = "Retexture Boss Frames Separately from All Bars texture"
+        -- checkbox
+        local defaultValue = false;
+        local function cbgetValue()
+            if (uuidb.general) then
+                return uuidb.general.bossbartextures;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function cbsetValue(self, value)
+            uuidb.general.bossbartextures = value;
+        end
+
+        local cbsetting = Settings.RegisterAddOnSetting(category, cbvariable, "bossbartextures", uuidb.general,
+            Settings.VarType.Boolean,
+            cbname, defaultValue)
+        cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
+
+        -- drop down
+        local ddvariable, ddname = "BossTexture", "Boss Bar Texture";
+        local ddtooltip =
+        "Set your desired status bar texture for Boss frames\n\n|cffff0000Requires reload to properly attach \n\nBlizzard option is not accurate until reload";
+        local function GetOptions()
+            local container = Settings.CreateControlTextContainer();
+            local c = 0;
+            for bar in pairs(UberUI:GetDefaults().statusbars) do
+                bar = gsub(bar, "_", " ");
+                container:Add(bar, bar);
+                c = c + 1;
+            end
+            return container:GetData();
+        end
+
+        local dddefaultValue = "Blizzard";
+        local function ddgetValue()
+            if (uuidb.general) then
+                local val = uuidb.general.bossbartexture;
+                return val and gsub(val, "_", " ") or dddefaultValue;
+            else
+                return dddefaultValue;
+            end
+        end
+
+        local function ddsetValue(self, value)
+            value = gsub(value, " ", "_");
+            uuidb.general.bossbartexture = value;
+            UberUI.bossframes:HealthManaBarTexture();
+        end
+
+        local proxy = { ["bossbartexture"] = ddgetValue() }
+        local ddsetting = Settings.RegisterAddOnSetting(category, ddvariable, "bossbartexture", proxy,
+            Settings.VarType.String,
+            ddname, dddefaultValue)
+        ddsetting.GetValue, ddsetting.SetValue, ddsetting.Commit = ddgetValue, ddsetValue, commitValue;
+
+        -- Custom initializer with texture previews
+        local function CustomGetOptions()
+            local options = GetOptions()
+            local statusbars = UberUI:GetDefaults().statusbars
+            if statusbars then
+                for _, option in ipairs(options) do
+                    local textureName = gsub(option.value, " ", "_")
+                    local texturePath = statusbars[textureName]
+                    if texturePath then
+                        local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
+                        option.label = iconString .. " " .. option.label
+                    end
+                end
+            end
+            return options
+        end
+
+        local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, cbname, cbtooltip, ddsetting, CustomGetOptions,
+            ddname, ddtooltip);
+        cbdd:AddShownPredicate(function() return uuidb.general.showExtendedBarTextures end);
+        layout:AddInitializer(cbdd);
+    end
+
     -- Party Bar Textures
     do
         local cbvariable, cbname = "PartyBarTextures", "Party Bar Textures";
@@ -1234,6 +1317,47 @@ end
         Settings.CreateCheckbox(category, setting, tooltip);
     end
 
+    -- Boss Buffs
+    CreateAuraStyleDropdown("Boss Buffs", "aurastyle_bossbuffs", "Choose how to style boss buffs", true, function()
+        if UberUI.bossframes then
+            UberUI.bossframes:UpdateAllAuras();
+        end
+    end);
+
+    -- Boss Debuffs
+    CreateAuraStyleDropdown("Boss Debuffs", "aurastyle_bossdebuffs", "Choose how to style boss debuffs", true, function()
+        if UberUI.bossframes then
+            UberUI.bossframes:UpdateAllAuras();
+        end
+    end);
+
+    -- Show Dispels for Boss Buffs
+    do
+        local variable, name = "bossbuffsShowDispel", "Show Dispels for Boss Buffs";
+        local tooltip =
+        "Show a white border on enemy buffs your class can Purge/Dispel/Spellsteal, layered on top of whichever Boss Buffs style is chosen above (including Dark/Both, which otherwise hides it). Matches stock Blizzard behavior: only shown if your class actually has a way to remove it.";
+        local defaultValue = true;
+        local function getValue()
+            if (uuidb.general) then
+                return uuidb.general.bossbuffs_showdispel;
+            else
+                return defaultValue;
+            end
+        end
+
+        local function setValue(self, value)
+            uuidb.general.bossbuffs_showdispel = value;
+            if UberUI.bossframes then
+                UberUI.bossframes:UpdateAllAuras();
+            end
+        end
+
+        local setting = Settings.RegisterAddOnSetting(category, variable, "bossbuffs_showdispel", uuidb.general,
+            Settings.VarType.Boolean, name, defaultValue)
+        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
+        Settings.CreateCheckbox(category, setting, tooltip);
+    end
+
 if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
     -- Compact Raid/Party frames. "None" hands that aura type back to
     -- Blizzard's native display (restores the raid frame option we turned
@@ -1280,53 +1404,48 @@ if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
     end
 end
 
-    -- Zoom Party Auras
-    do
-        local variable, name = "zoomIconParty", "Zoom Party Auras";
-        local tooltip = "Crop party member buff/debuff icons in tighter, hiding their default border art";
-        local defaultValue = false;
-        local function getValue()
-            if (uuidb.general) then
-                return uuidb.general.zoomiconparty;
-            else
-                return defaultValue;
-            end
+    -- Party Buffs. Buffs never show directly on the classic (non-compact)
+    -- party frame -- only in the on-hover tooltip -- so this styles the
+    -- tooltip's buff icons.
+    local function RefreshPartyAuraStyle()
+        if UberUI.partyframes and UberUI.partyframes.RefreshAuraStyle then
+            UberUI.partyframes:RefreshAuraStyle();
         end
-
-        local function setValue(self, value)
-            uuidb.general.zoomiconparty = value;
-            if UberUI.partyframes and UberUI.partyframes.ZoomAuras then
-                UberUI.partyframes:ZoomAuras();
-            end
-        end
-
-        local setting = Settings.RegisterAddOnSetting(category, variable, "zoomiconparty", uuidb.general,
-            Settings.VarType.Boolean, name, defaultValue)
-        setting.GetValue, setting.SetValue, setting.Commit = getValue, setValue, commitValue;
-        Settings.CreateCheckbox(category, setting, tooltip);
     end
 
-    -- Sub-group for other frames
-    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Aura Styling - Other Frames (Coming Soon)"));
-
-    -- Party Buffs
-    CreateAuraStyleDropdown("Party Buffs", "aurastyle_partybuffs", "Choose how to style standard party buffs", false);
+    CreateAuraStyleDropdown("Party Buffs", "aurastyle_partybuffs",
+        "Choose how to style standard (non-compact) party buffs, shown when hovering a party member's buff tooltip.",
+        true, RefreshPartyAuraStyle);
 
     -- Party Debuffs
-    CreateAuraStyleDropdown("Party Debuffs", "aurastyle_partydebuffs", "Choose how to style standard party debuffs", false);
-
-    -- Nameplate Buffs
-    CreateAuraStyleDropdown("Nameplate Buffs", "aurastyle_nameplatebuffs", "Choose how to style nameplate buffs", false);
-
-    -- Nameplate Debuffs
-    CreateAuraStyleDropdown("Nameplate Debuffs", "aurastyle_nameplatedebuffs", "Choose how to style nameplate debuffs", false);
+    CreateAuraStyleDropdown("Party Debuffs", "aurastyle_partydebuffs",
+        "Choose how to style standard (non-compact) party debuffs.",
+        true, RefreshPartyAuraStyle);
 
 if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
-    -- Arena Buffs
-    CreateAuraStyleDropdown("Arena Buffs", "aurastyle_arenabuffs", "Choose how to style arena buffs", false);
+    local function RefreshArenaAuraStyle()
+        if UberUI.arenaframes then
+            UberUI.arenaframes:RefreshAuraStyle();
+        end
+    end
 
-    -- Arena Debuffs
-    CreateAuraStyleDropdown("Arena Debuffs", "aurastyle_arenadebuffs", "Choose how to style arena debuffs", false);
+    -- Arena Buffs. Arena frames never show general buffs at all -- Blizzard
+    -- hardcodes ignore-buffs=true for PvP-classified frames, so there's
+    -- nothing native to suppress or replace. Until there's a real custom
+    -- arena buff display, this styles the Diminishing Returns tracker
+    -- instead, which doesn't warrant its own dedicated dropdown.
+    CreateAuraStyleDropdown("Arena Buffs", "aurastyle_arenabuffs",
+        "Arena frames don't show general buffs. For now this styles the Diminishing Returns tracker instead.",
+        true, RefreshArenaAuraStyle);
+
+    -- Arena Debuffs. Arena frames' native debuff display is the same
+    -- forbidden private-aura renderer party/raid have, except Blizzard
+    -- hardcodes it permanently on for PvP frames with no CVar to suppress
+    -- it, so this styles the addon-visible widget arena frames actually
+    -- expose instead: the CC (Loss of Control) tracker.
+    CreateAuraStyleDropdown("Arena Debuffs", "aurastyle_arenadebuffs",
+        "Choose how to style the arena Crowd Control tracker.",
+        true, RefreshArenaAuraStyle);
 end
 
 if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
@@ -1462,7 +1581,7 @@ end
     -- Hide Honor
     do
         local variable, name = "HideHonor", "Hide Honor";
-        local tooltip = "Hide macro text on actionbars"
+        local tooltip = "Hide the entire PvP badge (icon, background, and Prestige art) on the Player, Target, and Focus frames"
         local defaultValue = false;
         local function getValue()
             if (uuidb.general) then
@@ -1474,9 +1593,7 @@ end
 
         local function setValue(self, value)
             uuidb.general.hidehonor = value;
-            UberUI.playerframes:PvPIcon(value);
-            UberUI.targetframes:PvPIcon(value);
-            UberUI.focusframes:PvPIcon(value);
+            UberUI.general:RefreshHideHonor();
         end
 
         local setting = Settings.RegisterAddOnSetting(category, variable, "hidehonor", uuidb.general,

@@ -11,17 +11,6 @@ end
 local general = {}
 
 function general:PvPIcon(frame)
-    if (frame and frame.HonorIcon) then
-        if (uuidb and uuidb.general and uuidb.general.hidehonor) then
-            frame.PrestigeBadge:SetAlpha(0)
-            frame.PrestigePortrait:SetAlpha(0)
-            frame.HonorIcon:Hide()
-        else
-            frame.PrestigeBadge:SetAlpha(1)
-            frame.PrestigePortrait:SetAlpha(1)
-            frame.HonorIcon:Show()
-        end
-    end
     if frame then
         local dc = uuidb and uuidb.general and uuidb.general.darkencolor
         if dc then
@@ -40,6 +29,135 @@ function general:PvPIcon(frame)
         end
     end
 end
+
+-- Hide Honor: hides the whole PvP badge (icon + background + Prestige art)
+-- on the Player, Target, and Focus frames.
+--
+-- CONFIRMED (via wow-ui-source origin/live vs origin/forever): retail 12.1
+-- and WoW Forever 1.60.1 are NOT on the same PvP-indicator code here. Forever
+-- already has Blizzard's newer shared abstraction -- each frame exposes
+-- GetPvPIndicatorElements(), and Player/Target/Focus all funnel through one
+-- UnitFrameUtil.UpdateUnitPvPIndicator delegate ("also safe for addons to
+-- use"). Retail 12.1 does not have that abstraction at all (zero references
+-- in origin/live) -- it still sets PVPIcon/PvpIcon/PrestigePortrait/
+-- PrestigeBadge directly inline inside PlayerFrame_UpdatePvPStatus and
+-- TargetFrameMixin:CheckFaction. Both function NAMES exist unchanged on both
+-- clients (only their bodies differ), so we hook those directly as the
+-- universal fallback, and additionally hook the new delegate when present.
+-- Whichever path actually runs on a given client, it converges on the same
+-- ApplyHideHonor(elements) call.
+local PvPBadgeElementKeys = { "pvpIcon", "pvpBackground", "prestigePortrait", "prestigeBadge" }
+
+local function ApplyHideHonor(elements)
+    if not elements then return end
+    local hide = uuidb and uuidb.general and uuidb.general.hidehonor
+    for _, key in ipairs(PvPBadgeElementKeys) do
+        local tex = elements[key]
+        if tex and tex.SetShown then
+            tex:SetShown(not hide)
+        end
+    end
+end
+
+-- Player: Forever's PlayerFrame_GetPvPIndicatorElements() when present;
+-- retail 12.1 has no such accessor, so fall back to reading the same
+-- PVPIcon/PrestigePortrait/PrestigeBadge fields its own inline code uses.
+local function GetPlayerPvPBadgeElements()
+    if PlayerFrame_GetPvPIndicatorElements then
+        return PlayerFrame_GetPvPIndicatorElements()
+    end
+    local contextual = PlayerFrame_GetPlayerFrameContentContextual and PlayerFrame_GetPlayerFrameContentContextual()
+    if not contextual then return nil end
+    return {
+        pvpIcon = contextual.PVPIcon,
+        prestigePortrait = contextual.PrestigePortrait,
+        prestigeBadge = contextual.PrestigeBadge,
+    }
+end
+
+-- Target/Focus (frame = TargetFrame or FocusFrame): same idea, using each
+-- frame's own GetPvPIndicatorElements method when present, otherwise reading
+-- TargetFrameContentContextual's PvpIcon/PrestigePortrait/PrestigeBadge the
+-- way retail 12.1's inline CheckFaction code does.
+local function GetFramePvPBadgeElements(frame)
+    if not frame then return nil end
+    if frame.GetPvPIndicatorElements then
+        return frame:GetPvPIndicatorElements()
+    end
+    local contextual = frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentContextual
+    if not contextual then return nil end
+    return {
+        pvpIcon = contextual.PvpIcon,
+        prestigePortrait = contextual.PrestigePortrait,
+        prestigeBadge = contextual.PrestigeBadge,
+    }
+end
+
+-- Non-compact party member frames have their own, much simpler PvP icon --
+-- PartyMemberOverlay.PVPIcon, no background/prestige art -- set by
+-- PartyMemberFrameMixin:UpdatePvPStatus (core/partyframes.lua's own aura/
+-- color code never touches this, so it needed separate coverage here).
+local function GetPartyMemberPvPBadgeElements(p)
+    local overlay = p and p.PartyMemberOverlay
+    if not overlay then return nil end
+    return { pvpIcon = overlay.PVPIcon }
+end
+
+function general:RefreshHideHonor()
+    ApplyHideHonor(GetPlayerPvPBadgeElements())
+    ApplyHideHonor(GetFramePvPBadgeElements(TargetFrame))
+    ApplyHideHonor(GetFramePvPBadgeElements(FocusFrame))
+    if UberUI.partyframes and UberUI.partyframes.IteratePartyFrames then
+        for _, p in pairs(UberUI.partyframes:IteratePartyFrames()) do
+            ApplyHideHonor(GetPartyMemberPvPBadgeElements(p))
+        end
+    end
+end
+
+-- Forever's shared delegate, when present.
+if UnitFrameUtil and UnitFrameUtil.UpdateUnitPvPIndicator then
+    hooksecurefunc(UnitFrameUtil, "UpdateUnitPvPIndicator", function(elements)
+        ApplyHideHonor(elements)
+    end)
+end
+
+-- Retail 12.1's separate per-frame update functions -- present under the
+-- same names on Forever too, so these hooks are harmless (redundant with
+-- the delegate hook above) there, and load-bearing on retail.
+if PlayerFrame_UpdatePvPStatus then
+    hooksecurefunc("PlayerFrame_UpdatePvPStatus", function()
+        ApplyHideHonor(GetPlayerPvPBadgeElements())
+    end)
+end
+if TargetFrameMixin and TargetFrameMixin.CheckFaction then
+    hooksecurefunc(TargetFrameMixin, "CheckFaction", function(self)
+        ApplyHideHonor(GetFramePvPBadgeElements(self))
+    end)
+end
+if PartyMemberFrameMixin and PartyMemberFrameMixin.UpdatePvPStatus then
+    hooksecurefunc(PartyMemberFrameMixin, "UpdatePvPStatus", function(self)
+        ApplyHideHonor(GetPartyMemberPvPBadgeElements(self))
+    end)
+end
+
+-- Belt-and-suspenders: don't rely solely on successfully hooking Blizzard's
+-- internal update functions (a mixin method hook can be shadowed if some
+-- other addon -- or a future Blizzard refactor -- assigns a per-instance
+-- override that shadows the shared mixin table, and we have no reliable way
+-- to detect that from here). Directly watching the actual game events that
+-- drive every PvP-badge update (targeting, focusing, faction/flag changes,
+-- roster changes) and re-running RefreshHideHonor ourselves means the hide
+-- holds even if a specific internal hook above turns out not to fire.
+local hideHonorWatcher = CreateFrame("Frame")
+hideHonorWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+hideHonorWatcher:RegisterEvent("PLAYER_TARGET_CHANGED")
+hideHonorWatcher:RegisterEvent("PLAYER_FOCUS_CHANGED")
+hideHonorWatcher:RegisterEvent("UNIT_FACTION")
+hideHonorWatcher:RegisterEvent("PLAYER_FLAGS_CHANGED")
+hideHonorWatcher:RegisterEvent("GROUP_ROSTER_UPDATE")
+hideHonorWatcher:SetScript("OnEvent", function()
+    general:RefreshHideHonor()
+end)
 
 local function IsSecret(val)
     return issecretvalue and issecretvalue(val)
@@ -212,6 +330,27 @@ function general:ApplyIconZoom(textureObject, enable)
     else
         -- This will help you track down which object is being passed incorrectly
         print("ApplyIconZoom received non-Texture object: " .. tostring(textureObject))
+    end
+end
+
+-- Shared icon-inset convention used by every aura style implementation
+-- (target/focus/party/arena/nameplate): whenever zoom or a border is active,
+-- the icon insets 1px inward from its parent so the crop and the border read
+-- as one cohesive unit instead of the border framing a boundary the icon no
+-- longer visually fills. Native ("None") keeps the icon at its own
+-- full-bleed anchor. Safe even on a masked icon (e.g. nameplate auras): the
+-- icon shrinking inside an unmoved mask just crops slightly more, not a
+-- misaligned crop.
+function general:ApplyAuraIconInset(icon, insetEnabled)
+    if not icon then return end
+    local parent = icon:GetParent()
+    if not parent then return end
+    icon:ClearAllPoints()
+    if insetEnabled then
+        icon:SetPoint("TOPLEFT", parent, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -1, 1)
+    else
+        icon:SetAllPoints(parent)
     end
 end
 

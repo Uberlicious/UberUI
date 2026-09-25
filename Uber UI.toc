@@ -1,5 +1,5 @@
-## Interface: 120100, 11504, 40400, 10600
-## Version: 12.1.0
+## Interface: 120100, 10600
+## Version: 1.0.0
 
 ## Author: Uberlicious
 ## Notes: Darkens and modifies original Blizzard UI.
@@ -19,6 +19,7 @@ core\aurakit.lua
 core\playerframe.lua
 core\targetframe.lua
 core\focusframe.lua
+core\bossframes.lua
 core\miscframes.lua
 core\nameplates.lua
 core\compactunitframe.lua
