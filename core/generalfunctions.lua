@@ -46,39 +46,115 @@ end
 -- universal fallback, and additionally hook the new delegate when present.
 -- Whichever path actually runs on a given client, it converges on the same
 -- ApplyHideHonor(elements) call.
-local PvPBadgeElementKeys = { "pvpIcon", "pvpBackground", "prestigePortrait", "prestigeBadge" }
+--
+-- UPDATE (origin/forever, Sept 2026): Forever's Camelot game type now loads
+-- Camelot/PlayerFrame.lua + Camelot/TargetFrame.lua overrides that draw the
+-- badge with PvpBackgroundCircle/PvpBackgroundIcon instead and never touch
+-- the Mainline PVPIcon/PrestigePortrait/PrestigeBadge regions (which still
+-- exist, permanently hidden). Both sets are collected below.
+--
+-- ApplyHideHonor must NEVER Show() anything Blizzard didn't. It used to do
+-- SetShown(not hide), which with the setting off force-showed every badge
+-- element on every target/flag/roster event -- unflagged units got a badge on
+-- retail, and Forever got the never-used Mainline badge art popping up.
+local PvPBadgeElementKeys = {
+    "pvpIcon", "pvpBackground", "prestigePortrait", "prestigeBadge",
+    "pvpBackgroundCircle", "pvpBackgroundIcon",
+}
 
-local function ApplyHideHonor(elements)
+-- Texture -> { unit, frame }, for badge textures that were visible (i.e.
+-- Blizzard showed them) when we hid them. Turning Hide Honor off re-shows only
+-- these, and only if Blizzard's own show conditions still hold, so we never
+-- resurrect a badge Blizzard wouldn't show. Anything stale gets fixed by
+-- Blizzard's own next PvP update.
+local hiddenByHideHonor = {}
+
+local function IsSecret(val)
+    return issecretvalue and issecretvalue(val)
+end
+
+-- Mirrors the show conditions in PlayerFrame_UpdatePvPStatus /
+-- TargetFrameMixin:CheckFaction / PartyMemberFrameMixin:UpdatePvPStatus
+-- (identical on origin/live and origin/forever's Camelot overrides): game
+-- rule not disabling it, the frame's showPVP (target/focus only -- small
+-- focus clears it), and FFA or faction-flagged PvP. Unknown/secret -> false.
+local function BlizzardWouldShowBadge(record)
+    local unit, frame = record.unit, record.frame
+    if not unit or not UnitExists(unit) then return false end
+    if C_GameRules and C_GameRules.IsGameRuleActive and Enum.GameRule
+        and Enum.GameRule.UnitFramePvPContextualDisabled
+        and C_GameRules.IsGameRuleActive(Enum.GameRule.UnitFramePvPContextualDisabled) then
+        return false
+    end
+    if frame and frame.CheckFaction and not frame.showPVP then return false end
+    local ffa = UnitIsPVPFreeForAll(unit)
+    if IsSecret(ffa) then return false end
+    if ffa then return true end
+    local faction = UnitFactionGroup(unit)
+    local pvp = UnitIsPVP(unit)
+    if IsSecret(faction) or IsSecret(pvp) then return false end
+    return faction ~= nil and faction ~= "Neutral" and pvp and true or false
+end
+
+local function ApplyHideHonor(elements, unit, frame)
     if not elements then return end
     local hide = uuidb and uuidb.general and uuidb.general.hidehonor
-    for _, key in ipairs(PvPBadgeElementKeys) do
-        local tex = elements[key]
-        if tex and tex.SetShown then
-            tex:SetShown(not hide)
+    if hide then
+        -- If Blizzard just re-decided this badge (something is visible), its
+        -- previous choice (e.g. icon vs. prestige badge) is stale -- drop it.
+        local anyShown = false
+        for _, key in ipairs(PvPBadgeElementKeys) do
+            local tex = elements[key]
+            if tex and tex.IsShown and tex:IsShown() then anyShown = true break end
+        end
+        for _, key in ipairs(PvPBadgeElementKeys) do
+            local tex = elements[key]
+            if tex and tex.IsShown then
+                if tex:IsShown() then
+                    hiddenByHideHonor[tex] = { unit = unit, frame = frame }
+                    tex:Hide()
+                elseif anyShown then
+                    hiddenByHideHonor[tex] = nil
+                end
+            end
+        end
+    elseif next(hiddenByHideHonor) then
+        for _, key in ipairs(PvPBadgeElementKeys) do
+            local tex = elements[key]
+            local record = tex and hiddenByHideHonor[tex]
+            if record then
+                hiddenByHideHonor[tex] = nil
+                if BlizzardWouldShowBadge(record) then
+                    tex:Show()
+                end
+            end
         end
     end
 end
 
 -- Player: Forever's PlayerFrame_GetPvPIndicatorElements() when present;
--- retail 12.1 has no such accessor, so fall back to reading the same
--- PVPIcon/PrestigePortrait/PrestigeBadge fields its own inline code uses.
+-- otherwise read the Mainline PVPIcon/PrestigePortrait/PrestigeBadge fields
+-- retail's inline code uses, plus Forever Camelot's PvpBackground* regions.
 local function GetPlayerPvPBadgeElements()
     if PlayerFrame_GetPvPIndicatorElements then
         return PlayerFrame_GetPvPIndicatorElements()
     end
     local contextual = PlayerFrame_GetPlayerFrameContentContextual and PlayerFrame_GetPlayerFrameContentContextual()
-    if not contextual then return nil end
+    local main = PlayerFrame and PlayerFrame.PlayerFrameContent and PlayerFrame.PlayerFrameContent.PlayerFrameContentMain
+    if not contextual and not main then return nil end
     return {
-        pvpIcon = contextual.PVPIcon,
-        prestigePortrait = contextual.PrestigePortrait,
-        prestigeBadge = contextual.PrestigeBadge,
+        pvpIcon = contextual and contextual.PVPIcon,
+        prestigePortrait = contextual and contextual.PrestigePortrait,
+        prestigeBadge = contextual and contextual.PrestigeBadge,
+        pvpBackgroundCircle = main and main.PvpBackgroundCircle,
+        pvpBackgroundIcon = main and main.PvpBackgroundIcon,
     }
 end
 
 -- Target/Focus (frame = TargetFrame or FocusFrame): same idea, using each
 -- frame's own GetPvPIndicatorElements method when present, otherwise reading
 -- TargetFrameContentContextual's PvpIcon/PrestigePortrait/PrestigeBadge the
--- way retail 12.1's inline CheckFaction code does.
+-- way retail's inline CheckFaction code does (plus Camelot's PvpBackground*).
 local function GetFramePvPBadgeElements(frame)
     if not frame then return nil end
     if frame.GetPvPIndicatorElements then
@@ -90,6 +166,8 @@ local function GetFramePvPBadgeElements(frame)
         pvpIcon = contextual.PvpIcon,
         prestigePortrait = contextual.PrestigePortrait,
         prestigeBadge = contextual.PrestigeBadge,
+        pvpBackgroundCircle = contextual.PvpBackgroundCircle,
+        pvpBackgroundIcon = contextual.PvpBackgroundIcon,
     }
 end
 
@@ -117,8 +195,8 @@ local function EnsureHideHonorHooks()
 
     -- Forever's shared delegate, when present.
     if UnitFrameUtil and UnitFrameUtil.UpdateUnitPvPIndicator then
-        hooksecurefunc(UnitFrameUtil, "UpdateUnitPvPIndicator", function(elements)
-            ApplyHideHonor(elements)
+        hooksecurefunc(UnitFrameUtil, "UpdateUnitPvPIndicator", function(elements, unitToken)
+            ApplyHideHonor(elements, unitToken)
         end)
     end
 
@@ -127,17 +205,17 @@ local function EnsureHideHonorHooks()
     -- the delegate hook above) there, and load-bearing on retail.
     if PlayerFrame_UpdatePvPStatus then
         hooksecurefunc("PlayerFrame_UpdatePvPStatus", function()
-            ApplyHideHonor(GetPlayerPvPBadgeElements())
+            ApplyHideHonor(GetPlayerPvPBadgeElements(), "player")
         end)
     end
     if TargetFrameMixin and TargetFrameMixin.CheckFaction then
         hooksecurefunc(TargetFrameMixin, "CheckFaction", function(self)
-            ApplyHideHonor(GetFramePvPBadgeElements(self))
+            ApplyHideHonor(GetFramePvPBadgeElements(self), self.unit, self)
         end)
     end
     if PartyMemberFrameMixin and PartyMemberFrameMixin.UpdatePvPStatus then
         hooksecurefunc(PartyMemberFrameMixin, "UpdatePvPStatus", function(self)
-            ApplyHideHonor(GetPartyMemberPvPBadgeElements(self))
+            ApplyHideHonor(GetPartyMemberPvPBadgeElements(self), self.unit)
         end)
     end
 end
@@ -146,12 +224,12 @@ function general:RefreshHideHonor()
     if uuidb and uuidb.general and uuidb.general.hidehonor then
         EnsureHideHonorHooks()
     end
-    ApplyHideHonor(GetPlayerPvPBadgeElements())
-    ApplyHideHonor(GetFramePvPBadgeElements(TargetFrame))
-    ApplyHideHonor(GetFramePvPBadgeElements(FocusFrame))
+    ApplyHideHonor(GetPlayerPvPBadgeElements(), "player")
+    ApplyHideHonor(GetFramePvPBadgeElements(TargetFrame), "target", TargetFrame)
+    ApplyHideHonor(GetFramePvPBadgeElements(FocusFrame), "focus", FocusFrame)
     if UberUI.partyframes and UberUI.partyframes.IteratePartyFrames then
         for _, p in pairs(UberUI.partyframes:IteratePartyFrames()) do
-            ApplyHideHonor(GetPartyMemberPvPBadgeElements(p))
+            ApplyHideHonor(GetPartyMemberPvPBadgeElements(p), p.unit)
         end
     end
 end
@@ -174,10 +252,6 @@ hideHonorWatcher:RegisterEvent("GROUP_ROSTER_UPDATE")
 hideHonorWatcher:SetScript("OnEvent", function()
     general:RefreshHideHonor()
 end)
-
-local function IsSecret(val)
-    return issecretvalue and issecretvalue(val)
-end
 
 local function SafeBool(val)
     if val == nil or IsSecret(val) then return false end

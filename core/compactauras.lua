@@ -312,6 +312,15 @@ end
 
 -- Big Defensive: one centered icon, most important first (Blizzard's own
 -- BigDefensive sort). Styled with the buff style.
+--
+-- The engine's BIG_DEFENSIVE flag also covers some permanent auras (e.g.
+-- Paladin Devotion Aura), which Blizzard's comparator only ranks last
+-- (expirationTime 0) rather than excluding -- so with no real defensive up,
+-- the center icon showed Devotion Aura. maxDuration filters by the aura's full
+-- duration inside the container's secure code (secret-safe) and implicitly
+-- drops permanent auras. Real big defensives are all short cooldowns
+-- (~6-15s), so 60s leaves plenty of margin.
+local BIG_DEFENSIVE_MAX_DURATION = 60
 local function BuildBigDefensive(frame, metrics)
     return aurakit.BuildGroupedAuraContainer({
         parentFrame = frame,
@@ -324,6 +333,7 @@ local function BuildBigDefensive(frame, metrics)
                 key = "bigdefensive", filter = "HELPFUL|BIG_DEFENSIVE", isBuff = true,
                 size = metrics.bigDefensiveSize, maxFrameCount = 1,
                 sortMethod = AuraContainerSortMethod.BigDefensive,
+                candidateFilters = { maxDuration = BIG_DEFENSIVE_MAX_DURATION },
             },
         },
     })
