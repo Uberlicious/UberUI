@@ -216,8 +216,9 @@ f:SetScript("OnEvent", function(self, event, unit)
     if event == "NAME_PLATE_UNIT_ADDED" then
         -- Only do this at all while the feature is actually on -- when off,
         -- friendly nameplates just keep Blizzard's native size, no addon
-        -- intervention needed (see setValue in options.lua for the one-time
-        -- restore-to-native call when the option gets turned off).
+        -- intervention needed (see the Small Friendly Nameplates onChange in
+        -- options/nameplates.lua for the one-time restore-to-native call when
+        -- the option gets turned off).
         --
         -- Deferred: this event fires nested inside Blizzard's own native
         -- nameplate-add call stack (OnNamePlateAdded -> SetUnit -> ...).

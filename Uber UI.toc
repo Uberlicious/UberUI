@@ -12,9 +12,17 @@
 ## Category: Unit Frames
 
 config.lua
-options.lua
+options\helpers.lua
+options\general.lua
+options\unitframes.lua
+options\groupframes.lua
+options\arena.lua
+options\nameplates.lua
+options\otherui.lua
+options\register.lua
 
 core\generalfunctions.lua
+core\squareborders.lua
 core\aurakit.lua
 core\playerframe.lua
 core\targetframe.lua

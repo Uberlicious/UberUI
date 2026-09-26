@@ -11,3 +11,11 @@
     - Fixed Hide Nameplate Selection Glow not restoring the glow when turned back off.
     - Reduced unnecessary hook installation addon-wide for better taint hygiene: optional features no longer install their hooks unless actually enabled.
     - Deduplicated the Bar Textures settings code (12 near-identical blocks reduced to one shared helper).
+    - Settings reorganized into pages: Uber UI (general), Unit Frames, Raid & Group Frames, Arena, Nameplates, and Other UI. Existing saved settings carry over unchanged. /uberui now works alongside /uui.
+    - Aura settings are clearer: each frame now has Zoom Icons, Buff Border, Debuff Border, Border Shape, Border Thickness, and Border Position instead of a single combined style dropdown. Existing looks carry over unchanged.
+    - New Square aura borders (Border Shape: Square) for every aura location, with adjustable pixel thickness (default 2px) and inside/outside placement. Debuffs keep their real dispel-type colors, including in combat on Target, Focus, Boss, and Compact Raid/Party. Note: on Player auras, square debuff borders can't show dispel colors in combat yet.
+    - Debuff Border "Dispel Color" with Rounded borders now tints Uber UI's own border ring instead of switching to Blizzard's separate border art, so Dark and Dispel Color share the same shape.
+    - New All Auras section on the main settings page: one-shot actions that set Zoom, borders, shape, thickness, or position on every aura location at once.
+    - Fixed the Target/Focus buff row overlapping the debuff row during combat.
+    - Fixed Hide Honor force-showing PvP badges that Blizzard wouldn't show (and stray badge art on WoW Forever); Hide Honor now also covers WoW Forever's own PvP badge.
+    - Compact Raid/Party Big Defensive no longer shows permanent auras such as Devotion Aura.

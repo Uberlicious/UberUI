@@ -1208,3 +1208,106 @@ SlashCmdList["UBERUIDEBUGARENA"] = function()
     end
     UberUI.arenaframes:ShowFakeFrames()
 end
+
+-- /uuidebugplayerdebuffs: why is a player debuff border the wrong color?
+-- For each shown DebuffFrame button: its buttonInfo.index, the aura
+-- instance ID we pair it with (GetUnitAuraInstanceIDs[index], see
+-- buffsandauras.lua GetPlayerDebuffInstanceID), that aura's real name and
+-- dispel type (readable out of combat), and the color our dispel curve
+-- returns for it. Also dumps the curve itself next to Blizzard's own
+-- AuraUtil colors so a wrong dispel-type ID mapping is visible directly.
+-- Run it out of combat with a couple of different-type debuffs on you.
+local function SafeStr(v)
+    if issecretvalue and issecretvalue(v) then return "<secret>" end
+    return tostring(v)
+end
+
+local function ColorStr(r, g, b)
+    if issecretvalue and (issecretvalue(r) or issecretvalue(g) or issecretvalue(b)) then return "<secret color>" end
+    if type(r) ~= "number" then return tostring(r) end
+    return string.format("%.2f, %.2f, %.2f", r, g, b)
+end
+
+local function BuildPlayerDebuffReport()
+    local lines = {}
+    local function add(s) table.insert(lines, s) end
+    local SB = UberUI.squareborders
+    local unit = (PlayerFrame and PlayerFrame.unit) or "player"
+    add("unit = " .. tostring(unit) .. "   inCombat = " .. tostring(InCombatLockdown()))
+
+    local ids
+    if C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs then
+        local ok, res = pcall(C_UnitAuras.GetUnitAuraInstanceIDs, unit, "HARMFUL")
+        if ok then ids = res else add("GetUnitAuraInstanceIDs ERROR: " .. tostring(res)) end
+    else
+        add("GetUnitAuraInstanceIDs: not available")
+    end
+    if type(ids) == "table" then
+        local parts = {}
+        for i, id in ipairs(ids) do parts[#parts + 1] = i .. "=" .. SafeStr(id) end
+        add("GetUnitAuraInstanceIDs(HARMFUL): " .. table.concat(parts, "  "))
+    end
+
+    add("")
+    add("==== DebuffFrame buttons ====")
+    local buttons = DebuffFrame and DebuffFrame.auraFrames or {}
+    for n, btn in ipairs(buttons) do
+        local okS, shown = pcall(btn.IsShown, btn)
+        if okS and shown == true then
+            local info = btn.buttonInfo
+            local index = info and info.index
+            local infoID = info and info.auraInstanceID
+            add(string.format("button #%d  auraType=%s  buttonInfo.index=%s  buttonInfo.auraInstanceID=%s  buttonInfo.debuffType=%s",
+                n, SafeStr(info and info.auraType), SafeStr(index), SafeStr(infoID), SafeStr(info and info.debuffType)))
+            local id = infoID
+            if (id == nil) and type(ids) == "table" and type(index) == "number" then id = ids[index] end
+            add("   paired instanceID = " .. SafeStr(id))
+            if id and not (issecretvalue and issecretvalue(id)) then
+                local okA, aura = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, id)
+                if okA and aura and not (issecretvalue and issecretvalue(aura)) then
+                    add("   that aura: " .. SafeStr(aura.name) .. "  dispelName=" .. SafeStr(aura.dispelName))
+                else
+                    add("   that aura: unreadable (" .. tostring(aura) .. ")")
+                end
+                if SB then
+                    local okC, r, g, b = pcall(SB.GetDispelColor, nil, unit, id)
+                    add("   curve color = " .. (okC and ColorStr(r, g, b) or ("ERROR " .. tostring(r))))
+                end
+            end
+            -- What the button itself says it is, by index, for cross-checking order.
+            if type(index) == "number" and C_UnitAuras.GetAuraDataByIndex then
+                local okI, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, "HARMFUL")
+                if okI and aura and not (issecretvalue and issecretvalue(aura)) then
+                    add("   GetAuraDataByIndex(" .. index .. "): " .. SafeStr(aura.name) .. "  id=" .. SafeStr(aura.auraInstanceID)
+                        .. "  dispelName=" .. SafeStr(aura.dispelName))
+                end
+            end
+        end
+    end
+
+    add("")
+    add("==== dispel curve vs Blizzard colors ====")
+    local curve = SB and SB.GetDispelColorCurve and SB.GetDispelColorCurve()
+    add("curve = " .. tostring(curve))
+    for x = 0, 12 do
+        local s = "x=" .. x
+        if curve and curve.EvaluateUnpacked then
+            local okE, r, g, b = pcall(curve.EvaluateUnpacked, curve, x)
+            s = s .. "  curve: " .. (okE and ColorStr(r, g, b) or ("ERROR " .. tostring(r)))
+        end
+        add(s)
+    end
+    for _, key in ipairs({ "None", "Magic", "Curse", "Disease", "Poison", "Bleed" }) do
+        local okC, color = pcall(AuraUtil.GetAuraBorderColor, key)
+        add("AuraUtil " .. key .. ": " .. ((okC and color) and ColorStr(color:GetRGB()) or "n/a"))
+    end
+    return table.concat(lines, "\n")
+end
+
+SLASH_UBERUIDEBUGPLAYERDEBUFFS1 = "/uuidebugplayerdebuffs"
+SlashCmdList["UBERUIDEBUGPLAYERDEBUFFS"] = function()
+    local ok, report = pcall(BuildPlayerDebuffReport)
+    if not ok then report = "ERROR building report: " .. tostring(report) end
+    print("|cff33ff99UberUI debug|r player debuff report ready -- see the popup window (Ctrl+A, Ctrl+C to copy).")
+    ShowReport(report)
+end

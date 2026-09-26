@@ -148,6 +148,33 @@ function partyframes:StyleAuraButton(button, isBuff)
         UberUI.general:ApplyIconZoom(button.Icon, zoomEnabled)
     end
 
+    -- Square borders (core/squareborders.lua): same rules as every other
+    -- location -- the Buff/Debuff Border choice picks the color (dark, or
+    -- Blizzard's look: dispel color on debuffs, no border on buffs); None
+    -- style is never overridden. Replaces DebuffBorder while on.
+    local SB = UberUI.squareborders
+    local square = SB and button.Icon and style ~= "none" and SB.IsEnabled("party")
+    if square and (not isBuff or darkBorderEnabled) then
+        button.DebuffBorder:Hide()
+        local sb = SB.Get(button)
+        SB.LayoutFor(sb, button.Icon, "party")
+        SB.RaiseAbove(sb, button, 2)
+        if darkBorderEnabled then
+            SB.SetDarkColor(sb)
+        else
+            local instID = button.auraInstanceID
+            SB.ApplyDispelColor(sb, nil, button.unit, instID)
+        end
+        sb:Show()
+        return
+    elseif square then
+        -- Buff in Zoom Only: native "no border on buffs" look.
+        button.DebuffBorder:Hide()
+        SB.Hide(button)
+        return
+    end
+    if SB then SB.Hide(button) end
+
     if darkBorderEnabled then
         local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
         button.DebuffBorder:SetDesaturated(true)

@@ -24,7 +24,7 @@ gate the *installation* on the setting being enabled — check once, and if
 it's off, don't call `hooksecurefunc` at all. Wire an idempotent
 `EnsureXHook()` that gets (re-)called from wherever the feature's own
 reactive code already runs safely (an event handler, or the function the
-options.lua checkbox/dropdown's `onChange` already calls) so enabling the
+options\ page checkbox/dropdown's `onChange` already calls) so enabling the
 setting later, live, without a reload, still installs the hook.
 `core/nameplates.lua`'s `MaybeRegisterRaidTargetScaleHooks` is the reference
 implementation of this pattern. Core/always-on baseline behavior (frame

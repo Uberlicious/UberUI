@@ -201,7 +201,7 @@ end
 -- this checked it directly at the top level). Deferred into
 -- EnsureManaBarCombatHook() instead, called from HealthManaBarTexture()
 -- below, which only ever runs from playerframes' own OnEvent handler or an
--- options.lua toggle -- both always after uuidb is populated. The Player/All
+-- options page toggle -- both always after uuidb is populated. The Player/All
 -- Bar Textures tooltips already warn a reload is needed to properly attach,
 -- which covers turning this on after load too.
 local manaBarCombatHookInstalled = false

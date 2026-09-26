@@ -186,7 +186,7 @@ function bossframes:UpdateAuraButtonStyle(button)
         (uuidb.general.aurastyle_bossdebuffs or "zoom")
     end
     local showDispel = uuidb and uuidb.general and uuidb.general.bossbuffs_showdispel
-    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel })
+    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "boss" })
 end
 
 function bossframes:UpdateAuraPositions(i)

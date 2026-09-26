@@ -242,7 +242,7 @@ function targetframes:UpdateAuraButtonStyle(button)
         (uuidb.general.aurastyle_targetdebuffs or "zoom")
     end
     local showDispel = uuidb and uuidb.general and uuidb.general.targetbuffs_showdispel
-    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel })
+    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "target" })
 end
 
 local TOP_X = 25

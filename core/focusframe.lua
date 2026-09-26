@@ -221,7 +221,7 @@ function focusframes:UpdateAuraButtonStyle(button)
         (uuidb.general.aurastyle_focusdebuffs or "zoom")
     end
     local showDispel = uuidb and uuidb.general and uuidb.general.focusbuffs_showdispel
-    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel })
+    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "focus" })
 end
 
 local FOCUS_TOP_X = 25

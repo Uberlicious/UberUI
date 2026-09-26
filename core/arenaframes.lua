@@ -117,7 +117,7 @@ end
 -- a feature that only ever matters inside an arena instance. hooksecurefunc
 -- can't be undone, so only install it if the setting is actually on; if the
 -- user enables it later without reload, EnsureArenaNameplateNumberHook()
--- (called from NameplateNumbers() below, which the options.lua checkbox
+-- (called from NameplateNumbers() below, which the options/arena.lua checkbox
 -- already calls on toggle) installs it lazily then -- full live on/off, no
 -- reload ever required.
 -- Not checked at the top level here: uuidb is still config.lua's empty
@@ -142,7 +142,7 @@ local function EnsureArenaNameplateNumberHook()
     end)
 end
 
--- Called by the options.lua checkbox on toggle, and by this file's own
+-- Called by the options/arena.lua checkbox on toggle, and by this file's own
 -- event handler on every relevant event. Lazily installs the hook the first
 -- time the setting is seen on; disabling it is already fully live since
 -- ApplyArenaNameplateNumber() re-checks the setting on every call.
@@ -209,6 +209,34 @@ end
 -- in core/generalfunctions.lua (used by target/focus/party/arena/nameplate
 -- alike, previously duplicated locally in this file).
 
+-- Square borders (core/squareborders.lua) for the arena trackers. Arena
+-- entries carry no dispel type, so: dark square when the style includes a
+-- border, otherwise the tracker's native color (red for the CC tracker, none
+-- for the DR/CC-remover icons). Returns true when the square border took over
+-- for this owner (caller then leaves its own border hidden).
+local function ApplyArenaSquareBorder(owner, icon, style, darkBorderEnabled, nativeR, nativeG, nativeB)
+    local SB = UberUI.squareborders
+    if not SB then return false end
+    if style == "none" or not SB.IsEnabled("arena") then
+        SB.Hide(owner)
+        return false
+    end
+    if not darkBorderEnabled and not nativeR then
+        SB.Hide(owner)
+        return true
+    end
+    local sb = SB.Get(owner)
+    SB.LayoutFor(sb, icon, "arena")
+    SB.RaiseAbove(sb, owner, 2)
+    if darkBorderEnabled then
+        SB.SetDarkColor(sb)
+    else
+        SB.SetColor(sb, nativeR, nativeG, nativeB, 1)
+    end
+    sb:Show()
+    return true
+end
+
 function arenaframes:StyleDebuffFrame(debuffFrame)
     if not debuffFrame or not debuffFrame.Icon then return end
     local style = uuidb.general.aurastyle_arenadebuffs or "zoom"
@@ -218,7 +246,13 @@ function arenaframes:StyleDebuffFrame(debuffFrame)
     UberUI.general:ApplyAuraIconInset(debuffFrame.Icon, zoomEnabled or darkBorderEnabled)
     UberUI.general:ApplyIconZoom(debuffFrame.Icon, zoomEnabled)
 
+    local square = ApplyArenaSquareBorder(debuffFrame, debuffFrame.Icon, style, darkBorderEnabled, 1, 0, 0)
     if debuffFrame.Border then
+        -- Alpha, not Hide(): leaves Blizzard's own shown/hidden state alone.
+        debuffFrame.Border:SetAlpha(square and 0 or 1)
+    end
+
+    if debuffFrame.Border and not square then
         if darkBorderEnabled then
             local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
             debuffFrame.Border:SetDesaturated(true)
@@ -268,7 +302,9 @@ function arenaframes:StyleCcRemoverFrame(ccRemoverFrame)
     UberUI.general:ApplyIconZoom(ccRemoverFrame.Icon, zoomEnabled)
 
     local border = EnsureCcRemoverBorder(ccRemoverFrame)
-    if darkBorderEnabled then
+    if ApplyArenaSquareBorder(ccRemoverFrame, ccRemoverFrame.Icon, style, darkBorderEnabled) then
+        border:Hide()
+    elseif darkBorderEnabled then
         local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
         border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         border:Show()
@@ -314,7 +350,9 @@ function arenaframes:StyleDiminishTrayItem(trayItem)
     UberUI.general:ApplyIconZoom(trayItem.Icon, zoomEnabled)
 
     local border = EnsureDiminishTrayItemBorder(trayItem)
-    if darkBorderEnabled then
+    if ApplyArenaSquareBorder(trayItem, trayItem.Icon, style, darkBorderEnabled) then
+        border:Hide()
+    elseif darkBorderEnabled then
         local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
         border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         border:Show()

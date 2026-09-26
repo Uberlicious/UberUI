@@ -1,9 +1,118 @@
 # Square / pixel-depth aura borders — research notes
 
-Status: **not started**. This is a pre-implementation research doc for a feature
-the user wants to pick up later ("this weekend") — a "playground" for a new
-border style, starting with Player buffs/debuffs. Read this before touching
-border code so you don't re-derive what's already confirmed below.
+Status: **implemented for every aura location, untested in game.**
+
+**Known limitation -- Player debuffs in combat:** Player auras are Blizzard's
+own BuffFrame/DebuffFrame buttons styled from outside, and in combat every
+route to a player debuff's dispel color is closed to addon code (instance
+ID and dispel type are secret; `GetUnitAuraInstanceIDs` is refused while
+tainted; confirmed with `/uuidebugplayerdebuffs`). So square (and the tinted
+rounded ring) Player debuff borders fall back to the "None" red in combat;
+the Player Border Shape tooltip warns about it. Every other location is
+engine-colored and unaffected. Planned fix: show player auras in our own
+aurakit container (EllesmereUI's approach) -- debuffs first.
+
+Settings model (options/helpers.lua `AddAuraOptions`): per location, Zoom
+Icons (checkbox), Buff Border (Dark / None), Debuff Border (Dark / Dispel
+Color), Border Shape (Rounded / Square), Border Thickness, Border Position
+(Inside / Outside Icon). These are presentation only: zoom + dark border
+are still stored as the original `aurastyle_<loc>buffs|debuffs` strings
+(both = zoom+dark, border = dark, zoom = zoom only, none = neither, i.e.
+handed back to Blizzard), and shape/position as the boolean
+`squareauraborders_*` keys -- no migration. The Debuff Border choice is
+honored in square mode too (Dark = dark square); earlier versions forced
+dispel color on square debuffs.
+
+All Auras (main page, `opt.AddAllAurasOptions` / `opt.ApplyAuraParts`):
+six one-shot action dropdowns (same choices as a location's controls).
+Picking a value immediately COPIES that one part into every location's own
+keys and refreshes them, then the dropdown snaps back to "Set All...".
+Nothing is stored and no code path ever reads these again -- deliberately
+not a live override; each location stays editable afterwards.
+
+Rounded + Dispel Color draws OUR rounded ring (desaturated
+`ui-debuff-border-default-noicon`, same art as Dark) tinted with the dispel
+color, instead of switching to Blizzard's per-type border art -- Dark and
+Dispel Color are the same ring, only the color changes. Player: tinted via
+`squareborders.GetDispelColor`. Target/Focus/Boss/Compact: a second
+engine-registered texture (`button.roundDispelTex`, `PreserveAsset`) so the
+engine applies the tint (secret-safe); Blizzard's per-type art
+(`dispelBorderTex`, style `Border`) remains the fallback until it registers.
+Party and the Arena CC tracker already work this way natively (Blizzard
+tints one plain ring), so they're unchanged.
+
+v2 (all locations): shared module `core/squareborders.lua` (border object,
+whole-pixel layout, per-location settings `squareauraborders_<loc>` /
+`_thickness` / `_inset`, dispel coloring). Each location has its own
+toggle/thickness/inset rows in its own settings section.
+
+- Player (`buffsandauras.lua`): see v1 notes below; keeps the original keys.
+- Target/Focus/Boss/Compact (`aurakit.ApplySquareBorder`, `opts.squareLoc`):
+  the edge strips are registered with the button's `AddDispelTypeTexture`
+  (a list, so extra textures are fine) -- debuffs with `PreserveAsset` (the
+  engine applies the real dispel color to our solid strip, secret-safe),
+  buffs' Show Dispels border with `CustomAsset` + a WHITE8X8 asset map +
+  `stealableFilter`. Registered at button init alongside the round dispel
+  border (hidden until on), so toggling needs no aura update. Round border
+  stays as the fallback until registration succeeds.
+- Party (`partyframes.lua`): own strips, colored via
+  `GetAuraDispelTypeColor` curve from the button's auraInstanceID.
+- Arena (`arenaframes.lua`): trackers have no dispel type -- dark square in
+  border styles, else native red on the CC tracker / none on DR icons; the
+  CC tracker's native Border is alpha'd out, not hidden.
+
+v1 notes (Player only) follow.
+Opt-in via Options → Uber UI (main page) → Aura Borders → "Square Aura
+Borders" (`uuidb.general.squareauraborders_player`, default off; lives on
+the main page because it's meant to grow to every frame) + "Square Border
+Thickness" slider (`squareauraborders_thickness`, 1–8 px, default 2) and
+"Inset Square Border" toggle, both greyed out while it's off. Code
+lives at the top of `core/buffsandauras.lua` (`GetSquareBorder`,
+`LayoutSquareBorder`, `ApplyDebuffDispelColor`) and is used from
+`StyleAuraButton` when the aura style includes a border.
+
+Implementation notes (what v1 actually does, vs. the research below):
+
+- 4 solid `SetColorTexture` edge strips, *inset* over the icon's outer edge
+  by default (user preference: keeps the button's footprint) or outside it
+  via the "Inset Square Border" toggle (`squareauraborders_inset`), sized in
+  physical pixels via `PixelUtil.GetPixelToUIUnitFactor() / effectiveScale`.
+- Dispel coloring: non-secret `dispelName` → `AuraUtil.GetAuraBorderColor`
+  (Blizzard's colors). **Secret** dispel type (12.x combat restrictions) →
+  `C_UnitAuras.GetAuraDispelTypeColor(unit, auraInstanceID, curve)` with a
+  Step `C_CurveUtil` color curve keyed by engine dispel IDs (0 none, 1 Magic,
+  2 Curse, 3 Disease, 4 Poison, 9 Enrage, 11 Bleed) and valued with the same
+  AuraUtil colors; result goes straight into `SetVertexColor` (secret-safe,
+  same pattern as `Blizzard_CustomAuraButton.lua`). Player debuff buttons
+  only carry `buttonInfo.index`, so the instance ID is resolved via
+  `C_UnitAuras.GetAuraDataByIndex(PlayerFrame.unit, index, "HARMFUL")`.
+  `AuraUtil.SetAuraBorderColor` below can't be used directly with a secret
+  dispel type (it indexes a table with it).
+- Defaults mirror EllesmereUI's `PP.CreateBorder` (the reference design):
+  inset (default now 2px by user preference; EllesmereUI uses 1px), thickness rounded to whole pixels (min 1),
+  `SetSnapToPixelGrid(false)` + `SetTexelSnappingBias(0)` on the strips so a
+  1px edge can't vanish, and a re-measure on `UI_SCALE_CHANGED` /
+  `DISPLAY_SIZE_CHANGED`. EllesmereUI uses 2px only for its dispel ring.
+- Outset mode pushes Blizzard's `Duration` text out by the border
+  thickness (`OffsetDurationText`), along whichever icon edge Blizzard
+  anchored it to (orientation-aware); absolute offset, restored to 0 when
+  inset/off. Blizzard's layout pass re-anchors Duration right *after*
+  `UpdateAuraButtons` (our styling hook), and BuffFrame/DebuffFrame call
+  their own copied `AuraContainer:UpdateGridLayout` (created before we load,
+  so the `AuraContainerMixin` hook never sees it) -- so the push is
+  re-applied from instance hooks on those two containers
+  (`EnsureSquareBorderLayoutHooks`, installed only once outset is in use).
+- Player debuffs and temp enchants get the square border in Zoom Only style
+  too (replacing Blizzard's rounded border, undarkened: dispel color for
+  debuffs, `TEMP_ENCHANT_BORDER_COLOR` = (0.50, 0.22, 0.72) for enchants,
+  sampled from the bright rim of Blizzard's `UI-TempEnchant-Border.blp` in
+  the game dir's exported `_retail_\BlizzardInterfaceArt`, since that purple
+  is baked into the texture rather than set as a color); buffs stay
+  borderless in Zoom Only. "None" style is never overridden.
+- Buffs/temp enchants keep the darkness color (stealable → white), same as
+  the atlas border.
+
+Original pre-implementation research follows.
 
 ## The ask
 
@@ -101,9 +210,8 @@ by reading the function body directly; not an assumption.
 4. Once proven out on Player, candidates for later reuse: Target/Focus/Party/
    Boss (their own border styling) and Cooldown Manager (see note above).
 
-No code has been written for this yet. Nothing in `buffsandauras.lua` should
-be assumed to already support this — the border/tint logic there is the
-*old* atlas-based system, described above for contrast.
+Steps 1–3 are now done (see Status at top); step 4 (reuse on Target/Focus/
+Party/Boss/Cooldown Manager) is still open.
 
 ## Open question to investigate (reported, not yet understood)
 

@@ -26,6 +26,125 @@ local function SafeIsForbidden(frame)
     return ok and SafeBool(isForbid)
 end
 
+-- Square pixel-depth borders (docs/square-borders.md). The border itself,
+-- per-location settings and dispel coloring live in core/squareborders.lua
+-- (shared with every aura location); what stays here is Player-only: the
+-- duration-text push for outset borders and the temp enchant color.
+local SB = UberUI.squareborders
+local SQUARE_LOC = "player"
+
+local function SquareBordersEnabled() return SB.IsEnabled(SQUARE_LOC) end
+local function SquareBorderThickness() return SB.Thickness(SQUARE_LOC) end
+local function SquareBorderInset() return SB.IsInset(SQUARE_LOC) end
+local PixelsToUIUnits = SB.PixelsToUIUnits
+
+local function GetSquareBorder(button) return SB.Get(button) end
+local function FindSquareBorder(button) return SB.Find(button) end
+local function SetSquareBorderColor(sb, r, g, b, a) SB.SetColor(sb, r, g, b, a) end
+
+-- Blizzard anchors the Duration text to the icon's edge with no gap
+-- (AuraContainerMixin:UpdateGridLayout -- TOP/BOTTOM or LEFT/RIGHT depending
+-- on Edit Mode orientation), so an outset border would run into it. Push it
+-- out by the border thickness along Blizzard's own anchor direction. The
+-- offset is set absolutely (never added to), so repeated passes don't drift
+-- and 0 puts it back exactly where Blizzard had it. Only touches Blizzard's
+-- single icon-relative anchor; anything else is left alone.
+local DURATION_PUSH = { TOP = { 0, 1 }, BOTTOM = { 0, -1 }, LEFT = { -1, 0 }, RIGHT = { 1, 0 } }
+local movedDurations = setmetatable({}, {__mode = "k"})
+
+local function OffsetDurationText(button, iconTexture, amount)
+    if amount == 0 and not movedDurations[button] then return end
+    local duration = button.Duration
+    if not duration or IsSecret(duration) or not duration.GetPoint or not duration.GetNumPoints then return end
+    local okN, numPoints = pcall(duration.GetNumPoints, duration)
+    if not okN or IsSecret(numPoints) or numPoints ~= 1 then return end
+    local ok, point, relTo, relPoint = pcall(duration.GetPoint, duration, 1)
+    if not ok or IsSecret(relTo) or relTo ~= iconTexture or IsSecret(point) or IsSecret(relPoint) then return end
+    local dir = DURATION_PUSH[relPoint]
+    if not dir then return end
+    duration:SetPoint(point, relTo, relPoint, dir[1] * amount, dir[2] * amount)
+    movedDurations[button] = (amount ~= 0) or nil
+end
+
+-- Blizzard's layout pass re-anchors every Duration back to the icon edge
+-- (AuraContainerMixin:UpdateGridLayout), and it runs right AFTER
+-- UpdateAuraButtons -- i.e. after our styling -- so the outset push above
+-- only lasted until the next aura update. The mixin hook further down can't
+-- catch it: BuffFrame/DebuffFrame exist before this addon loads and call
+-- their own copied AuraContainer:UpdateGridLayout, so hook those two
+-- instances directly. Installed once, only when outset square borders are
+-- actually in use (hooks can't be removed); deferred a frame to stay out of
+-- Blizzard's update chain.
+local squareLayoutHooksInstalled = false
+
+local function ReapplyDurationOffsets(auraFrame)
+    if not SquareBordersEnabled() or SquareBorderInset() then return end
+    local buttons = auraFrame and auraFrame.auraFrames
+    if type(buttons) ~= "table" then return end
+    local px = SquareBorderThickness()
+    for _, button in ipairs(buttons) do
+        local sb = button and FindSquareBorder(button)
+        if sb and sb:IsShown() and button.Icon then
+            OffsetDurationText(button, button.Icon, PixelsToUIUnits(button, px))
+        end
+    end
+end
+
+local function EnsureSquareBorderLayoutHooks()
+    if squareLayoutHooksInstalled then return end
+    squareLayoutHooksInstalled = true
+    for _, auraFrame in ipairs({ BuffFrame, DebuffFrame }) do
+        local container = auraFrame and auraFrame.AuraContainer
+        if container and container.UpdateGridLayout then
+            hooksecurefunc(container, "UpdateGridLayout", function()
+                C_Timer.After(0, function() ReapplyDurationOffsets(auraFrame) end)
+            end)
+        end
+    end
+end
+
+-- Blizzard's temp enchant border is a purple texture file
+-- (Interface\Buttons\UI-TempEnchant-Border), not a vertex color. Sampled
+-- from the exported BLP (BlizzardInterfaceArt): its bright rim -- the part
+-- that reads as "the border" -- averages ~(128, 57, 183)/255.
+local TEMP_ENCHANT_BORDER_COLOR = { 0.50, 0.22, 0.72 }
+
+-- Player debuff buttons carry buttonInfo.index (and sometimes
+-- auraInstanceID), not the aura itself -- resolve the instance ID from that.
+local function GetPlayerDebuffInstanceID(button)
+    local info = button.buttonInfo
+    if not info or IsSecret(info) then return nil end
+    local unit = (PlayerFrame and PlayerFrame.unit) or "player"
+    local id = info.auraInstanceID
+    if id and not IsSecret(id) then return id, unit end
+    local index = info.index
+    if not index or IsSecret(index) or not C_UnitAuras then return nil end
+    -- In combat, GetAuraDataByIndex below is refused for addon code (aura
+    -- data is secret while restricted), which left player debuffs on the
+    -- "None" color. GetUnitAuraInstanceIDs isn't secret-when-restricted, and
+    -- lists HARMFUL auras in the same slot order DebuffFrame's
+    -- AuraUtil.ForEachAura walk numbered buttonInfo.index by.
+    if C_UnitAuras.GetUnitAuraInstanceIDs then
+        local okIDs, ids = pcall(C_UnitAuras.GetUnitAuraInstanceIDs, unit, "HARMFUL")
+        if okIDs and type(ids) == "table" and not IsSecret(ids) then
+            local id = ids[index]
+            if id and not IsSecret(id) then return id, unit end
+        end
+    end
+    if not C_UnitAuras.GetAuraDataByIndex then return nil end
+    local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, "HARMFUL")
+    if ok and aura and not IsSecret(aura) then
+        id = aura.auraInstanceID
+        if id and not IsSecret(id) then return id, unit end
+    end
+    return nil
+end
+
+local function ApplyDebuffDispelColor(sb, button, dtype)
+    local id, unit = GetPlayerDebuffInstanceID(button)
+    SB.ApplyDispelColor(sb, dtype, unit, id)
+end
+
 local function GetAuraInfo(button)
     local isPlayer = false
     local isDebuff = false
@@ -200,12 +319,22 @@ function buffsandauras:StyleAuraButton(button)
 
     local isPlayer, isDebuff, isTempEnchant = GetAuraInfo(button)
 
-    -- Determine debuff type
-    local dtype = button.debuffType or (button.auraData and not IsSecret(button.auraData) and button.auraData.dispelName)
-    if not dtype and button.buttonInfo and not IsSecret(button.buttonInfo) and button.buttonInfo.debuffType then
+    -- Determine debuff type. In combat these fields (e.g. buttonInfo.
+    -- debuffType = auraData.dispelName) are secret, and boolean-testing or
+    -- comparing a secret value throws in addon code -- which aborted this
+    -- whole function mid-combat and left player debuffs uncolored. IsSecret
+    -- comes first everywhere; a secret dtype is kept as-is and only ever
+    -- handed to squareborders.GetDispelColor, which is secret-safe.
+    local function Known(v) return IsSecret(v) or v ~= nil end
+    local dtype = button.debuffType
+    if not Known(dtype) and not IsSecret(button.auraData) and button.auraData then
+        dtype = button.auraData.dispelName
+    end
+    if not Known(dtype) and not IsSecret(button.buttonInfo) and button.buttonInfo then
         dtype = button.buttonInfo.debuffType
     end
-    if not dtype and button.auraInstanceID and not IsSecret(button.auraInstanceID) and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+    if not Known(dtype) and not IsSecret(button.auraInstanceID) and button.auraInstanceID
+        and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
         local okP, p = pcall(button.GetParent, button)
         local unit = button.unit or (okP and p and p.GetUnit and p:GetUnit()) or (isPlayer and "player") or "target"
         pcall(function()
@@ -214,16 +343,6 @@ function buffsandauras:StyleAuraButton(button)
                 dtype = aura.dispelName
             end
         end)
-    end
-
-    local isTypeless = true
-    if dtype and not IsSecret(dtype) then
-        local ok, lowerDtype = pcall(string.lower, dtype)
-        if ok and lowerDtype and lowerDtype ~= "" and lowerDtype ~= "none" then
-            isTypeless = false
-        end
-    elseif IsSecret(dtype) then
-        isTypeless = false
     end
 
     local style = "both"
@@ -243,7 +362,18 @@ function buffsandauras:StyleAuraButton(button)
         end
     end
 
-    local borderEnabled = (style == "both" or style == "border")
+    -- Square borders also override Zoom Only on Player debuffs and weapon
+    -- enchants: Blizzard's rounded border becomes a square one in Blizzard's
+    -- own (undarkened) color -- dispel color for debuffs, enchant purple for
+    -- temp enchants. Buffs have no Blizzard border in Zoom Only, so they stay
+    -- borderless there.
+    local squareZoomOverride = style == "zoom" and isPlayer and (isDebuff or isTempEnchant) and SquareBordersEnabled()
+    -- Rounded + Debuff Border "Dispel Color" (zoom style): our own rounded
+    -- ring tinted with the dispel color, instead of switching to Blizzard's
+    -- separate per-type border art -- so Dark and Dispel Color are the same
+    -- ring, only the color changes.
+    local roundedDispelOverride = style == "zoom" and isPlayer and isDebuff and not SquareBordersEnabled()
+    local borderEnabled = (style == "both" or style == "border") or squareZoomOverride or roundedDispelOverride
     local zoomEnabled = (style == "both" or style == "zoom")
 
     -- Handle icon zoom
@@ -322,20 +452,54 @@ function buffsandauras:StyleAuraButton(button)
             showCustomBorder = true
         end
 
-        if showCustomBorder then
-            local r, g, b, a = dc.r, dc.g, dc.b, dc.a
-            local isStealable = false
-            pcall(function()
-                if SafeBool(button.isStealable) then isStealable = true end
-                if SafeIsShown(button.Stealable) then isStealable = true end
-                if SafeIsShown(button.StealableBorder) then isStealable = true end
-            end)
-            if isStealable then
-                r, g, b, a = 1, 1, 1, 1
+        local r, g, b, a = dc.r, dc.g, dc.b, dc.a
+        local isStealable = false
+        pcall(function()
+            if SafeBool(button.isStealable) then isStealable = true end
+            if SafeIsShown(button.Stealable) then isStealable = true end
+            if SafeIsShown(button.StealableBorder) then isStealable = true end
+        end)
+        if isStealable then
+            r, g, b, a = 1, 1, 1, 1
+        end
+
+        local squareBorder = FindSquareBorder(button)
+        if showCustomBorder and isPlayer and SquareBordersEnabled() then
+            borderFrame:Hide()
+            squareBorder = GetSquareBorder(button)
+            squareBorder:SetFrameLevel(borderFrame:GetFrameLevel())
+            local px = SquareBorderThickness()
+            SB.Layout(squareBorder, iconTexture, px, SquareBorderInset())
+            if SquareBorderInset() then
+                OffsetDurationText(button, iconTexture, 0)
+            else
+                EnsureSquareBorderLayoutHooks()
+                OffsetDurationText(button, iconTexture, PixelsToUIUnits(button, px))
             end
-            borderFrame.texture:SetVertexColor(r, g, b, a)
+            -- Debuff Border "Dark" (both/border style) stays dark; "Dispel
+            -- Color" (zoom style) gets Blizzard's dispel color.
+            if isDebuff and not (style == "both" or style == "border") then
+                ApplyDebuffDispelColor(squareBorder, button, dtype)
+            elseif isTempEnchant and squareZoomOverride then
+                SetSquareBorderColor(squareBorder, TEMP_ENCHANT_BORDER_COLOR[1], TEMP_ENCHANT_BORDER_COLOR[2],
+                    TEMP_ENCHANT_BORDER_COLOR[3], 1)
+            else
+                SetSquareBorderColor(squareBorder, r, g, b, a)
+            end
+            squareBorder:Show()
+        elseif showCustomBorder then
+            if squareBorder then squareBorder:Hide() end
+            OffsetDurationText(button, iconTexture, 0)
+            if roundedDispelOverride then
+                local id, unit = GetPlayerDebuffInstanceID(button)
+                borderFrame.texture:SetVertexColor(SB.GetDispelColor(dtype, unit, id))
+            else
+                borderFrame.texture:SetVertexColor(r, g, b, a)
+            end
             borderFrame:Show()
         else
+            if squareBorder then squareBorder:Hide() end
+            OffsetDurationText(button, iconTexture, 0)
             if borderFrame then
                 borderFrame:Hide()
             end
@@ -344,6 +508,11 @@ function buffsandauras:StyleAuraButton(button)
         if borderFrame then
             borderFrame:Hide()
         end
+        local squareBorder = FindSquareBorder(button)
+        if squareBorder then
+            squareBorder:Hide()
+        end
+        OffsetDurationText(button, iconTexture, 0)
 
         if borderObj and not IsSecret(borderObj) and not isTempEnchant then
             local pad = zoomEnabled and (isPlayer and 5 or 4) or 0
@@ -383,6 +552,8 @@ function buffsandauras:StyleAuraButton(button)
         pcall(button.HookScript, button, "OnHide", function(self)
             local bf = buffsandauras.borderFrames[self]
             if bf then bf:Hide() end
+            local sb = FindSquareBorder(self)
+            if sb then sb:Hide() end
         end)
     end
 end
@@ -696,6 +867,22 @@ if BuffFrame_UpdateAllBuffAnchors then
         end
     end)
 end
+
+-- Square border thickness is baked in from the effective scale at style
+-- time, so re-measure when UI scale or resolution changes (neither restyles
+-- the aura buttons on its own). Deferred a frame so the new scale has
+-- settled; Refresh() itself skips combat.
+local squareBorderScaleWatcher = CreateFrame("Frame")
+squareBorderScaleWatcher:RegisterEvent("UI_SCALE_CHANGED")
+squareBorderScaleWatcher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+squareBorderScaleWatcher:SetScript("OnEvent", function()
+    if not SquareBordersEnabled() then return end
+    C_Timer.After(0, function()
+        if UberUI.buffsandauras then
+            UberUI.buffsandauras:Refresh()
+        end
+    end)
+end)
 
 local ticker = C_Timer.NewTicker(1, function()
     if InCombatLockdown() then return end

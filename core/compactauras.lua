@@ -226,6 +226,7 @@ function compactauras:UpdateAuraButtonStyle(button)
     aurakit.ApplyAuraButtonStyle(button, {
         style = style,
         showDispel = false,
+        squareLoc = "compact",
     })
 end
 
