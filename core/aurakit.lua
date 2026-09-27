@@ -77,16 +77,20 @@ function aurakit.GetSafeMineMaxFrameCount(unit, isHarmful, normalMaxCount)
     return normalMaxCount
 end
 
-function aurakit.MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, layoutIndex)
+-- exactLineSpacing: rows spaced exactly spacingY apart (Blizzard's target
+-- frame: 3px everywhere). Without it rows get spacingY + 2, which every
+-- other container was tuned with.
+function aurakit.MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, layoutIndex, exactLineSpacing)
     spacingX = spacingX or 1
     spacingY = spacingY or 1
+    local lineSpacing = exactLineSpacing and spacingY or (spacingY + 2)
     return {
         elementWidth = elementSize,
         elementHeight = elementSize,
         elementSpacing = spacingX,
-        lineSpacing = spacingY + 2,
+        lineSpacing = lineSpacing,
         groupSpacing = -1,
-        groupLineSpacing = spacingY + 2,
+        groupLineSpacing = lineSpacing,
         forceNewLine = forceNewLine or false,
         layoutIndex = layoutIndex,
     }
@@ -272,10 +276,15 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
     local zoomEnabled = (style == "both" or style == "zoom")
     local darkBorderEnabled = (style == "both" or style == "border")
 
+    -- Square borders are drawn over the icon's own edge (or just outside it),
+    -- so the 1px inset kept for the round border only shrinks the icon: let
+    -- it fill the button, like Blizzard's own aura buttons.
+    local SBk = UberUI.squareborders
+    local squareOn = opts and opts.squareLoc and style ~= "none" and SBk and SBk.IsEnabled(opts.squareLoc)
     if button.icon then
         pcall(function()
             button.icon:ClearAllPoints()
-            if darkBorderEnabled or zoomEnabled then
+            if (darkBorderEnabled or zoomEnabled) and not squareOn then
                 button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
                 button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
             else
@@ -359,15 +368,19 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
             local function ApplyDispelColoredBorder()
                 button.borderHost:Show()
                 if button.borderTex then button.borderTex:Hide() end
-                if button.roundDispelTex then
-                    -- Our ring, engine-tinted with the dispel color.
-                    button.roundDispelHost:Show()
-                    if button.dispelBorderHost then button.dispelBorderHost:Hide() end
-                elseif button.dispelBorderHost then
-                    -- Fallback until the ring registers: Blizzard's per-type
-                    -- art, engine-managed.
+                -- Blizzard's own per-type border art, picked by the engine
+                -- (dispelBorderTex, style Border). Preferred over our tinted
+                -- ring (roundDispelTex): that ring art is painted red, so once
+                -- desaturated it's only ~24% bright and any dispel tint on it
+                -- comes out dark (sampled from Blizzard's debuff border BLP).
+                -- The per-type art is already full-brightness in each color.
+                if button.dispelBorderTex or (button.dispelBorderHost and not button.roundDispelTex) then
                     if button.roundDispelHost then button.roundDispelHost:Hide() end
                     button.dispelBorderHost:Show()
+                elseif button.roundDispelTex then
+                    -- Only if the per-type art never registered.
+                    button.roundDispelHost:Show()
+                    if button.dispelBorderHost then button.dispelBorderHost:Hide() end
                 elseif button.borderTex then
                     -- Fallback if AddDispelTypeTexture is unavailable.
                     button.borderTex:Show()
@@ -460,7 +473,13 @@ function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
 
         if showMain then
             main = main or SB.Get(button, 1)
-            SB.LayoutFor(main, button.icon, loc)
+            -- Buffs: slot 1 is the plain dark border. Debuffs: the engine's
+            -- dispel-colored strips, 1px thicker (SB.DispelThickness).
+            if isBuff then
+                SB.LayoutFor(main, button.icon, loc)
+            else
+                SB.LayoutDispelFor(main, button.icon, loc)
+            end
             if level then main:SetFrameLevel(level) end
             if isBuff then SB.SetDarkColor(main) end -- debuff strips are engine-colored
             main:Show()
@@ -479,7 +498,7 @@ function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
         end
 
         if showSteal then
-            SB.LayoutFor(steal, button.icon, loc)
+            SB.LayoutDispelFor(steal, button.icon, loc)
             if level then steal:SetFrameLevel(level + 1) end
             steal:Show()
         elseif steal then
@@ -681,7 +700,7 @@ function aurakit.BuildAuraContainer(opts)
         initializeFrame = function(btn)
             aurakit.InitAuraButton(container, btn, mineKey, opts.mineFilter:find("HELPFUL") ~= nil, opts.largeSize, true, opts.updateStyleFn)
         end,
-        layout = aurakit.MakeGroupLayout(opts.largeSize, opts.spacing, opts.spacing, false, 1),
+        layout = aurakit.MakeGroupLayout(opts.largeSize, opts.spacing, opts.spacing, false, 1, opts.exactLineSpacing),
     })
 
     container:AddAuraGroup(otherKey, opts.otherFilter, {
@@ -689,7 +708,7 @@ function aurakit.BuildAuraContainer(opts)
         initializeFrame = function(btn)
             aurakit.InitAuraButton(container, btn, otherKey, opts.otherFilter:find("HELPFUL") ~= nil, opts.smallSize, false, opts.updateStyleFn)
         end,
-        layout = aurakit.MakeGroupLayout(opts.smallSize, opts.spacing, opts.spacing, false, 2),
+        layout = aurakit.MakeGroupLayout(opts.smallSize, opts.spacing, opts.spacing, false, 2, opts.exactLineSpacing),
     })
 
     if container.ApplyLayout then
@@ -943,8 +962,11 @@ function aurakit.UpdatePairedPositions(opts)
         end
         startY = startY + extraY
         primary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
+        -- Empty primary: take its exact spot, no gap -- Blizzard's flow
+        -- layout drops an empty group, so the next one starts on the first
+        -- row (groupLineSpacing only applies after a row that exists).
         if primaryIsEmpty then
-            secondary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY + opts.containerGap)
+            secondary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
         else
             secondary:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, opts.containerGap)
         end
@@ -958,8 +980,8 @@ function aurakit.UpdatePairedPositions(opts)
         end
     else
         primary:SetPoint("TOPLEFT", refFrame, "BOTTOMLEFT", opts.topX, opts.topY)
-        if primaryIsEmpty then
-            secondary:SetPoint("TOPLEFT", refFrame, "BOTTOMLEFT", opts.topX, opts.topY - opts.containerGap)
+        if primaryIsEmpty then -- same as above: no gap in the empty primary's spot
+            secondary:SetPoint("TOPLEFT", refFrame, "BOTTOMLEFT", opts.topX, opts.topY)
         else
             secondary:SetPoint("TOPLEFT", primary, "BOTTOMLEFT", 0, -opts.containerGap)
         end

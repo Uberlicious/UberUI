@@ -227,10 +227,12 @@ end
 local FOCUS_TOP_X = 25
 local FOCUS_TOP_Y = 26
 local FOCUS_TOP_ON_TOP_X = 5
-local FOCUS_LARGE_AURA_SIZE = 17
-local FOCUS_SMALL_AURA_SIZE = 13
+-- Same as Target / Blizzard (21 / 17). Our containers are children of
+-- FocusFrame, so Blizzard's 0.75x small-focus scale still applies on top.
+local FOCUS_LARGE_AURA_SIZE = 21
+local FOCUS_SMALL_AURA_SIZE = 17
 local FOCUS_AURA_SPACING = 3
-local FOCUS_CONTAINER_GAP = 2
+local FOCUS_CONTAINER_GAP = 3 -- Blizzard: groupLineSpacing = FlowLayoutLineSpacing (3)
 
 local isUpdatingAuras = false
 
@@ -392,6 +394,7 @@ function focusframes:SetupCustomAuraContainer()
             mineFilter = "HARMFUL|PLAYER",
             otherFilter = "HARMFUL|!PLAYER",
             frameLevelBonus = 20,
+            exactLineSpacing = true, -- Blizzard's 3px rows
             largeSize = FOCUS_LARGE_AURA_SIZE,
             smallSize = FOCUS_SMALL_AURA_SIZE,
             spacing = FOCUS_AURA_SPACING,
@@ -414,6 +417,7 @@ function focusframes:SetupCustomAuraContainer()
             mineFilter = "HELPFUL|PLAYER",
             otherFilter = "HELPFUL|!PLAYER",
             frameLevelBonus = 20,
+            exactLineSpacing = true, -- Blizzard's 3px rows
             largeSize = FOCUS_LARGE_AURA_SIZE,
             smallSize = FOCUS_SMALL_AURA_SIZE,
             spacing = FOCUS_AURA_SPACING,

@@ -99,4 +99,13 @@ function opt.BuildOtherUI(page)
             ddOnChange = RefreshDamageMeter,
         });
     end
+
+    opt.Header(page, "Minimap");
+
+    opt.AddCheckbox(page, {
+        variable = "DarkenAddonMinimapButtons", name = "Darken Addon Minimap Buttons",
+        tooltip = "Darken the ring around other addons' minimap buttons to match the minimap border. The addons' own icons keep their colors.\n\nButtons that use their own custom ring art are left alone.",
+        db = "general", field = "darkenaddonminimapbuttons", default = true,
+        onChange = function() if UberUI.minimap then UberUI.minimap.DarkenAddonButtons() end end,
+    });
 end

@@ -82,6 +82,12 @@ local function ReapplyDurationOffsets(auraFrame)
     local buttons = auraFrame and auraFrame.auraFrames
     if type(buttons) ~= "table" then return end
     local px = SquareBorderThickness()
+    if auraFrame == DebuffFrame then
+        local style = uuidb.general.aurastyle_playerdebuffs or "zoom"
+        if not (style == "both" or style == "border") then
+            px = SB.DispelThickness(SQUARE_LOC)
+        end
+    end
     for _, button in ipairs(buttons) do
         local sb = button and FindSquareBorder(button)
         if sb and sb:IsShown() and button.Icon then
@@ -368,12 +374,13 @@ function buffsandauras:StyleAuraButton(button)
     -- temp enchants. Buffs have no Blizzard border in Zoom Only, so they stay
     -- borderless there.
     local squareZoomOverride = style == "zoom" and isPlayer and (isDebuff or isTempEnchant) and SquareBordersEnabled()
-    -- Rounded + Debuff Border "Dispel Color" (zoom style): our own rounded
-    -- ring tinted with the dispel color, instead of switching to Blizzard's
-    -- separate per-type border art -- so Dark and Dispel Color are the same
-    -- ring, only the color changes.
-    local roundedDispelOverride = style == "zoom" and isPlayer and isDebuff and not SquareBordersEnabled()
-    local borderEnabled = (style == "both" or style == "border") or squareZoomOverride or roundedDispelOverride
+    -- Rounded + Debuff Border "Dispel Color" (zoom style) falls through to
+    -- the no-custom-border path below, which re-shows Blizzard's own
+    -- DebuffBorder. Blizzard sets its per-type art from its own code, so it's
+    -- full brightness and right in combat. (Tinting our desaturated ring
+    -- instead came out dark -- the ring art is painted red, ~24% bright once
+    -- desaturated -- and lost the color in combat.)
+    local borderEnabled = (style == "both" or style == "border") or squareZoomOverride
     local zoomEnabled = (style == "both" or style == "zoom")
 
     -- Handle icon zoom
@@ -468,7 +475,12 @@ function buffsandauras:StyleAuraButton(button)
             borderFrame:Hide()
             squareBorder = GetSquareBorder(button)
             squareBorder:SetFrameLevel(borderFrame:GetFrameLevel())
+            -- Dispel Color debuff borders are 1px thicker than Dark ones
+            -- (squareborders.DispelThickness).
             local px = SquareBorderThickness()
+            if isDebuff and not (style == "both" or style == "border") then
+                px = SB.DispelThickness(SQUARE_LOC)
+            end
             SB.Layout(squareBorder, iconTexture, px, SquareBorderInset())
             if SquareBorderInset() then
                 OffsetDurationText(button, iconTexture, 0)
@@ -490,12 +502,7 @@ function buffsandauras:StyleAuraButton(button)
         elseif showCustomBorder then
             if squareBorder then squareBorder:Hide() end
             OffsetDurationText(button, iconTexture, 0)
-            if roundedDispelOverride then
-                local id, unit = GetPlayerDebuffInstanceID(button)
-                borderFrame.texture:SetVertexColor(SB.GetDispelColor(dtype, unit, id))
-            else
-                borderFrame.texture:SetVertexColor(r, g, b, a)
-            end
+            borderFrame.texture:SetVertexColor(r, g, b, a)
             borderFrame:Show()
         else
             if squareBorder then squareBorder:Hide() end
@@ -559,6 +566,9 @@ function buffsandauras:StyleAuraButton(button)
 end
 
 function buffsandauras:Refresh()
+    -- Player debuffs move into our own container while Player auras use
+    -- square borders (core/playerdebuffs.lua); it handles combat itself.
+    if UberUI.playerdebuffs then UberUI.playerdebuffs:Update() end
     if InCombatLockdown() then return end
 
     if BuffFrame then

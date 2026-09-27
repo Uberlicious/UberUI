@@ -13,9 +13,14 @@
     - Deduplicated the Bar Textures settings code (12 near-identical blocks reduced to one shared helper).
     - Settings reorganized into pages: Uber UI (general), Unit Frames, Raid & Group Frames, Arena, Nameplates, and Other UI. Existing saved settings carry over unchanged. /uberui now works alongside /uui.
     - Aura settings are clearer: each frame now has Zoom Icons, Buff Border, Debuff Border, Border Shape, Border Thickness, and Border Position instead of a single combined style dropdown. Existing looks carry over unchanged.
-    - New Square aura borders (Border Shape: Square) for every aura location, with adjustable pixel thickness (default 2px) and inside/outside placement. Debuffs keep their real dispel-type colors, including in combat on Target, Focus, Boss, and Compact Raid/Party. Note: on Player auras, square debuff borders can't show dispel colors in combat yet.
-    - Debuff Border "Dispel Color" with Rounded borders now tints Uber UI's own border ring instead of switching to Blizzard's separate border art, so Dark and Dispel Color share the same shape.
+    - New Square aura borders (Border Shape: Square) for every aura location, with adjustable pixel thickness (default 2px) and inside/outside placement. Debuffs keep their real dispel-type colors, including in combat on Target, Focus, Boss, and Compact Raid/Party. With Square borders, your own debuffs are shown by Uber UI itself (following your Edit Mode Debuff Frame layout) so their dispel colors stay correct in combat too.
+    - Debuff Border "Dispel Color" with Rounded borders uses Blizzard's own full-brightness dispel-type border art (the colors were coming out too dark), and is now correct in combat on Player debuffs too.
     - New All Auras section on the main settings page: one-shot actions that set Zoom, borders, shape, thickness, or position on every aura location at once.
     - Fixed the Target/Focus buff row overlapping the debuff row during combat.
     - Fixed Hide Honor force-showing PvP badges that Blizzard wouldn't show (and stray badge art on WoW Forever); Hide Honor now also covers WoW Forever's own PvP badge.
     - Compact Raid/Party Big Defensive no longer shows permanent auras such as Devotion Aura.
+    - Dispel-colored square borders (and purgeable-buff highlights) are drawn 1px thicker than dark borders so the color is easier to see.
+    - Square-bordered aura icons now fill their whole slot instead of shrinking by 1px on each side.
+    - Target and Focus auras now match Blizzard's sizes and spacing: 21px for your own auras, 17px for others, and 3px between icons, rows, and the buff/debuff blocks. Focus auras were previously smaller.
+    - Fixed extra space above an enemy target's buffs when it has no debuffs.
+    - New Darken Addon Minimap Buttons option (Other UI, on by default): darkens the ring around other addons' minimap buttons to match the minimap.

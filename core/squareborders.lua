@@ -151,6 +151,17 @@ function squareborders.LayoutFor(sb, region, loc)
     return squareborders.Layout(sb, region, squareborders.Thickness(loc), squareborders.IsInset(loc))
 end
 
+-- Dispel-colored borders (debuff dispel type, purgeable/stealable buffs) are
+-- drawn 1px thicker than the plain dark border so the color reads at small
+-- sizes -- EllesmereUI's convention (1px border, 2px dispel ring).
+function squareborders.DispelThickness(loc)
+    return squareborders.Thickness(loc) + 1
+end
+
+function squareborders.LayoutDispelFor(sb, region, loc)
+    return squareborders.Layout(sb, region, squareborders.DispelThickness(loc), squareborders.IsInset(loc))
+end
+
 -- Keeps the border above the owner's own art (icon, cooldown swipe, native
 -- border textures).
 function squareborders.RaiseAbove(sb, frame, bonus)

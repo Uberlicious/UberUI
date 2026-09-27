@@ -2,15 +2,72 @@
 
 Status: **implemented for every aura location, untested in game.**
 
-**Known limitation -- Player debuffs in combat:** Player auras are Blizzard's
-own BuffFrame/DebuffFrame buttons styled from outside, and in combat every
-route to a player debuff's dispel color is closed to addon code (instance
-ID and dispel type are secret; `GetUnitAuraInstanceIDs` is refused while
-tainted; confirmed with `/uuidebugplayerdebuffs`). So square (and the tinted
-rounded ring) Player debuff borders fall back to the "None" red in combat;
-the Player Border Shape tooltip warns about it. Every other location is
-engine-colored and unaffected. Planned fix: show player auras in our own
-aurakit container (EllesmereUI's approach) -- debuffs first.
+**Player debuffs in combat -- fixed by moving them into our own container**
+(`core/playerdebuffs.lua`, untested in game). Player auras are Blizzard's own
+BuffFrame/DebuffFrame buttons styled from outside, and in combat every route
+to a player debuff's dispel color is closed to addon code (instance ID and
+dispel type are secret; `GetUnitAuraInstanceIDs` is refused while tainted;
+confirmed with `/uuidebugplayerdebuffs`), so square Player debuff borders
+used to fall back to the "None" red in combat. Now, while Player auras use
+**square** borders (and Player debuffs aren't set to "None"), Player
+debuffs are shown in an aurakit `CustomAuraContainer` (unit
+`PlayerFrame.unit`, `squareLoc = "player"`), where the engine colors the
+square strips like Target/Focus. Buffs and weapon enchants stay on
+Blizzard's BuffFrame. Rounded + Dispel Color keeps Blizzard's own debuff
+buttons and shows Blizzard's own `DebuffBorder` (set by Blizzard's code), so
+it is also correct in combat (see "Rounded + Dispel Color" below).
+
+How the container mirrors Blizzard's DebuffFrame (same code on retail 12.1
+and Forever 1.60.1 -- checked in `wow-ui-source` `origin/live` /
+`origin/forever`, `Blizzard_BuffFrame/BuffFrame.lua`):
+
+- **Which auras:** every `HARMFUL` aura, unfiltered, like
+  `DebuffFrameMixin:UpdateAuras` (`AuraUtil.ForEachAura(PlayerFrame.unit,
+  "HARMFUL", maxAuras)`). Sorted `AuraInstanceIDOnly` (application order,
+  approximating Blizzard's slot order). Max `DEBUFF_MAX_DISPLAY` (16) + 6
+  private slots. Private (boss) auras come through the container itself, so
+  Blizzard's six `DebuffFrame.PrivateAuraAnchors` (direct children of
+  DebuffFrame, not of its AuraContainer) are hidden along with
+  `DebuffFrame.AuraContainer`.
+- **Edit Mode settings:** all land as fields on `DebuffFrame.AuraContainer`
+  (`EditModeAuraFrameSystemMixin`): `isHorizontal`, `addIconsToRight`,
+  `addIconsToTop`, `iconStride` (icon limit = icons per row), `iconScale`
+  (icon size %), `iconPadding`. Re-read after every `UpdateGridLayout`
+  (instance hook) and mapped to flow axis / anchor corner / growth
+  direction / max line size / container `SetScale`. Visibility (Always / In
+  Combat / Hidden) and opacity apply to `DebuffFrame` itself -- our
+  container's parent -- so they carry over, as does position.
+- **Look:** 30x30 icon filling the button; Blizzard's 30x40 / 60x30 cells
+  become the line gap past the icon (padding + 10 horizontal, + 30
+  vertical) where the duration text sits on Blizzard's side of the icon.
+  Duration via the engine's `SetDurationText` with a step color curve
+  (white under `BUFF_DURATION_WARNING_TIME`, yellow above), hidden with the
+  `buffDurations` CVar, pushed out by an outset border's thickness. Count in
+  `NumberFontNormal` at (-2, 2). No cooldown swipe (`ClearDurationCooldown`).
+- **Edit Mode open:** Blizzard's container is shown instead (its preview
+  icons need it); ours comes back on exit (`SetIsEditing` hook).
+- **Not mirrored:** the low-time flash (`BUFF_WARNING_TIME`), Edit Mode's
+  "Show Dispel Type" symbol (only swaps `-noicon` for `-icon` border art;
+  colors are identical, and square borders have no symbol slot), Forever's
+  gamepad navigation of DebuffFrame buttons. The deadly-debuff center
+  alert (`DeadlyDebuffFrame`) is separate and keeps working.
+- Hooks on Blizzard frames install only once the feature is on, and their
+  work is deferred a frame (`C_Timer.After(0)`, coalesced). The container is
+  built out of combat only; if square borders get turned on mid-combat,
+  Blizzard's debuffs keep showing until combat ends.
+
+**Sizing rules (2026-09-26):**
+- Dispel-colored borders -- debuff dispel type and purgeable/stealable buffs
+  -- are drawn **1px thicker** than the plain dark border
+  (`squareborders.DispelThickness` / `LayoutDispelFor`), matching
+  EllesmereUI (1px border, 2px dispel ring). Applied in aurakit (Target,
+  Focus, Boss, Compact, Player debuff container), Party, and Player's
+  Blizzard-button path; outset duration-text pushes use the same thickness.
+- With square borders on for a location, aurakit icons **fill their button**
+  instead of the 1px inset kept for the round border (which cost 2px of
+  every icon). Target "other" auras went 16 -> 17 and Focus 17/13 -> 21/17
+  to match Blizzard's `TargetFrameAuraContainerDefaults` (21 mine / 17
+  other; Focus containers inherit FocusFrame's 0.75x small-focus scale).
 
 Settings model (options/helpers.lua `AddAuraOptions`): per location, Zoom
 Icons (checkbox), Buff Border (Dark / None), Debuff Border (Dark / Dispel
@@ -30,16 +87,21 @@ keys and refreshes them, then the dropdown snaps back to "Set All...".
 Nothing is stored and no code path ever reads these again -- deliberately
 not a live override; each location stays editable afterwards.
 
-Rounded + Dispel Color draws OUR rounded ring (desaturated
-`ui-debuff-border-default-noicon`, same art as Dark) tinted with the dispel
-color, instead of switching to Blizzard's per-type border art -- Dark and
-Dispel Color are the same ring, only the color changes. Player: tinted via
-`squareborders.GetDispelColor`. Target/Focus/Boss/Compact: a second
-engine-registered texture (`button.roundDispelTex`, `PreserveAsset`) so the
-engine applies the tint (secret-safe); Blizzard's per-type art
-(`dispelBorderTex`, style `Border`) remains the fallback until it registers.
-Party and the Arena CC tracker already work this way natively (Blizzard
-tints one plain ring), so they're unchanged.
+Rounded + Dispel Color shows **Blizzard's own per-type border art** (changed
+2026-09-27). It used to draw our ring (desaturated
+`ui-debuff-border-default-noicon`) tinted with the dispel color, but that
+ring art is painted red -- sampled `UI-Debuff-Border.blp`: avg RGB
+(124, 34, 31) -- so desaturated it's only ~24% bright and every tint came out
+dark. Vertex color can only darken, so no tint fixes that; the per-type art is
+already full-brightness in each color. Target/Focus/Boss/Compact: the
+engine-picked `dispelBorderTex` (style `Border`) is preferred;
+`roundDispelTex` (`PreserveAsset`) stays registered only as a fallback if the
+per-type art never registers. Player (Blizzard's buttons): Zoom Only falls
+through to re-showing Blizzard's own `DebuffBorder`, which Blizzard's code
+sets per type -- correct in combat too. Dark borders still use the
+desaturated ring tinted with the darkness color (dark is the intent there).
+Party and the Arena CC tracker already use Blizzard's own ring natively, so
+they're unchanged.
 
 v2 (all locations): shared module `core/squareborders.lua` (border object,
 whole-pixel layout, per-location settings `squareauraborders_<loc>` /

@@ -249,9 +249,9 @@ local TOP_X = 25
 local TOP_Y = 26
 local TOP_ON_TOP_X = 5
 local LARGE_AURA_SIZE = 21
-local SMALL_AURA_SIZE = 16
-local AURA_SPACING = 1
-local CONTAINER_GAP = 2
+local SMALL_AURA_SIZE = 17 -- Blizzard's TargetFrameAuraContainerDefaults: 21 / 17
+local AURA_SPACING = 3 -- Blizzard's FlowLayoutElementSpacing
+local CONTAINER_GAP = 3 -- Blizzard: groupLineSpacing = FlowLayoutLineSpacing (3)
 
 local isUpdatingAuras = false
 
@@ -391,6 +391,7 @@ function targetframes:SetupCustomAuraContainer()
             mineFilter = "HARMFUL|PLAYER",
             otherFilter = "HARMFUL|!PLAYER",
             frameLevelBonus = 20,
+            exactLineSpacing = true, -- Blizzard's 3px rows
             largeSize = LARGE_AURA_SIZE,
             smallSize = SMALL_AURA_SIZE,
             spacing = AURA_SPACING,
@@ -413,6 +414,7 @@ function targetframes:SetupCustomAuraContainer()
             mineFilter = "HELPFUL|PLAYER",
             otherFilter = "HELPFUL|!PLAYER",
             frameLevelBonus = 20,
+            exactLineSpacing = true, -- Blizzard's 3px rows
             largeSize = LARGE_AURA_SIZE,
             smallSize = SMALL_AURA_SIZE,
             spacing = AURA_SPACING,

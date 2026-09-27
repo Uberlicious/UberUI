@@ -157,11 +157,13 @@ function partyframes:StyleAuraButton(button, isBuff)
     if square and (not isBuff or darkBorderEnabled) then
         button.DebuffBorder:Hide()
         local sb = SB.Get(button)
-        SB.LayoutFor(sb, button.Icon, "party")
         SB.RaiseAbove(sb, button, 2)
         if darkBorderEnabled then
+            SB.LayoutFor(sb, button.Icon, "party")
             SB.SetDarkColor(sb)
         else
+            -- Dispel color: 1px thicker than the dark border.
+            SB.LayoutDispelFor(sb, button.Icon, "party")
             local instID = button.auraInstanceID
             SB.ApplyDispelColor(sb, nil, button.unit, instID)
         end

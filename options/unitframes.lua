@@ -35,7 +35,7 @@ function opt.BuildUnitFrames(page)
         refresh = opt.RefreshPlayerAuras,
         buffTooltip = "Border on Player buffs and weapon enchants. \"None\" is Blizzard's look: no border on buffs, Blizzard's purple border on weapon enchants.\n\nWith Zoom off and the Blizzard border choice, Uber UI leaves these auras entirely to Blizzard.",
         positionDetail = " The duration text moves out to make room.",
-        shapeTooltip = "Rounded uses Blizzard's border art. Square draws a flat border of exact pixel thickness in the same colors.\n\n|cffff4040Square on Player auras loses debuff dispel coloring in combat:|r WoW hides your own debuffs' dispel types from addons during combat, so square Player debuff borders can't show Magic/Curse/Poison/etc. colors there. (Target, Focus, Boss and other frames are not affected.)\n\nHas no effect on auras Uber UI has handed back to Blizzard (Zoom off + Blizzard border).",
+        shapeTooltip = "Rounded uses Blizzard's border art. Square draws a flat border of exact pixel thickness in the same colors.\n\nWith Square, Uber UI shows your debuffs itself, following your Edit Mode Debuff Frame layout, so their dispel colors stay correct in combat. Buffs and weapon enchants stay on Blizzard's frame.\n\nHas no effect on auras Uber UI has handed back to Blizzard (Zoom off + Blizzard border).",
     });
 
     opt.AddCheckbox(page, {

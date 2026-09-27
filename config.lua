@@ -144,6 +144,7 @@ local defaults = {
         nameplateraidtargetscale     = 1,
         nameplateraidtargettopanchor = false,
         smallfriendlynameplate       = false,
+        darkenaddonminimapbuttons    = true,
     },
     damagemeters = {
         background = false,
