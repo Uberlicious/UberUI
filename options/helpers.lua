@@ -109,22 +109,20 @@ end
 
 -- Bar texture checkbox + dropdown pairs --------------------------------------
 
+-- Ours plus every LibSharedMedia statusbar texture (UberUI:GetBarTextureChoices
+-- in config.lua), each with a preview. Built each time the dropdown opens, so
+-- textures other addons register later show up too.
 local function GetBarTextureOptionsWithTextures()
     local container = Settings.CreateControlTextContainer();
-    for bar in pairs(UberUI:GetDefaults().statusbars) do
-        bar = gsub(bar, "_", " ");
-        container:Add(bar, bar);
+    local choices = UberUI:GetBarTextureChoices();
+    for _, choice in ipairs(choices) do
+        container:Add(choice.name, choice.name);
     end
     local options = container:GetData();
-    local statusbars = UberUI:GetDefaults().statusbars
-    if statusbars then
-        for _, option in ipairs(options) do
-            local textureName = gsub(option.value, " ", "_")
-            local texturePath = statusbars[textureName]
-            if texturePath then
-                local iconString = CreateTextureMarkup(texturePath, 64, 16, 60, 12, 0, 1, 0, 1)
-                option.label = iconString .. " " .. option.label
-            end
+    for i, option in ipairs(options) do
+        local path = choices[i] and choices[i].path
+        if path then
+            option.label = CreateTextureMarkup(path, 64, 16, 60, 12, 0, 1, 0, 1) .. " " .. option.label
         end
     end
     return options

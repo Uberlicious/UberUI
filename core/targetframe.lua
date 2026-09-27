@@ -123,6 +123,7 @@ function targetframes:Color()
     if TargetFrameSpellBar and TargetFrameSpellBar.Border then
         ApplyDarkenColor(TargetFrameSpellBar.Border)
     end
+    self:StyleCastBarIcon()
 
     if TargetFrameToT and TargetFrameToT.FrameTexture then
         ApplyDarkenColor(TargetFrameToT.FrameTexture)
@@ -212,10 +213,33 @@ function targetframes:HealthManaBarTexture()
     end
 
     if secondaryTextureToApply and healthBar then
-        if healthBar.HealAbsorbBar then healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply) end
-        if healthBar.MyHealPredictionBar then healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply) end
-        if healthBar.OtherHealPredictionBar then healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply) end
-        if healthBar.TotalAbsorbBar then
+        if healthBar.HealAbsorbBar and healthBar.HealAbsorbBar.Fill then
+            healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply)
+            if healthBar.HealAbsorbBar.fillColor then
+                healthBar.HealAbsorbBar.Fill:SetVertexColor(healthBar.HealAbsorbBar.fillColor:GetRGBA())
+            end
+        end
+        if healthBar.MyHealPredictionBar and healthBar.MyHealPredictionBar.Fill then
+            healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply)
+            if healthBar.MyHealPredictionBar.fillColor then
+                healthBar.MyHealPredictionBar.Fill:SetVertexColor(healthBar.MyHealPredictionBar.fillColor:GetRGBA())
+            elseif CUF_MY_HEAL_PREDICTION_COLOR then
+                healthBar.MyHealPredictionBar.Fill:SetVertexColor(CUF_MY_HEAL_PREDICTION_COLOR:GetRGBA())
+            else
+                healthBar.MyHealPredictionBar.Fill:SetVertexColor(11/255, 136/255, 105/255, 1)
+            end
+        end
+        if healthBar.OtherHealPredictionBar and healthBar.OtherHealPredictionBar.Fill then
+            healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply)
+            if healthBar.OtherHealPredictionBar.fillColor then
+                healthBar.OtherHealPredictionBar.Fill:SetVertexColor(healthBar.OtherHealPredictionBar.fillColor:GetRGBA())
+            elseif CUF_OTHER_HEAL_PREDICTION_COLOR then
+                healthBar.OtherHealPredictionBar.Fill:SetVertexColor(CUF_OTHER_HEAL_PREDICTION_COLOR:GetRGBA())
+            else
+                healthBar.OtherHealPredictionBar.Fill:SetVertexColor(21/255, 89/255, 72/255, 1)
+            end
+        end
+        if healthBar.TotalAbsorbBar and healthBar.TotalAbsorbBar.Fill then
             healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply)
             healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1)
         end
@@ -273,8 +297,18 @@ function targetframes:UpdateAuraPositions()
     })
 end
 
+-- Border on the cast bar's spell icon (Cast Bar Icon Border option), in
+-- this frame's aura border look (aurakit.StyleCastBarIcon).
+function targetframes:StyleCastBarIcon()
+    local bar = TargetFrame.spellbar or TargetFrameSpellBar
+    if not bar then return end
+    local enabled = not (uuidb and uuidb.general and uuidb.general.targetcastbariconborder == false)
+    aurakit.StyleCastBarIcon(bar, "target", enabled)
+end
+
 function targetframes:UpdateAuras()
     if isUpdatingAuras then return end
+    self:StyleCastBarIcon()
     isUpdatingAuras = true
 
     local styleBuffs = (uuidb and uuidb.general and uuidb.general.aurastyle_targetbuffs) or "both"

@@ -104,9 +104,19 @@ function prd:StylePRD(frame)
         if secondaryTextureToApply then
             if healthBar.myHealPrediction then
                 healthBar.myHealPrediction:SetTexture(secondaryTextureToApply)
+                if CUF_MY_HEAL_PREDICTION_COLOR then
+                    healthBar.myHealPrediction:SetVertexColor(CUF_MY_HEAL_PREDICTION_COLOR:GetRGBA())
+                else
+                    healthBar.myHealPrediction:SetVertexColor(11/255, 136/255, 105/255, 1)
+                end
             end
             if healthBar.otherHealPrediction then
                 healthBar.otherHealPrediction:SetTexture(secondaryTextureToApply)
+                if CUF_OTHER_HEAL_PREDICTION_COLOR then
+                    healthBar.otherHealPrediction:SetVertexColor(CUF_OTHER_HEAL_PREDICTION_COLOR:GetRGBA())
+                else
+                    healthBar.otherHealPrediction:SetVertexColor(21/255, 89/255, 72/255, 1)
+                end
             end
             if healthBar.totalAbsorb then
                 healthBar.totalAbsorb:SetTexture(secondaryTextureToApply)

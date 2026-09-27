@@ -10,6 +10,11 @@
 ## SavedVariables: UberuiDB
 ## Dependencies: Blizzard_Settings, Blizzard_BuffFrame, Blizzard_ActionBar
 ## Category: Unit Frames
+## OptionalDeps: LibSharedMedia-3.0, SharedMedia
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 
 config.lua
 options\helpers.lua
@@ -29,6 +34,7 @@ core\targetframe.lua
 core\focusframe.lua
 core\bossframes.lua
 core\miscframes.lua
+core\swingtimers.lua
 core\nameplates.lua
 core\nameplateauras.lua
 core\compactunitframe.lua

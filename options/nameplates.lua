@@ -36,6 +36,28 @@ function opt.BuildNameplates(page)
         ddOnChange = function(value) UberUI.nameplates:ForceNameplateTexture(value) end,
     });
 
+    local function RefreshNameplateBars()
+        if UberUI.nameplates then UberUI.nameplates:ForceNameplateTexture() end
+    end
+
+    local shapeInit = opt.AddDropdown(page, {
+        variable = "NameplateHealthBorderShape", name = "Nameplate Health Bar Border",
+        tooltip = "Rounded is Blizzard's nameplate border. Square draws a flat border of exact pixel thickness around the health bar, in the darkness color, with a square bar.",
+        default = "rounded",
+        values = { { "rounded", "Rounded" }, { "square", "Square" } },
+        get = function() return (uuidb.general and uuidb.general.nameplatesquareborder) and "square" or "rounded" end,
+        set = function(value) uuidb.general.nameplatesquareborder = (value == "square") end,
+        onChange = RefreshNameplateBars,
+    });
+
+    opt.DependsOn(opt.AddSlider(page, {
+        variable = "NameplateHealthBorderThickness", name = "Nameplate Health Bar Border Thickness",
+        tooltip = "Thickness of the square nameplate health bar border, in screen pixels.",
+        db = "general", field = "nameplatesquareborder_thickness", default = 1,
+        min = 1, max = 4, step = 1,
+        onChange = RefreshNameplateBars,
+    }), shapeInit, function() return uuidb.general and uuidb.general.nameplatesquareborder end);
+
     opt.Header(page, "Nameplate Auras");
 
     local function RefreshNameplateAuraStyle()

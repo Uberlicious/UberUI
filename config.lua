@@ -76,6 +76,15 @@ local defaults = {
         bossbartexture               = "Blizzard",
         nameplatebartexture          = "Blizzard",
         personalresourcebartexture   = "Blizzard",
+        swingtimerbartexture         = "Blizzard",
+        swingtimerbartextures        = false,
+        darkenswingtimers            = true,
+        swingtimerlabelshadow        = true,
+        swingtimersquareborder       = false,
+        swingtimersquareborder_thickness = 1,
+        swingtimermainhandcolor      = "ffffc21a",
+        swingtimeroffhandcolor       = "ff3d9eff",
+        swingtimerrangedcolor        = "ff5cd65c",
         damagemetertexture           = "Blizzard",
         arenanumbers                 = true,
         hidearenaframes              = false,
@@ -104,6 +113,7 @@ local defaults = {
         squareauraborders_player     = false,
         squareauraborders_thickness  = 2,
         squareauraborders_inset      = true,
+        playertempenchantcolor       = true,
         -- Other aura locations: squareauraborders_<loc>[_thickness|_inset]
         -- (see core/squareborders.lua; Player keeps the original keys above).
         squareauraborders_target           = false,
@@ -127,6 +137,9 @@ local defaults = {
         squareauraborders_nameplate            = false,
         squareauraborders_nameplate_thickness  = 2,
         squareauraborders_nameplate_inset      = true,
+        squareauraborders_cdm              = false,
+        squareauraborders_cdm_thickness    = 1,
+        squareauraborders_cdm_inset        = true,
         aurastyle_targetbuffs        = "both",
         aurastyle_targetdebuffs      = "zoom",
         targetbuffs_showdispel       = true,
@@ -144,6 +157,8 @@ local defaults = {
         aurastyle_arenabuffs         = "both",
         aurastyle_arenadebuffs       = "zoom",
         nameplateauras               = false,
+        targetcastbariconborder      = true,
+        focuscastbariconborder       = true,
         aurastyle_nameplatebuffs     = "both",
         aurastyle_nameplatedebuffs   = "zoom",
         nameplatebuffs_showdispel    = true,
@@ -157,6 +172,8 @@ local defaults = {
         nameplateraidtargetscale     = 1,
         nameplateraidtargettopanchor = false,
         smallfriendlynameplate       = false,
+        nameplatesquareborder        = false,
+        nameplatesquareborder_thickness = 1,
         darkenaddonminimapbuttons    = true,
     },
     damagemeters = {
@@ -169,6 +186,9 @@ local defaults = {
         bartexture  = "Blizzard",
         bartextures = false,
         borders     = true,
+        pandemicstyle = "blizzard",
+        debuffborder  = "dispel",
+        pandemiccolor = "ffff2626",
     },
     playerframes = {
         classcolor = true,
@@ -192,6 +212,7 @@ local defaults = {
     },
     cuf = {
         hideRaidTitle = false,
+        sortMeOnTop = false,
     },
 }
 
@@ -221,6 +242,94 @@ function UberUI:Init()
 
     mergeDefaults(defaults, UberuiDB)
     uuidb = UberuiDB
+    self:AttachSharedMediaTextures()
+end
+
+-----------------------------
+-- SHARED MEDIA (LibSharedMedia-3.0)
+-----------------------------
+
+-- Every texture lookup in the addon is uuidb.statusbars[name]. Our own
+-- textures live in that saved table; any other name falls through to
+-- LibSharedMedia's "statusbar" list (textures other addons register), so
+-- all of those work everywhere with no per-frame changes and nothing from
+-- another addon is ever saved. Names are stored with spaces as underscores
+-- (the dropdowns' convention), so both spellings are tried.
+local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+
+local function FetchSharedTexture(_, name)
+    if not LSM or type(name) ~= "string" then return nil end
+    return LSM:Fetch("statusbar", name, true) or LSM:Fetch("statusbar", (name:gsub("_", " ")), true)
+end
+
+function UberUI:AttachSharedMediaTextures()
+    if type(uuidb.statusbars) == "table" and getmetatable(uuidb.statusbars) == nil then
+        setmetatable(uuidb.statusbars, { __index = FetchSharedTexture })
+    end
+end
+
+-- Our textures for other addons' pickers (names with spaces). A name another
+-- addon already registered keeps its texture there.
+if LSM then
+    for name, path in pairs(defaults.statusbars) do
+        if name ~= "Blizzard" then
+            LSM:Register("statusbar", "Uber UI " .. name:gsub("_", " "), path)
+        end
+    end
+end
+
+-- A texture another addon registers after our frames were textured (their
+-- load order is theirs) left a chosen shared texture unapplied until the next
+-- refresh. When one of the textures picked in our settings shows up, re-apply
+-- bar textures once (coalesced; next frame, outside the registering call).
+if LSM then
+    local pending = false
+    local watcher = {}
+    LSM.RegisterCallback(watcher, "LibSharedMedia_Registered", function(_, mediatype, key)
+        if mediatype ~= "statusbar" or pending or type(key) ~= "string" then return end
+        local g = uuidb and uuidb.general
+        if type(g) ~= "table" then return end
+        local stored = key:gsub(" ", "_")
+        local used = false
+        for field, value in pairs(g) do
+            if type(value) == "string" and field:find("texture$") and (value == key or value == stored) then
+                used = true
+                break
+            end
+        end
+        if not used then return end
+        pending = true
+        C_Timer.After(0, function()
+            pending = false
+            if UberUI.misc then pcall(UberUI.misc.AllFramesHealthManaTexture, UberUI.misc) end
+        end)
+    end)
+end
+
+-- The bar texture dropdowns: ours, then every LibSharedMedia texture that
+-- isn't already one of ours, as display names (spaces). "Blizzard" first.
+function UberUI:GetBarTextureChoices()
+    local seen, list = {}, {}
+    local function add(display, path)
+        local key = display:lower()
+        if seen[key] then return end
+        seen[key] = true
+        list[#list + 1] = { name = display, path = path }
+    end
+    for name, path in pairs(defaults.statusbars) do
+        add((name:gsub("_", " ")), path)
+    end
+    if LSM then
+        for name, path in pairs(LSM:HashTable("statusbar")) do
+            if type(name) == "string" and not name:find("^Uber UI ") then add(name, path) end
+        end
+    end
+    table.sort(list, function(a, b)
+        if a.name == "Blizzard" then return b.name ~= "Blizzard" end
+        if b.name == "Blizzard" then return false end
+        return a.name:lower() < b.name:lower()
+    end)
+    return list
 end
 
 function UberUI:Save()

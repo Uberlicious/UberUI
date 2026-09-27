@@ -39,6 +39,13 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
+        variable = "playerTempEnchantColor", name = "Player Weapon Enchant Border Color",
+        tooltip = "Give weapon enchants (sharpening stones, oils, poisons, imbues) Blizzard's purple enchant border, whatever the Player Buff Border choice. With Square borders it's drawn as a purple square border. Off: weapon enchants get the same border as your other buffs, and no purple border at all when Buff Border is None.",
+        db = "general", field = "playertempenchantcolor", default = true,
+        onChange = opt.RefreshPlayerAuras,
+    });
+
+    opt.AddCheckbox(page, {
         variable = "ccPlayerHealth", name = "Class Color Player",
         tooltip = "Class color player health bar",
         db = "playerframes", field = "classcolor", default = true,
@@ -80,6 +87,13 @@ function opt.BuildUnitFrames(page)
                 UberUI.targetframes:UpdateAuras();
             end
         end,
+    });
+
+    opt.AddCheckbox(page, {
+        variable = "targetCastBarIconBorder", name = "Target Cast Bar Icon Border",
+        tooltip = "Give the spell icon on the Target cast bar a border, in the Target aura border style (Border Shape, Thickness and Position above) and the darkness color, with the icon zoomed like aura icons.",
+        db = "general", field = "targetcastbariconborder", default = true,
+        onChange = function() if UberUI.targetframes then UberUI.targetframes:StyleCastBarIcon() end end,
     });
 
     opt.AddDropdown(page, {
@@ -140,6 +154,13 @@ function opt.BuildUnitFrames(page)
         tooltip = opt.DispelTooltip("Focus"),
         db = "general", field = "focusbuffs_showdispel", default = true,
         onChange = RefreshFocusAuras,
+    });
+
+    opt.AddCheckbox(page, {
+        variable = "focusCastBarIconBorder", name = "Focus Cast Bar Icon Border",
+        tooltip = "Give the spell icon on the Focus cast bar a border, in the Focus aura border style (Border Shape, Thickness and Position above) and the darkness color, with the icon zoomed like aura icons.",
+        db = "general", field = "focuscastbariconborder", default = true,
+        onChange = function() if UberUI.focusframes then UberUI.focusframes:StyleCastBarIcon() end end,
     });
 
     opt.AddDropdown(page, {

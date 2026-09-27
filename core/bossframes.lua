@@ -146,10 +146,33 @@ function bossframes:HealthManaBarTexture()
         end
 
         if secondaryTextureToApply and healthBar then
-            if healthBar.HealAbsorbBar then healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply) end
-            if healthBar.MyHealPredictionBar then healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply) end
-            if healthBar.OtherHealPredictionBar then healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply) end
-            if healthBar.TotalAbsorbBar then
+            if healthBar.HealAbsorbBar and healthBar.HealAbsorbBar.Fill then
+                healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply)
+                if healthBar.HealAbsorbBar.fillColor then
+                    healthBar.HealAbsorbBar.Fill:SetVertexColor(healthBar.HealAbsorbBar.fillColor:GetRGBA())
+                end
+            end
+            if healthBar.MyHealPredictionBar and healthBar.MyHealPredictionBar.Fill then
+                healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply)
+                if healthBar.MyHealPredictionBar.fillColor then
+                    healthBar.MyHealPredictionBar.Fill:SetVertexColor(healthBar.MyHealPredictionBar.fillColor:GetRGBA())
+                elseif CUF_MY_HEAL_PREDICTION_COLOR then
+                    healthBar.MyHealPredictionBar.Fill:SetVertexColor(CUF_MY_HEAL_PREDICTION_COLOR:GetRGBA())
+                else
+                    healthBar.MyHealPredictionBar.Fill:SetVertexColor(11/255, 136/255, 105/255, 1)
+                end
+            end
+            if healthBar.OtherHealPredictionBar and healthBar.OtherHealPredictionBar.Fill then
+                healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply)
+                if healthBar.OtherHealPredictionBar.fillColor then
+                    healthBar.OtherHealPredictionBar.Fill:SetVertexColor(healthBar.OtherHealPredictionBar.fillColor:GetRGBA())
+                elseif CUF_OTHER_HEAL_PREDICTION_COLOR then
+                    healthBar.OtherHealPredictionBar.Fill:SetVertexColor(CUF_OTHER_HEAL_PREDICTION_COLOR:GetRGBA())
+                else
+                    healthBar.OtherHealPredictionBar.Fill:SetVertexColor(21/255, 89/255, 72/255, 1)
+                end
+            end
+            if healthBar.TotalAbsorbBar and healthBar.TotalAbsorbBar.Fill then
                 healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply)
                 healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1)
             end

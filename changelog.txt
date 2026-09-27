@@ -10,6 +10,11 @@
     - Cooldown Manager icon borders now use the same border style and sizing logic as the rest of the addon's aura borders, and stay correctly sized when Edit Mode's icon size/padding settings change.
     - Fixed Hide Nameplate Selection Glow not restoring the glow when turned back off.
     - Reduced unnecessary hook installation addon-wide for better taint hygiene: optional features no longer install their hooks unless actually enabled.
+    - Preserved heal prediction and absorb vertex coloring when custom/flat secondary bar textures are applied (preventing incoming heals from rendering white instead of green/teal on Compact Raid/Party, Nameplates, and Unit Frames).
+    - New Party Sorting "Me on Top" option (Raid & Group Frames page): always positions yourself at the top of Raid-Style Party Frames, while ordering remaining party members by your chosen sort method (Role, Group, or Alphabetical).
+    - Cast bar overlap fix on WoW Forever: nudged nameplate cast bar downward to account for the "important cast" and "targeting you" border indicators.
+    - Square Nameplates now automatically use the "Blizzard_Flat" texture if no other custom bar texture is selected, replacing the stock rounded Blizzard healthbar texture.
+    - Fixed secret maxHealth taint crash on WoW Forever when updating nameplate cast bars.
     - Deduplicated the Bar Textures settings code (12 near-identical blocks reduced to one shared helper).
     - Settings reorganized into pages: Uber UI (general), Unit Frames, Raid & Group Frames, Arena, Nameplates, and Other UI. Existing saved settings carry over unchanged. /uberui now works alongside /uui.
     - Aura settings are clearer: each frame now has Zoom Icons, Buff Border, Debuff Border, Border Shape, Border Thickness, and Border Position instead of a single combined style dropdown. Existing looks carry over unchanged.
@@ -29,3 +34,13 @@
     - Target auras: purgeable buffs now get a thin rounded white border instead of Blizzard's large glow.
     - New Target of Target / Focus Target of Target options: narrow the aura rows while target-of-target is shown (Blizzard's behavior) or move the target-of-target frame aside so the rows keep their full width.
     - Custom nameplate bar textures now keep Blizzard's bar shape and edge, so the nameplate border reads as sitting in front of the bar again, and no longer revert to Blizzard's texture after nameplate style changes.
+    - New Nameplate Health Bar Border option (Nameplates page): Rounded (Blizzard's) or Square, a flat border of exact pixel thickness (1-4 px) in the darkness color around a square health bar, with a square target/focus selection outline in Blizzard's colors, and on WoW Forever a matching square box for the level display.
+    - Fixed the WoW Forever nameplate cast bar overlapping the health bar (accounting for the "important" and "targeting you" border indicators); it now nudges down cleanly in both Rounded and Square border modes.
+    - Bar texture dropdowns now also list every status bar texture other addons share through LibSharedMedia (SharedMedia packs, other UI addons), and Uber UI's own textures are shared with other addons' pickers as "Uber UI <name>".
+    - New Player Weapon Enchant Border Color option (on by default): weapon enchants keep Blizzard's purple enchant border whatever the Player Buff Border choice, drawn as a purple square border with Square borders (previously a Dark buff border turned them dark). Turned off, weapon enchants look like any other buff, with no purple border.
+    - New Target / Focus Cast Bar Icon Border options (on by default): the cast bar's spell icon gets a border in that frame's aura border style (rounded or square, same thickness and position) in the darkness color.
+    - Fixed the Focus cast bar not moving down below Focus auras the way the Target cast bar does.
+    - WoW Forever swing timers (Other UI): Darken Swing Timers (on by default) darkens the main hand, off hand and ranged bar frames, and the bars can have their own custom bar texture (separate from All Bars), with a color picker for each bar's fill, plus a Square border option (1-4 px) in place of Blizzard's rounded frame and an option to hide the shadow behind each bar's label.
+    - New Cooldown Manager Icon Shape option (Other UI): Square icons for Essential, Utility and tracked buff icons and buff bar icons, zoomed with a flat border of exact pixel thickness (1-8 px, inside or outside the icon) in the darkness color.
+    - Square Cooldown Manager icons show a tracked debuff's dispel color (red when it has none) on the square border in place of Blizzard's rounded debuff border.
+    - New Cooldown Manager Pandemic Highlight option: Blizzard's rounded animation, or a Border, Proc Glow or Marching Ants highlight in a chosen color (square with Square icons), shown while the game says an aura can be refreshed without losing time.

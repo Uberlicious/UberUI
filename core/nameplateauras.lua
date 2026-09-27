@@ -49,8 +49,8 @@ local nameplateauras = {}
 local SQUARE_LOC = "nameplate"
 local ICON_SIZE = 22
 local SPACING = 3                         -- 22 + 3 = Blizzard's 25px pitch
--- Extra gap between the health bar and the side containers (buffs left, CC
--- right): our borders sit outside the icon (rounded art ~3px), so at
+-- Extra gap between the health bar and our containers (buffs left, CC right,
+-- debuffs above): our borders sit outside the icon (rounded art ~3px), so at
 -- Blizzard's own spacing they ran onto the health bar.
 local SIDE_GAP = 3
 local DEBUFF_MAX = 12
@@ -203,13 +203,6 @@ end
 -- children. Styles: the aura's own border shape in a color, or one of
 -- Blizzard's animated glows (a looping FlipBook, which runs in the engine).
 local PANDEMIC_DEFAULT_COLOR = "ffff2626"
--- FlipBook sheets (6x5, 30 frames) and how far their art is padded past the
--- icon (EllesmereUI_Glows.lua's measurements).
-local PANDEMIC_GLOWS = {
-    glow = { atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook", pad = 1.4 },
-    ants = { atlas = "RotationHelper_Ants_Flipbook", pad = 1.6 },
-}
-local PANDEMIC_RING_ATLAS = "ui-debuff-border-default-noicon"
 local pandemicHosts = setmetatable({}, { __mode = "k" }) -- button -> host frame
 
 local function GetPandemicHost(button)
@@ -239,76 +232,16 @@ local function StylePandemic(button, style)
     end
 
     local SB = UberUI.squareborders
-    local kind = g.nameplatepandemicstyle or "border"
     -- Hex string from the options' color swatch.
     local color = HexColor(g.nameplatepandemiccolor, nil) or HexColor(PANDEMIC_DEFAULT_COLOR)
-    local square = style ~= "none" and SB and SB.IsEnabled(SQUARE_LOC)
-    local r, gg, b = color.r, color.g, color.b
-
-    -- Rounded: the rounded border art as a mask over a solid color.
-    local wantRing = on and kind == "border" and not square
-    if wantRing and not host.ring and button.borderHost then
-        local ring = host:CreateTexture(nil, "OVERLAY")
-        ring:SetPoint("TOPLEFT", button.borderHost, "TOPLEFT")
-        ring:SetPoint("BOTTOMRIGHT", button.borderHost, "BOTTOMRIGHT")
-        ring:SetColorTexture(1, 1, 1, 1)
-        local mask = host:CreateMaskTexture()
-        mask:SetAtlas(PANDEMIC_RING_ATLAS)
-        mask:SetAllPoints(ring)
-        ring:AddMaskTexture(mask)
-        host.ring = ring
-    end
-    if host.ring then
-        host.ring:SetVertexColor(r, gg, b, 1)
-        host.ring:SetShown(wantRing)
-    end
-
-    -- Square: strips like the dispel border (same thickness and position).
-    local wantSquare = on and kind == "border" and square
-    if wantSquare and not host.square then host.square = SB.CreateBorder(host) end
-    if host.square then
-        if wantSquare then
-            SB.LayoutDispelFor(host.square, button.icon, SQUARE_LOC)
-            SB.SetColor(host.square, r, gg, b, 1)
-            host.square:Show()
-        else
-            host.square:Hide()
-        end
-    end
-
-    -- Glow: a looping FlipBook, tinted.
-    local glowDef = on and PANDEMIC_GLOWS[kind]
-    if glowDef and not host.glow then
-        local tex = host:CreateTexture(nil, "OVERLAY", nil, 7)
-        tex:SetPoint("CENTER", button, "CENTER")
-        local ag = tex:CreateAnimationGroup()
-        ag:SetLooping("REPEAT")
-        local anim = ag:CreateAnimation("FlipBook")
-        anim:SetFlipBookRows(6)
-        anim:SetFlipBookColumns(5)
-        anim:SetFlipBookFrames(30)
-        anim:SetFlipBookFrameWidth(0)
-        anim:SetFlipBookFrameHeight(0)
-        anim:SetDuration(1.0)
-        host.glow, host.glowAg = tex, ag
-    end
-    if host.glow then
-        if glowDef then
-            local size = (button.elementSize or ICON_SIZE) * glowDef.pad
-            if host.glowAtlas ~= glowDef.atlas then
-                host.glow:SetAtlas(glowDef.atlas)
-                host.glowAtlas = glowDef.atlas
-            end
-            host.glow:SetSize(size, size)
-            host.glow:SetDesaturated(true)
-            host.glow:SetVertexColor(r, gg, b, 1)
-            host.glow:Show()
-            if not host.glowAg:IsPlaying() then host.glowAg:Play() end
-        else
-            host.glow:Hide()
-            host.glowAg:Stop()
-        end
-    end
+    aurakit.StyleHighlight(host, {
+        kind = on and (g.nameplatepandemicstyle or "border") or "none",
+        r = color.r, g = color.g, b = color.b,
+        square = style ~= "none" and SB and SB.IsEnabled(SQUARE_LOC),
+        loc = SQUARE_LOC, icon = button.icon,
+        ringFrom = button.borderHost,
+        center = button, size = button.elementSize or ICON_SIZE,
+    })
 end
 
 local function StyleButton(button)
@@ -529,11 +462,13 @@ end
 
 local function Layout(b)
     local af = b.aurasFrame
-    local function place(c, point, list, x)
+    local function place(c, point, list, x, y)
         c:ClearAllPoints()
-        c:SetPoint(point, list, point, x, 0)
+        c:SetPoint(point, list, point, x, y or 0)
     end
-    pcall(place, b.debuffs, "BOTTOMLEFT", af.DebuffListFrame, 0)
+    -- Debuffs lifted by the same gap: their borders draw outside the icon
+    -- and the bottom row ran onto the health bar.
+    pcall(place, b.debuffs, "BOTTOMLEFT", af.DebuffListFrame, 0, SIDE_GAP)
     pcall(place, b.buffs, "RIGHT", af.BuffListFrame, -SIDE_GAP)
     pcall(place, b.cc, "LEFT", af.CrowdControlListFrame, SIDE_GAP)
 end

@@ -24,7 +24,6 @@ misc:SetScript("OnEvent", function(self, event, ...)
         misc:ObjectiveTrackerFrames()
     elseif event == "ADDON_LOADED" then
         misc:EndCaps()
-        misc:SwingTimers()
         -- We don't call StatusTrackingBars here anymore as it's almost always too early.
     end
 end)
@@ -350,14 +349,6 @@ function misc:BagSlots()
     end
 end
 
-function misc:SwingTimers()
-    local dc = uuidb.general.darkencolor
-
-    if SwingTimerMainHandFrame then
-        SwingTimerMainHandFrame.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-    end
-end
-
 function misc:MicroButtons()
     local dc = uuidb.general.darkencolor
     local buttons = {
@@ -405,7 +396,7 @@ function misc:AllFramesColor()
     self:MicroButtons();
     self:BagSlots();
     self:ObjectiveTrackerFrames();
-    self:SwingTimers();
+    if UberUI.swingtimers then UberUI.swingtimers:Apply() end
     if UberUI.partyframes then UberUI.partyframes:Color() end
     -- Nameplate border ring and health bar edges use the darkness color.
     if UberUI.nameplates then UberUI.nameplates:ForceNameplateTexture() end

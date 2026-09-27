@@ -1105,7 +1105,9 @@ local function BuildTaintReport()
             ScanTable(add, plabel .. ".UnitFrame.healthBar", uf.healthBar, seen)
             ScanTable(add, plabel .. ".UnitFrame.HealthBarsContainer", uf.HealthBarsContainer, seen)
             ScanTable(add, plabel .. ".UnitFrame.RaidTargetFrame", uf.RaidTargetFrame, seen)
-            ScanTable(add, plabel .. ".UnitFrame.castBar", uf.castBar, seen)
+            ScanTable(add, plabel .. ".UnitFrame.CastBarsContainer", uf.CastBarsContainer, seen)
+            local cb = uf.castBar or (uf.CastBarsContainer and uf.CastBarsContainer.castBar)
+            ScanTable(add, plabel .. ".UnitFrame.castBar", cb, seen)
             ScanTable(add, plabel .. ".UnitFrame.AurasFrame", uf.AurasFrame, seen)
         end
     end
@@ -1989,6 +1991,25 @@ npLoginFrame:SetScript("OnEvent", function(self, event)
     end
 end)
 
+-- /uuidebugrings: the white rounded purgeable-buff rings (aurakit
+-- stealableRing) -- created / engine-registered / shown, and what a shown one
+-- is actually drawing.
+-- /uuidebugcdm: Cooldown Manager icons -- debuff border, our square border
+-- color, pandemic state.
+SLASH_UBERUIDEBUGCDM1 = "/uuidebugcdm"
+SlashCmdList["UBERUIDEBUGCDM"] = function()
+    if UberUI.cdManager and UberUI.cdManager.DebugReport then
+        ShowReport(UberUI.cdManager:DebugReport())
+    end
+end
+
+SLASH_UBERUIDEBUGRINGS1 = "/uuidebugrings"
+SlashCmdList["UBERUIDEBUGRINGS"] = function()
+    local summary, lines = UberUI.aurakit.DebugStealableRings()
+    print("|cff33ff99UberUI debug|r " .. summary)
+    for _, l in ipairs(lines) do print(l) end
+end
+
 SLASH_UBERUIDEBUGNPPOOL1 = "/uuidebugnppool"
 SlashCmdList["UBERUIDEBUGNPPOOL"] = function(msg)
     local cmd, arg1, arg2 = strsplit(" ", strtrim(msg or ""))
@@ -2053,6 +2074,7 @@ end
 --   /uuidebugnpbar dark      re-apply our darkness tint to the border
 --   /uuidebugnpbar blizzbar  put Blizzard's own bar atlas back on the fill
 --   /uuidebugnpbar layers | snap | diff   full draw-order dump / compare
+--   /uuidebugnpbar level                  Forever level badge regions (alpha, shown)
 --   /uuidebugnpbar bgtop | bgback         raise the border texture above the
 --                                         fill / put it back (test)
 -- Read-only except for those switches; never touches Lua fields.
@@ -2276,6 +2298,42 @@ SlashCmdList["UBERUIDEBUGNPBAR"] = function(msg)
             return
         end
         ShowReport("==== nameplate health bar draw layers ====\n" .. table.concat(lines, "\n"))
+        return
+    elseif cmd == "level" then
+        -- Forever's level badge (PlayerLevelDiffFrame) on every visible
+        -- plate: which regions it has, their alpha/vertex alpha/shown state,
+        -- so we can see what's still drawing Blizzard's badge art.
+        local out = { "==== nameplate level badge report ====",
+            "square border on: " .. tostring(uuidb.general.nameplatesquareborder) }
+        local function fmt(v)
+            if issecretvalue and issecretvalue(v) then return "<secret>" end
+            if type(v) == "number" then return string.format("%.2f", v) end
+            return tostring(v)
+        end
+        local count = 0
+        for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+            local hb, uf = NBHealthBar(plate)
+            local badge = uf and uf.PlayerLevelDiffFrame
+            if badge and count < 6 then
+                count = count + 1
+                local okS, shown = pcall(badge.IsShown, badge)
+                out[#out + 1] = string.format("-- %s  badge shown=%s alpha=%s target=%s",
+                    tostring(uf.unit), fmt(okS and shown), fmt(badge:GetAlpha()),
+                    tostring(hb.IsTarget and hb:IsTarget()))
+                for _, region in ipairs({ badge:GetRegions() }) do
+                    local name = "?"
+                    for k, v in pairs(badge) do if v == region then name = k break end end
+                    local okV, r, g, b, a = pcall(region.GetVertexColor, region)
+                    local atlas = region.GetAtlas and region:GetAtlas()
+                    local layer, sub = region:GetDrawLayer()
+                    out[#out + 1] = string.format("   %-20s %-12s %s %s shown=%s alpha=%s vertexA=%s atlas=%s",
+                        name, region:GetObjectType(), tostring(layer), tostring(sub),
+                        fmt(region:IsShown()), fmt(region:GetAlpha()), fmt(okV and a), tostring(atlas))
+                end
+            end
+        end
+        if count == 0 then out[#out + 1] = "(no level badges found on visible plates)" end
+        ShowReport(table.concat(out, "\n"))
         return
     elseif cmd == "bgtop" then
         -- Test: raise the border texture above the fill. Blizzard's own is

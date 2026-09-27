@@ -373,7 +373,10 @@ function buffsandauras:StyleAuraButton(button)
     -- own (undarkened) color -- dispel color for debuffs, enchant purple for
     -- temp enchants. Buffs have no Blizzard border in Zoom Only, so they stay
     -- borderless there.
-    local squareZoomOverride = style == "zoom" and isPlayer and (isDebuff or isTempEnchant) and SquareBordersEnabled()
+    -- "Player Weapon Enchant Border Color" (on by default): weapon enchants
+    -- keep Blizzard's enchant purple whatever the Buff Border choice.
+    local enchantColor = isTempEnchant and not (uuidb and uuidb.general and uuidb.general.playertempenchantcolor == false)
+    local squareZoomOverride = style == "zoom" and isPlayer and (isDebuff or enchantColor) and SquareBordersEnabled()
     -- Rounded + Debuff Border "Dispel Color" (zoom style) falls through to
     -- the no-custom-border path below, which re-shows Blizzard's own
     -- DebuffBorder. Blizzard sets its per-type art from its own code, so it's
@@ -477,8 +480,10 @@ function buffsandauras:StyleAuraButton(button)
             squareBorder:SetFrameLevel(borderFrame:GetFrameLevel())
             -- Dispel Color debuff borders are 1px thicker than Dark ones
             -- (squareborders.DispelThickness).
+            -- Weapon enchants in enchant purple (option on), drawn at the
+            -- colored-border thickness like dispel colors.
             local px = SquareBorderThickness()
-            if isDebuff and not (style == "both" or style == "border") then
+            if (isDebuff and not (style == "both" or style == "border")) or enchantColor then
                 px = SB.DispelThickness(SQUARE_LOC)
             end
             SB.Layout(squareBorder, iconTexture, px, SquareBorderInset())
@@ -492,13 +497,22 @@ function buffsandauras:StyleAuraButton(button)
             -- Color" (zoom style) gets Blizzard's dispel color.
             if isDebuff and not (style == "both" or style == "border") then
                 ApplyDebuffDispelColor(squareBorder, button, dtype)
-            elseif isTempEnchant and squareZoomOverride then
+            elseif enchantColor then
                 SetSquareBorderColor(squareBorder, TEMP_ENCHANT_BORDER_COLOR[1], TEMP_ENCHANT_BORDER_COLOR[2],
                     TEMP_ENCHANT_BORDER_COLOR[3], 1)
             else
                 SetSquareBorderColor(squareBorder, r, g, b, a)
             end
             squareBorder:Show()
+        elseif showCustomBorder and enchantColor and teBorder and not IsSecret(teBorder) then
+            -- Rounded: Blizzard's own purple enchant border instead of our
+            -- dark ring (tinting the ring's red art purple comes out dark).
+            if squareBorder then squareBorder:Hide() end
+            OffsetDurationText(button, iconTexture, 0)
+            borderFrame:Hide()
+            teBorder:SetAlpha(1)
+            teBorder:SetVertexColor(1, 1, 1, 1)
+            teBorder:Show()
         elseif showCustomBorder then
             if squareBorder then squareBorder:Hide() end
             OffsetDurationText(button, iconTexture, 0)
@@ -538,7 +552,11 @@ function buffsandauras:StyleAuraButton(button)
             borderObj:Show()
         end
 
-        if isTempEnchant and teBorder and not IsSecret(teBorder) then
+        if isTempEnchant and not enchantColor and teBorder and not IsSecret(teBorder) then
+            -- Weapon Enchant Border Color off: no purple border at all, like
+            -- a plain buff (Blizzard draws none on buffs).
+            teBorder:SetAlpha(0)
+        elseif isTempEnchant and teBorder and not IsSecret(teBorder) then
             teBorder:ClearAllPoints()
             if zoomEnabled then
                 teBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -2, 2)

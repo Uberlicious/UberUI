@@ -296,6 +296,27 @@ local function GetStealableRing(button)
     return host
 end
 
+-- Debug (/uuidebugrings): the stealable rings' registration and state.
+function aurakit.DebugStealableRings()
+    local total, registered, shown, lines = 0, 0, 0, {}
+    for button, host in pairs(ringHosts) do
+        total = total + 1
+        if host.registered then registered = registered + 1 end
+        local okS, s = pcall(host.IsShown, host)
+        if okS and issecretvalue and issecretvalue(s) then okS = false end
+        if okS and s == true then shown = shown + 1 end
+        if #lines < 6 and okS and s == true then
+            local okV, r, g, b, a = pcall(host.tex.GetVertexColor, host.tex)
+            local okT, file = pcall(host.tex.GetTexture, host.tex)
+            local okTS, texShown = pcall(host.tex.IsShown, host.tex)
+            local fmt = function(v) return (issecretvalue and issecretvalue(v)) and "<secret>" or tostring(v) end
+            lines[#lines + 1] = string.format("  shown ring: tex shown=%s file=%s color=%s,%s,%s,%s",
+                fmt(okTS and texShown), fmt(okT and file), fmt(r), fmt(g), fmt(b), fmt(a))
+        end
+    end
+    return string.format("stealable rings: %d created, %d registered with the engine, %d hosts shown", total, registered, shown), lines
+end
+
 -- button.isBuff is fixed permanently at button creation (see InitAuraButton)
 -- based on which permanent aura group the button belongs to.
 --
@@ -468,10 +489,13 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
             local ring = GetStealableRing(button)
             if not ring then return end
             local showStealable = UberUI.general:PlayerCanOffensiveDispel() and opts.showDispel
-            -- Square borders show their own white strips instead.
+            -- Square borders show their own white strips instead, once those
+            -- are registered (ApplySquareBorder's rule). Decided from our own
+            -- settings: reading the strips' IsShown back is secret on
+            -- container buttons (it errored here and the ring never showed).
             local steal = SBk and SBk.Find(button, 2)
-            local stripsShown = steal and steal:IsShown()
-            ring:SetShown((showStealable and ring.registered and not stripsShown) and true or false)
+            local stripsUsed = squareOn and steal and steal.engineRegistered
+            ring:SetShown((showStealable and ring.registered and not stripsUsed) and true or false)
         end)
     end
 end
@@ -1253,6 +1277,171 @@ function aurakit.HookSpellbarAdjustPosition(spellbar, frameObj, getContainer)
             aurakit.UpdateSpellbar(frameObj, containers)
         end
     end)
+end
+
+-- Border on a Target/Focus cast bar's spell icon (Blizzard draws none), in
+-- the frame's own aura border look: loc's Border Shape (rounded ring or
+-- square strips with that thickness/position), always the darkness color,
+-- and the icon zoomed like aura icons. enabled=false puts Blizzard's plain
+-- icon back. The border frame is ours, a child of the spell bar (so it
+-- shows and hides with it -- the icon itself is always shown on unit-frame
+-- cast bars, CastingBarMixin:ShouldIconBeShown). Born with
+-- DisableUntrustedLayoutScriptsTemplate: 12.1 gives the spell bar the aura
+-- container's layout aspects when it anchors under the auras
+-- (TargetSpellBarMixin:AdjustPosition), and a plain frame anchored to its
+-- icon would then refuse to lay out. Kept in a weak table, never a field on
+-- Blizzard's frame.
+local castIconBorders = setmetatable({}, { __mode = "k" }) -- spellbar -> host
+
+function aurakit.StyleCastBarIcon(spellbar, loc, enabled)
+    local icon = spellbar and spellbar.Icon
+    if not icon or SafeIsForbidden(spellbar) then return end
+    local host = castIconBorders[spellbar]
+
+    if not enabled then
+        if host then
+            host:Hide()
+            pcall(icon.SetTexCoord, icon, 0, 1, 0, 1)
+        end
+        return
+    end
+
+    if not host then
+        local ok, f = pcall(CreateFrame, "Frame", nil, spellbar, "DisableUntrustedLayoutScriptsTemplate")
+        if not ok or not f then return end
+        f:EnableMouse(false)
+        local ring = f:CreateTexture(nil, "OVERLAY")
+        ring:SetAtlas("ui-debuff-border-default-noicon")
+        ring:SetDesaturated(true)
+        ring:SetTexelSnappingBias(0)
+        ring:SetSnapToPixelGrid(false)
+        f.ring = ring
+        host = f
+        castIconBorders[spellbar] = host
+    end
+
+    local okL = pcall(function()
+        host:ClearAllPoints()
+        host:SetPoint("TOPLEFT", icon, "TOPLEFT", -3, 3)
+        host:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 3, -3)
+        host.ring:ClearAllPoints()
+        host.ring:SetAllPoints(host)
+    end)
+    if not okL then return end
+    host:SetFrameLevel(spellbar:GetFrameLevel() + 5)
+    pcall(icon.SetTexCoord, icon, 0.08, 0.92, 0.08, 0.92)
+
+    local SB = UberUI.squareborders
+    local square = SB and SB.IsEnabled(loc)
+    local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    if square then
+        host.ring:Hide()
+        host.square = host.square or SB.CreateBorder(host)
+        SB.LayoutFor(host.square, icon, loc)
+        SB.SetDarkColor(host.square)
+        host.square:Show()
+    else
+        if host.square then host.square:Hide() end
+        host.ring:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        host.ring:Show()
+    end
+    host:Show()
+end
+
+-- Highlight visuals shared by the pandemic highlights (nameplate auras,
+-- Cooldown Manager). Styles `host`'s children only -- whoever owns host
+-- decides when it's shown (the engine's pandemic region, or our own hooks).
+-- opts: {
+--   kind   = "border" | "glow" | "ants" (anything else: nothing drawn),
+--   r, g, b,
+--   square = true for square strips (squareborders, `loc`'s thickness/
+--            position at the colored thickness), false for a rounded ring,
+--   loc    = squareborders location, icon = region the square strips hug,
+--   ringFrom, ringTo = regions whose TOPLEFT / BOTTOMRIGHT bound the ring,
+--   center = region the glow centers on, size = glow size before padding,
+-- }
+local HIGHLIGHT_GLOWS = {
+    -- FlipBook sheets (6x5, 30 frames) and how far their art is padded past
+    -- the icon (EllesmereUI_Glows.lua's measurements).
+    glow = { atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook", pad = 1.4 },
+    ants = { atlas = "RotationHelper_Ants_Flipbook", pad = 1.6 },
+}
+local HIGHLIGHT_RING_ATLAS = "ui-debuff-border-default-noicon"
+
+function aurakit.StyleHighlight(host, opts)
+    local SB = UberUI.squareborders
+    local kind = opts.kind
+    local r, g, b = opts.r or 1, opts.g or 0.15, opts.b or 0.15
+
+    -- Rounded: the rounded border art as a mask over a solid color (the art
+    -- itself is red, so it can't be tinted to an arbitrary color).
+    local wantRing = kind == "border" and not opts.square
+    if wantRing and not host.uuRing and opts.ringFrom then
+        local ring = host:CreateTexture(nil, "OVERLAY")
+        ring:SetColorTexture(1, 1, 1, 1)
+        local mask = host:CreateMaskTexture()
+        mask:SetAtlas(HIGHLIGHT_RING_ATLAS)
+        mask:SetAllPoints(ring)
+        ring:AddMaskTexture(mask)
+        host.uuRing = ring
+    end
+    if host.uuRing then
+        if wantRing then
+            host.uuRing:ClearAllPoints()
+            host.uuRing:SetPoint("TOPLEFT", opts.ringFrom, "TOPLEFT", opts.ringX or 0, -(opts.ringX or 0))
+            host.uuRing:SetPoint("BOTTOMRIGHT", opts.ringTo or opts.ringFrom, "BOTTOMRIGHT", -(opts.ringX or 0), opts.ringX or 0)
+        end
+        host.uuRing:SetVertexColor(r, g, b, 1)
+        host.uuRing:SetShown(wantRing)
+    end
+
+    -- Square: strips like the dispel border (same thickness and position).
+    local wantSquare = kind == "border" and opts.square and SB and opts.icon
+    if wantSquare and not host.uuSquare then host.uuSquare = SB.CreateBorder(host) end
+    if host.uuSquare then
+        if wantSquare then
+            SB.LayoutDispelFor(host.uuSquare, opts.icon, opts.loc)
+            SB.SetColor(host.uuSquare, r, g, b, 1)
+            host.uuSquare:Show()
+        else
+            host.uuSquare:Hide()
+        end
+    end
+
+    -- Glow: a looping FlipBook, tinted.
+    local glowDef = HIGHLIGHT_GLOWS[kind]
+    if glowDef and not host.uuGlow then
+        local tex = host:CreateTexture(nil, "OVERLAY", nil, 7)
+        local ag = tex:CreateAnimationGroup()
+        ag:SetLooping("REPEAT")
+        local anim = ag:CreateAnimation("FlipBook")
+        anim:SetFlipBookRows(6)
+        anim:SetFlipBookColumns(5)
+        anim:SetFlipBookFrames(30)
+        anim:SetFlipBookFrameWidth(0)
+        anim:SetFlipBookFrameHeight(0)
+        anim:SetDuration(1.0)
+        host.uuGlow, host.uuGlowAg = tex, ag
+    end
+    if host.uuGlow then
+        if glowDef then
+            local size = (opts.size or 24) * glowDef.pad
+            host.uuGlow:ClearAllPoints()
+            host.uuGlow:SetPoint("CENTER", opts.center or host, "CENTER")
+            if host.uuGlowAtlas ~= glowDef.atlas then
+                host.uuGlow:SetAtlas(glowDef.atlas)
+                host.uuGlowAtlas = glowDef.atlas
+            end
+            host.uuGlow:SetSize(size, size)
+            host.uuGlow:SetDesaturated(true)
+            host.uuGlow:SetVertexColor(r, g, b, 1)
+            host.uuGlow:Show()
+            if not host.uuGlowAg:IsPlaying() then host.uuGlowAg:Play() end
+        else
+            host.uuGlow:Hide()
+            host.uuGlowAg:Stop()
+        end
+    end
 end
 
 UberUI.aurakit = aurakit

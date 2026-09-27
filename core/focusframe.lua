@@ -122,6 +122,7 @@ function focusframes:Color()
     if FocusFrameSpellBar and FocusFrameSpellBar.Border then
         ApplyDarkenColor(FocusFrameSpellBar.Border)
     end
+    self:StyleCastBarIcon()
 
     if FocusFrameToT and FocusFrameToT.FrameTexture then
         ApplyDarkenColor(FocusFrameToT.FrameTexture)
@@ -192,10 +193,33 @@ function focusframes:HealthManaBarTexture()
     end
 
     if secondaryTextureToApply and healthBar then
-        if healthBar.HealAbsorbBar then healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply) end
-        if healthBar.MyHealPredictionBar then healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply) end
-        if healthBar.OtherHealPredictionBar then healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply) end
-        if healthBar.TotalAbsorbBar then
+        if healthBar.HealAbsorbBar and healthBar.HealAbsorbBar.Fill then
+            healthBar.HealAbsorbBar.Fill:SetTexture(secondaryTextureToApply)
+            if healthBar.HealAbsorbBar.fillColor then
+                healthBar.HealAbsorbBar.Fill:SetVertexColor(healthBar.HealAbsorbBar.fillColor:GetRGBA())
+            end
+        end
+        if healthBar.MyHealPredictionBar and healthBar.MyHealPredictionBar.Fill then
+            healthBar.MyHealPredictionBar.Fill:SetTexture(secondaryTextureToApply)
+            if healthBar.MyHealPredictionBar.fillColor then
+                healthBar.MyHealPredictionBar.Fill:SetVertexColor(healthBar.MyHealPredictionBar.fillColor:GetRGBA())
+            elseif CUF_MY_HEAL_PREDICTION_COLOR then
+                healthBar.MyHealPredictionBar.Fill:SetVertexColor(CUF_MY_HEAL_PREDICTION_COLOR:GetRGBA())
+            else
+                healthBar.MyHealPredictionBar.Fill:SetVertexColor(11/255, 136/255, 105/255, 1)
+            end
+        end
+        if healthBar.OtherHealPredictionBar and healthBar.OtherHealPredictionBar.Fill then
+            healthBar.OtherHealPredictionBar.Fill:SetTexture(secondaryTextureToApply)
+            if healthBar.OtherHealPredictionBar.fillColor then
+                healthBar.OtherHealPredictionBar.Fill:SetVertexColor(healthBar.OtherHealPredictionBar.fillColor:GetRGBA())
+            elseif CUF_OTHER_HEAL_PREDICTION_COLOR then
+                healthBar.OtherHealPredictionBar.Fill:SetVertexColor(CUF_OTHER_HEAL_PREDICTION_COLOR:GetRGBA())
+            else
+                healthBar.OtherHealPredictionBar.Fill:SetVertexColor(21/255, 89/255, 72/255, 1)
+            end
+        end
+        if healthBar.TotalAbsorbBar and healthBar.TotalAbsorbBar.Fill then
             healthBar.TotalAbsorbBar.Fill:SetTexture(secondaryTextureToApply)
             healthBar.TotalAbsorbBar.Fill:SetVertexColor(.7, .9, .9, 1)
         end
@@ -255,8 +279,18 @@ function focusframes:UpdateAuraPositions()
     })
 end
 
+-- Border on the cast bar's spell icon (Cast Bar Icon Border option), in
+-- this frame's aura border look (aurakit.StyleCastBarIcon).
+function focusframes:StyleCastBarIcon()
+    local bar = FocusFrame.spellbar or FocusFrameSpellBar
+    if not bar then return end
+    local enabled = not (uuidb and uuidb.general and uuidb.general.focuscastbariconborder == false)
+    aurakit.StyleCastBarIcon(bar, "focus", enabled)
+end
+
 function focusframes:UpdateAuras()
     if isUpdatingAuras then return end
+    self:StyleCastBarIcon()
     isUpdatingAuras = true
 
     local styleBuffs = (uuidb and uuidb.general and uuidb.general.aurastyle_focusbuffs) or "both"
@@ -368,15 +402,19 @@ function focusframes:SetupCustomAuraContainer()
     blizzAuras:EnableMouse(false)
 
     -- Blizzard's own FocusFrame re-shows its native aura container more
-    -- aggressively than TargetFrame's -- re-hide it whenever our own style
-    -- is active.
+    -- aggressively than TargetFrame's -- keep it invisible whenever our own
+    -- style is active. Alpha only, never Hide(): like Target, the container
+    -- must stay shown and laid out, because Blizzard's cast bar positions
+    -- itself from it (TargetSpellBarMixin:AdjustPosition anchors under it
+    -- when GetNumVisibleFlowLayoutLines() > 0). Hiding it left the Focus cast
+    -- bar in its default spot, under our aura rows.
+    blizzAuras:EnableMouse(false)
     if not self.blizzHooked then
         self.blizzHooked = true
         hooksecurefunc(blizzAuras, "Show", function(self)
             local sBuffs = (uuidb and uuidb.general and uuidb.general.aurastyle_focusbuffs) or "both"
             local sDebuffs = (uuidb and uuidb.general and uuidb.general.aurastyle_focusdebuffs) or "zoom"
             if sBuffs ~= "none" or sDebuffs ~= "none" then
-                self:Hide()
                 self:SetAlpha(0)
             end
         end)

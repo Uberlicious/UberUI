@@ -3,9 +3,25 @@ local cuf = {}
 
 cuf = UberUI:CreateFrame("Frame")
 cuf:RegisterEvent("ADDON_LOADED")
-cuf:SetScript("OnEvent", function(self)
-    self:set_hook()
-    self:HideRaidFrameTitles()
+cuf:RegisterEvent("PLAYER_LOGIN")
+cuf:RegisterEvent("PLAYER_REGEN_DISABLED")
+cuf:RegisterEvent("PLAYER_REGEN_ENABLED")
+cuf:SetScript("OnEvent", function(self, event, arg1)
+    if event == "ADDON_LOADED" then
+        if arg1 == "Blizzard_CompactRaidFrames" or arg1 == addon then
+            self:set_hook()
+            self:HideRaidFrameTitles()
+            self:UpdatePartySort()
+        end
+    elseif event == "PLAYER_LOGIN" then
+        self:set_hook()
+        self:HideRaidFrameTitles()
+        self:UpdatePartySort()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        self:OnCombatStart()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        self:OnCombatEnd()
+    end
 end)
 
 cuf.default = function(self)
@@ -54,8 +70,22 @@ cuf.default = function(self)
     end
 
     if secondaryTextureToApply then
-        if self.myHealPrediction then self.myHealPrediction:SetTexture(secondaryTextureToApply) end
-        if self.otherHealPrediction then self.otherHealPrediction:SetTexture(secondaryTextureToApply) end
+        if self.myHealPrediction then
+            self.myHealPrediction:SetTexture(secondaryTextureToApply)
+            if CUF_MY_HEAL_PREDICTION_COLOR then
+                self.myHealPrediction:SetVertexColor(CUF_MY_HEAL_PREDICTION_COLOR:GetRGBA())
+            else
+                self.myHealPrediction:SetVertexColor(11/255, 136/255, 105/255, 1)
+            end
+        end
+        if self.otherHealPrediction then
+            self.otherHealPrediction:SetTexture(secondaryTextureToApply)
+            if CUF_OTHER_HEAL_PREDICTION_COLOR then
+                self.otherHealPrediction:SetVertexColor(CUF_OTHER_HEAL_PREDICTION_COLOR:GetRGBA())
+            else
+                self.otherHealPrediction:SetVertexColor(21/255, 89/255, 72/255, 1)
+            end
+        end
         if self.totalAbsorb then
             self.totalAbsorb:SetTexture(secondaryTextureToApply)
             self.totalAbsorb:SetVertexColor(.6, .9, .9, 1)
@@ -133,4 +163,102 @@ end
 
 cuf.ForceZoom = cuf.UpdateAllAuras
 
+-------------------------------------------------------------------------------
+-- Party Sorting "Me on Top"
+-------------------------------------------------------------------------------
+local basePartySortFunc = nil
+local partySortHookInstalled = false
+
+local function MeOnTopSort(token1, token2)
+    if token1 == token2 then return false end
+    local isPlayer1 = (token1 == "player") or UnitIsUnit(token1, "player")
+    local isPlayer2 = (token2 == "player") or UnitIsUnit(token2, "player")
+    if isPlayer1 and isPlayer2 then
+        return false
+    elseif isPlayer1 then
+        return true
+    elseif isPlayer2 then
+        return false
+    end
+    local sortFunc = basePartySortFunc or _G.CRFSort_Group
+    if sortFunc then
+        return sortFunc(token1, token2)
+    end
+    return token1 < token2
+end
+
+local function EnsurePartySortHook()
+    if partySortHookInstalled then return end
+    if CompactPartyFrameMixin and type(CompactPartyFrameMixin.SetFlowSortFunction) == "function" then
+        hooksecurefunc(CompactPartyFrameMixin, "SetFlowSortFunction", function(self, flowSortFunc)
+            if flowSortFunc ~= MeOnTopSort then
+                basePartySortFunc = flowSortFunc
+            end
+            if uuidb and uuidb.cuf and uuidb.cuf.sortMeOnTop then
+                if self.flowSortFunc ~= MeOnTopSort then
+                    self.flowSortFunc = MeOnTopSort
+                    if not InCombatLockdown() then
+                        self:RefreshMembers()
+                    end
+                end
+            end
+        end)
+        partySortHookInstalled = true
+    end
+end
+
+function cuf:UpdatePartySort()
+    EnsurePartySortHook()
+    local frame = _G.CompactPartyFrame
+    if not frame then return end
+
+    if uuidb and uuidb.cuf and uuidb.cuf.sortMeOnTop then
+        if frame.flowSortFunc and frame.flowSortFunc ~= MeOnTopSort then
+            basePartySortFunc = frame.flowSortFunc
+        end
+        frame.flowSortFunc = MeOnTopSort
+        if not InCombatLockdown() then
+            frame:RefreshMembers()
+        end
+    else
+        if frame.flowSortFunc == MeOnTopSort then
+            frame.flowSortFunc = basePartySortFunc or _G.CRFSort_Group
+            if not InCombatLockdown() then
+                frame:RefreshMembers()
+            end
+        end
+    end
+end
+
+function cuf:OnCombatStart()
+    if uuidb and uuidb.cuf and uuidb.cuf.sortMeOnTop then
+        local frame = _G.CompactPartyFrame
+        if frame and frame.flowSortFunc == MeOnTopSort then
+            frame.flowSortFunc = basePartySortFunc or _G.CRFSort_Group
+        end
+    end
+end
+
+function cuf:OnCombatEnd()
+    if uuidb and uuidb.cuf and uuidb.cuf.sortMeOnTop then
+        local frame = _G.CompactPartyFrame
+        if frame then
+            if frame.flowSortFunc ~= MeOnTopSort then
+                if frame.flowSortFunc then
+                    basePartySortFunc = frame.flowSortFunc
+                end
+                frame.flowSortFunc = MeOnTopSort
+            end
+            frame:RefreshMembers()
+        end
+    end
+end
+
+if type(CompactPartyFrame_Generate) == "function" then
+    hooksecurefunc("CompactPartyFrame_Generate", function()
+        cuf:UpdatePartySort()
+    end)
+end
+
 UberUI.cuf = cuf
+
