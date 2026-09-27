@@ -452,6 +452,40 @@ function focusframes:SetupCustomAuraContainer()
             aurakit.ShowAuraContainers(focusframes, false)
         end)
     end
+    -- Target-of-target appearing/disappearing changes the aura row width
+    -- (aurakit.ApplyToTRowWidth) without any aura changing, so re-run the
+    -- positioning then too.
+    if not self.totFrameHooked and FocusFrame.totFrame then
+        self.totFrameHooked = true
+        local function RefreshToTWidth() focusframes:UpdateAuraPositions() end
+        FocusFrame.totFrame:HookScript("OnShow", RefreshToTWidth)
+        FocusFrame.totFrame:HookScript("OnHide", RefreshToTWidth)
+    end
+
+    self:ApplyToTPlacement()
+end
+
+-- "Target of Target" setting, same as Target's. Blizzard re-anchors the
+-- focus ToT itself whenever Edit Mode's small-focus-frame setting changes
+-- (FocusFrameMixin:SetSmallSize), which undoes an aside shift -- so while
+-- Move ToT Aside is in use, re-apply after it (hook installed only once the
+-- option is actually chosen; deferred a frame).
+local focusSmallSizeHooked = false
+function focusframes:ApplyToTPlacement()
+    local aside = uuidb and uuidb.focusframes and uuidb.focusframes.totplacement == "aside"
+    if aside and not focusSmallSizeHooked and FocusFrame and FocusFrame.SetSmallSize then
+        focusSmallSizeHooked = true
+        hooksecurefunc(FocusFrame, "SetSmallSize", function()
+            C_Timer.After(0, function()
+                aurakit.RecaptureToTAnchor(FocusFrame)
+                if focusframes.customDebuffs and focusframes.customBuffs then
+                    focusframes:UpdateAuraPositions()
+                end
+            end)
+        end)
+    end
+    aurakit.SetToTPlacement(FocusFrame, aside)
+    if self.customDebuffs and self.customBuffs then self:UpdateAuraPositions() end
 end
 
 -- Initialize immediately if FocusFrame is already present

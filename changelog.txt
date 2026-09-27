@@ -24,3 +24,8 @@
     - Target and Focus auras now match Blizzard's sizes and spacing: 21px for your own auras, 17px for others, and 3px between icons, rows, and the buff/debuff blocks. Focus auras were previously smaller.
     - Fixed extra space above an enemy target's buffs when it has no debuffs.
     - New Darken Addon Minimap Buttons option (Other UI, on by default): darkens the ring around other addons' minimap buttons to match the minimap.
+    - New Uber UI Nameplate Auras option (Nameplates page, off by default): nameplate buffs, debuffs and crowd control shown in Uber UI's own styled icons, in Blizzard's positions and following Blizzard's nameplate aura settings, with the usual zoom, border, shape, thickness and position options. May slightly increase loading screen times.
+    - Nameplate aura extras: countdown numbers with configurable normal and expiring colors (color pickers) and an expiring threshold (1-10 s), a thin white border on purgeable buffs, and an optional Pandemic Highlight (border, proc glow or marching ants, with a color picker) while one of your debuffs can be refreshed without losing time.
+    - Target auras: purgeable buffs now get a thin rounded white border instead of Blizzard's large glow.
+    - New Target of Target / Focus Target of Target options: narrow the aura rows while target-of-target is shown (Blizzard's behavior) or move the target-of-target frame aside so the rows keep their full width.
+    - Custom nameplate bar textures now keep Blizzard's bar shape and edge, so the nameplate border reads as sitting in front of the bar again, and no longer revert to Blizzard's texture after nameplate style changes.

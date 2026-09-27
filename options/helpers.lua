@@ -70,6 +70,15 @@ function opt.AddSlider(page, o)
     return Settings.CreateSlider(page.category, setting, options, o.tooltip), setting;
 end
 
+-- Color swatch (Blizzard's own settings control): opens the color picker,
+-- stored as an "AARRGGBB" hex string (what the control reads and writes).
+function opt.AddColorSwatch(page, o)
+    local setting = RegisterSetting(page, o, Settings.VarType.String);
+    local initializer = Settings.CreateColorSwatchInitializer(setting, nil, o.tooltip);
+    page.layout:AddInitializer(initializer);
+    return initializer, setting;
+end
+
 -- Greys out (and indents) a dependent setting while its parent checkbox is off.
 function opt.DependsOn(childInitializer, parentInitializer, isEnabled)
     if childInitializer and parentInitializer and childInitializer.SetParentInitializer then
@@ -308,6 +317,8 @@ local AURA_LOCATIONS = {
       refresh = function() if UberUI.compactauras and UberUI.compactauras.Refresh then UberUI.compactauras:Refresh() end end },
     { loc = "arena",   buffKey = "aurastyle_arenabuffs",   debuffKey = "aurastyle_arenadebuffs",
       refresh = function() if UberUI.arenaframes then UberUI.arenaframes:RefreshAuraStyle() end end },
+    { loc = "nameplate", buffKey = "aurastyle_nameplatebuffs", debuffKey = "aurastyle_nameplatedebuffs",
+      refresh = function() if UberUI.nameplateauras then UberUI.nameplateauras:RefreshStyle() end end },
 };
 
 -- Copies chosen aura parts into every location's own settings. parts: any of
@@ -369,7 +380,7 @@ function opt.AddAllAurasOptions(page)
         local setting;
         local _, s = opt.AddDropdown(page, {
             variable = variable, name = name, default = "none", values = list,
-            tooltip = tooltip .. "\n\n|cffff4040Picking a value immediately sets it on every aura location (Player, Target, Focus, Boss, Party, Compact Raid/Party, Arena), overwriting each one's own setting.|r This is a one-time change, not a lock: each location can still be changed on its own page afterwards.",
+            tooltip = tooltip .. "\n\n|cffff4040Picking a value immediately sets it on every aura location (Player, Target, Focus, Boss, Party, Compact Raid/Party, Arena, Nameplates), overwriting each one's own setting.|r This is a one-time change, not a lock: each location can still be changed on its own page afterwards.",
             get = function() return "none" end,
             set = function(value)
                 if value == "none" then return end

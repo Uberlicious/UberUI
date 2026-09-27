@@ -82,6 +82,16 @@ function opt.BuildUnitFrames(page)
         end,
     });
 
+    opt.AddDropdown(page, {
+        variable = "TargetToTPlacement", name = "Target of Target",
+        tooltip = "Where the target-of-target frame goes relative to the Target aura rows.\n\nNarrow Auras: Blizzard's behavior -- while the target-of-target frame is showing, the aura rows get narrower so they don't run under it.\n\nMove ToT Aside: shifts the target-of-target frame to the right so the aura rows keep their full width.\n\nThe target-of-target frame can only be moved out of combat; a change made in combat applies when combat ends.",
+        default = "narrow",
+        values = { { "narrow", "Narrow Auras" }, { "aside", "Move ToT Aside" } },
+        get = function() return (uuidb.targetframes and uuidb.targetframes.totplacement) or "narrow" end,
+        set = function(value) uuidb.targetframes.totplacement = value end,
+        onChange = function() if UberUI.targetframes then UberUI.targetframes:ApplyToTPlacement() end end,
+    });
+
     opt.AddCheckbox(page, {
         variable = "ccEnemyTarget", name = "Class Color Enemy Target",
         tooltip = "Class color target and target of target health bar of enemy players",
@@ -130,6 +140,16 @@ function opt.BuildUnitFrames(page)
         tooltip = opt.DispelTooltip("Focus"),
         db = "general", field = "focusbuffs_showdispel", default = true,
         onChange = RefreshFocusAuras,
+    });
+
+    opt.AddDropdown(page, {
+        variable = "FocusToTPlacement", name = "Focus Target of Target",
+        tooltip = "Where the target-of-target frame goes relative to the Focus aura rows.\n\nNarrow Auras: Blizzard's behavior -- while the target-of-target frame is showing, the aura rows get narrower so they don't run under it.\n\nMove ToT Aside: shifts the target-of-target frame to the right so the aura rows keep their full width.\n\nThe target-of-target frame can only be moved out of combat; a change made in combat applies when combat ends.",
+        default = "narrow",
+        values = { { "narrow", "Narrow Auras" }, { "aside", "Move ToT Aside" } },
+        get = function() return (uuidb.focusframes and uuidb.focusframes.totplacement) or "narrow" end,
+        set = function(value) uuidb.focusframes.totplacement = value end,
+        onChange = function() if UberUI.focusframes then UberUI.focusframes:ApplyToTPlacement() end end,
     });
 
     if FocusFrame then

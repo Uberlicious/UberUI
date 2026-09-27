@@ -24,13 +24,14 @@ misc:SetScript("OnEvent", function(self, event, ...)
         misc:ObjectiveTrackerFrames()
     elseif event == "ADDON_LOADED" then
         misc:EndCaps()
+        misc:SwingTimers()
         -- We don't call StatusTrackingBars here anymore as it's almost always too early.
     end
 end)
 
 function misc:EndCaps()
     local dc = uuidb.general.darkencolor;
-    
+
     local function ColorEndCap(endCap)
         if not endCap then return end
         -- These are Frames (MainMenuBarEndCaps.xml), not Textures, so
@@ -337,14 +338,23 @@ function misc:BagSlots()
     if MicroMenu and MicroMenu.BorderArt then
         MicroMenu.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
-    
+
     -- Reagent bag slots (Retail / Custom)
     for i = 0, 3 do
-        local rBag = _G["CharacterReagentBag"..i.."Slot"]
+        local rBag = _G["CharacterReagentBag" .. i .. "Slot"]
         if rBag then
-            local nt = (rBag.GetName and rBag:GetName() and _G[rBag:GetName() .. "NormalTexture"]) or rBag.NormalTexture or (rBag.GetNormalTexture and rBag:GetNormalTexture())
+            local nt = (rBag.GetName and rBag:GetName() and _G[rBag:GetName() .. "NormalTexture"]) or rBag.NormalTexture or
+            (rBag.GetNormalTexture and rBag:GetNormalTexture())
             if nt then nt:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
         end
+    end
+end
+
+function misc:SwingTimers()
+    local dc = uuidb.general.darkencolor
+
+    if SwingTimerMainHandFrame then
+        SwingTimerMainHandFrame.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 end
 
@@ -364,7 +374,7 @@ function misc:MicroButtons()
         "MainMenuMicroButton",
         "HelpMicroButton",
     }
-    
+
     if MicroMenu then
         for _, child in pairs({MicroMenu:GetChildren()}) do
             table.insert(buttons, child:GetName() or "")
@@ -395,7 +405,10 @@ function misc:AllFramesColor()
     self:MicroButtons();
     self:BagSlots();
     self:ObjectiveTrackerFrames();
+    self:SwingTimers();
     if UberUI.partyframes then UberUI.partyframes:Color() end
+    -- Nameplate border ring and health bar edges use the darkness color.
+    if UberUI.nameplates then UberUI.nameplates:ForceNameplateTexture() end
     UberUI.playerframes:Color();
     UberUI.targetframes:Color();
     if UberUI.focusframes then UberUI.focusframes:Color() end

@@ -35,7 +35,7 @@ local function Keys(loc)
 end
 squareborders.Keys = Keys
 
--- Locations: "player", "target", "focus", "boss", "party", "compact", "arena".
+-- Locations: "player", "target", "focus", "boss", "party", "compact", "arena", "nameplate".
 function squareborders.IsEnabled(loc)
     local g = uuidb and uuidb.general
     return g ~= nil and g[Keys(loc)[1]] == true

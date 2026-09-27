@@ -3,21 +3,104 @@ local nameplates = {}
 
 local _uberOriginalPoints = setmetatable({}, {__mode = "k"})
 
--- No masking here at all, by design: Blizzard's own nameplate
--- healthBar.barTexture (Blizzard_NamePlates.xml) is anchored with a plain
--- setAllPoints and uses no mask whatsoever -- confirmed against the live
--- client source. Two things were tried and ruled out with actual pixel
--- data before landing here: (1) masking with the atlas
--- ("UI-HUD-CoolDownManager-Bar") Blizzard uses for that same barTexture --
--- dumping the exported UICooldownManager.BLP showed that atlas region is
--- almost entirely alpha=0, not a usable shape to mask with; (2) the
--- addon's original hand-made cdm_bar_mask.tga -- dumping that TGA's alpha
--- channel showed it's just a near-fully-opaque rectangle with a few-pixel
--- edge feather, not a rounded pill either, and stretching its 38px-tall
--- source down to a ~10px nameplate bar was producing visible seam
--- artifacts (the reported gaps, then a stray dark line) with no shape
--- benefit to justify it. Matching Blizzard's real (unmasked) approach
--- avoids all of that.
+-- The custom health bar texture in effect, or nil for Blizzard's own.
+local function GetNameplateBarTexture()
+    if not (uuidb and uuidb.general and uuidb.statusbars) then return nil end
+    local tex
+    if uuidb.general.nameplatebartextures and uuidb.general.nameplatebartexture ~= "Blizzard" then
+        tex = uuidb.statusbars[uuidb.general.nameplatebartexture]
+    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
+        tex = uuidb.statusbars[uuidb.general.texture]
+    end
+    return type(tex) == "string" and tex or nil
+end
+
+-- Apply it the way Blizzard does (Blizzard_NamePlateUnitFrame.lua
+-- UpdateAnchors: healthBar.barTexture:SetTexture / SetAtlas on the same
+-- texture object) -- never SetStatusBarTexture, which Blizzard doesn't use
+-- here and which left the bar drawing over the nameplate border after a
+-- reload, in every style, on retail and Forever. The bar's original draw
+-- layer is also put back, so the layering is always Blizzard's own.
+local function ApplyHealthBarTexture(healthBar, textureToApply)
+    local bar = healthBar.barTexture or healthBar:GetStatusBarTexture()
+    if bar then
+        local layer, sublevel = bar:GetDrawLayer()
+        bar:SetTexture(textureToApply)
+        if layer then bar:SetDrawLayer(layer, sublevel or 0) end
+    else
+        healthBar:SetStatusBarTexture(textureToApply)
+    end
+end
+
+-- Blizzard's NamePlateUnitFrameMixin:UpdateAnchors puts its own atlas back
+-- on the health bar every time it runs: nameplate added, option changes
+-- (style, size, class colors, DISPLAY_SIZE_CHANGED -- all via
+-- NamePlateDriverMixin:UpdateNamePlateOptions), and on retail every
+-- nameplate resize (NamePlateBaseMixin:OnSizeChanged; Forever has no such
+-- call). So our texture was being reverted constantly and only came back
+-- when a plate was re-added. Re-apply after each UpdateAnchors: an instance
+-- hook per unit frame (pooled frames already exist, so the mixin can't be
+-- hooked), installed only once a custom texture is actually in use, and
+-- deferred a frame + coalesced per frame (this file's nameplate taint rule).
+local anchorHooked = setmetatable({}, { __mode = "k" })
+local anchorPending = setmetatable({}, { __mode = "k" })
+
+-- Blizzard's nameplate bar art (UI-HUD-CoolDownManager-Bar) has chamfered
+-- corners and a dark edge painted into it, which is what makes the border
+-- ring (healthBar.bgTexture, behind the fill) read as sitting in front of the
+-- fill. A custom texture is square and bright right up to its edge, so it
+-- looked drawn over the border. Give our fill that shape with a mask:
+-- textures/nameplate_bar_mask.tga (hand-made from the 2x atlas region of
+-- UICooldownManager2x.BLP) -- clear outside the edge, partial along it so the
+-- dark border behind shows through, open inside. Stretched over the whole
+-- health bar, the same rectangle Blizzard's bar art covers, so it stays put
+-- as health changes. Only while a custom texture is in use; kept in weak
+-- tables, never as fields on Blizzard's frame. Notes from getting here:
+-- MaskTexture ignores SetTexCoord in-game (no padded canvases), and WoW
+-- keeps an already-loaded texture file cached across /reload -- restart the
+-- client after editing the file.
+local BAR_MASK_TEXTURE = "Interface\\AddOns\\Uber UI\\textures\\nameplate_bar_mask"
+local barMasks = setmetatable({}, { __mode = "k" }) -- healthBar -> mask
+local barMasked = setmetatable({}, { __mode = "k" }) -- healthBar -> fill texture it's on
+
+local function UpdateBarMask(healthBar, show)
+    local fill = healthBar.barTexture or healthBar:GetStatusBarTexture()
+    local mask = barMasks[healthBar]
+    local current = barMasked[healthBar]
+    if current and (not show or current ~= fill) then
+        current:RemoveMaskTexture(mask)
+        barMasked[healthBar] = nil
+    end
+    if not (show and fill) then return end
+    if not mask then
+        local ok, m = pcall(healthBar.CreateMaskTexture, healthBar)
+        if not ok or not m then return end
+        m:SetTexture(BAR_MASK_TEXTURE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        m:SetAllPoints(healthBar)
+        mask = m
+        barMasks[healthBar] = mask
+    end
+    if barMasked[healthBar] ~= fill then
+        fill:AddMaskTexture(mask)
+        barMasked[healthBar] = fill
+    end
+end
+
+local function EnsureUpdateAnchorsHook(unitFrame)
+    if anchorHooked[unitFrame] or not unitFrame.UpdateAnchors then return end
+    anchorHooked[unitFrame] = true
+    hooksecurefunc(unitFrame, "UpdateAnchors", function(self)
+        if anchorPending[self] then return end
+        anchorPending[self] = true
+        C_Timer.After(0, function()
+            anchorPending[self] = nil
+            if self:IsForbidden() or not self.healthBar or self.healthBar:IsForbidden() then return end
+            local tex = GetNameplateBarTexture()
+            if tex then ApplyHealthBarTexture(self.healthBar, tex) end
+            UpdateBarMask(self.healthBar, tex ~= nil)
+        end)
+    end)
+end
 
 function nameplates:OnNamePlateLoad(unitFrame)
     if not unitFrame or not unitFrame.healthBar then
@@ -33,15 +116,10 @@ function nameplates:OnNamePlateLoad(unitFrame)
     local healthBar = unitFrame.healthBar
 
     -- Main texture logic
-    local textureToApply
-    if uuidb.general.nameplatebartextures and uuidb.general.nameplatebartexture ~= "Blizzard" then
-        textureToApply = uuidb.statusbars[uuidb.general.nameplatebartexture]
-    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
-        textureToApply = uuidb.statusbars[uuidb.general.texture]
-    end
-
-    if textureToApply and type(textureToApply) == "string" then
-        healthBar:SetStatusBarTexture(textureToApply)
+    local textureToApply = GetNameplateBarTexture()
+    if textureToApply then
+        ApplyHealthBarTexture(healthBar, textureToApply)
+        EnsureUpdateAnchorsHook(unitFrame)
     end
 
     -- Secondary texture logic for absorbs and heals
@@ -68,6 +146,11 @@ function nameplates:OnNamePlateLoad(unitFrame)
     local dc = uuidb.general.darkencolor
     if healthBar.bgTexture then
         healthBar.bgTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
+    UpdateBarMask(healthBar, textureToApply ~= nil)
+
+    if unitFrame.PlayerLevelDiffFrame then
+        unitFrame.PlayerLevelDiffFrame.playerLevelDiffIcon:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 
     if healthBar.selectedBorder then

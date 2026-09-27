@@ -1311,3 +1311,999 @@ SlashCmdList["UBERUIDEBUGPLAYERDEBUFFS"] = function()
     print("|cff33ff99UberUI debug|r player debuff report ready -- see the popup window (Ctrl+A, Ctrl+C to copy).")
     ShowReport(report)
 end
+
+-------------------------------------------------------------------------------
+-- Nameplate aura pool load-time test (/uuidebugnppool). Measures what
+-- building our own nameplate aura containers would cost, before committing
+-- to the feature (docs/nameplate-auras.md). Test-only: never touches the
+-- nameplate CVars or writes to Blizzard's nameplates, and does nothing
+-- unless run.
+--
+-- One "bundle" per nameplate = 4 CustomAuraContainers using Blizzard's
+-- nameplate rules (Blizzard_NamePlateAuras.lua, 12.1):
+--   debuffs  1 group  HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL|PLAYER,
+--                     nameplateShowPersonal (unless the show-all-personal
+--                     CVar), max 12
+--   buffs    2 groups IMPORTANT, and !IMPORTANT + isStealable (Blizzard:
+--                     enemy buffs only if stealable or important), max 2
+--   cc       2 groups CROWD_CONTROL, and !CROWD_CONTROL + nameplateShowAll
+--                     (Blizzard's IsAuraCrowdControl), max 2
+--   bigdebuff 1 slot  HARMFUL|CROWD_CONTROL (stand-in for the single
+--                     loss-of-control icon; Blizzard reads C_LossOfControl)
+-- Every AddAuraGroup pre-creates a 10-button batch: ~51 buttons per bundle.
+--
+-- Button setup variants (compare build cost):
+--   lean    icon + stack count only -- the minimum that can display an aura
+--   full    aurakit.InitAuraButton (cooldown, text holder, border frames)
+--   styled  full + aurakit.ApplyAuraButtonStyle with your Target aura
+--           settings, re-run on aura updates like the real containers (default)
+--   lazy    full at build; styled on the bundle's first aura update (its first
+--           attach), then only restyled when the style settings change. The
+--           engine creates buttons in batches of 10 and hides which ones are in
+--           use, so "style a button when it first shows an aura" isn't
+--           possible -- this is the closest: styling moves off the loading
+--           screen, and unchanged buttons are never restyled.
+--
+-- Usage:
+--   /uuidebugnppool build <n> [variant]    build n bundles now, in one frame
+--   /uuidebugnppool trickle <n> [variant]  build n bundles, one per frame
+--   /uuidebugnppool login <n> [variant]    build n inside PLAYER_LOGIN on the
+--                                          next /reload (loading screen); 0 = off
+--   /uuidebugnppool attach                 bind bundles to visible nameplates,
+--                                          time it, count shown auras, release
+--   /uuidebugnppool attach show            same, but leave them visible above
+--                                          each nameplate until detach
+--   /uuidebugnppool live on|off            attach/release automatically as
+--                                          nameplates appear/disappear (shown)
+--   /uuidebugnppool detach                 release shown bundles
+--   /uuidebugnppool report                 show results
+-- Built bundles can't be destroyed -- /reload to clear them.
+-------------------------------------------------------------------------------
+
+local NPPool = { bundles = {}, results = {}, attached = {} }
+local NP_ICON_SIZE = 20
+local NP_SPACING = 2
+local NP_CONTAINER_KEYS = { "debuffs", "buffs", "cc", "bigdebuff" }
+local NP_VARIANTS = { lean = true, full = true, styled = true, lazy = true }
+
+local function NPIsSecret(v)
+    return issecretvalue and issecretvalue(v)
+end
+
+local function NPAddResult(line)
+    NPPool.results[#NPPool.results + 1] = line
+end
+
+local function NPEnsureAuraContainer()
+    if not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
+        if C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist("Blizzard_AuraContainer") then
+            C_AddOns.LoadAddOn("Blizzard_AuraContainer")
+        end
+    end
+    return C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") and AuraContainerSortMethod ~= nil
+end
+
+-- Forced collection first, so a GC landing mid-test can't skew the reading.
+local function NPMemoryKB()
+    collectgarbage("collect")
+    if UpdateAddOnMemoryUsage and GetAddOnMemoryUsage then
+        pcall(UpdateAddOnMemoryUsage)
+        local ok, kb = pcall(GetAddOnMemoryUsage, addon)
+        if ok and type(kb) == "number" then return kb end
+    end
+    return nil
+end
+
+local function NPShowAllPersonal()
+    return NamePlateConstants and CVarCallbackRegistry
+        and CVarCallbackRegistry:GetCVarValueBool(NamePlateConstants.SHOW_ALL_PERSONAL_AURAS_CVAR) or false
+end
+
+-- "styled": Target's aura settings stand in for future nameplate settings.
+local function NPStyleButton(btn)
+    local g = uuidb and uuidb.general or {}
+    local style = btn.isBuff and (g.aurastyle_targetbuffs or "both") or (g.aurastyle_targetdebuffs or "zoom")
+    UberUI.aurakit.ApplyAuraButtonStyle(btn, { style = style, squareLoc = "target" })
+end
+
+-- lazy: everything that changes the look, as one string; a button is only
+-- restyled when this differs from what it was last styled with.
+local function NPStyleKey(btn)
+    local g = uuidb and uuidb.general or {}
+    local SB = UberUI.squareborders
+    local dc = g.darkencolor or {}
+    return table.concat({
+        tostring(btn.isBuff),
+        tostring(btn.isBuff and g.aurastyle_targetbuffs or g.aurastyle_targetdebuffs),
+        tostring(SB and SB.IsEnabled("target")), tostring(SB and SB.Thickness("target")),
+        tostring(SB and SB.IsInset("target")), tostring(dc.r),
+    }, "|")
+end
+
+local npLazyStyled = setmetatable({}, { __mode = "k" }) -- button -> style key
+NPPool.lazyStyleCount = 0
+local function NPLazyStyle(btn)
+    local key = NPStyleKey(btn)
+    if npLazyStyled[btn] == key then return end
+    npLazyStyled[btn] = key
+    NPPool.lazyStyleCount = NPPool.lazyStyleCount + 1
+    NPStyleButton(btn)
+end
+
+local function NPLeanInit(c, btn, isBuff, size)
+    btn:SetSize(size, size)
+    btn.isBuff = isBuff
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints(btn)
+    if btn.SetIcon then pcall(btn.SetIcon, btn, icon) end
+    local count = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    count:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    if btn.SetApplicationCount then pcall(btn.SetApplicationCount, btn, count, {}) end
+end
+
+local function NPBuildBundle(variant)
+    local aurakit = UberUI.aurakit
+    local errors = {}
+    -- Born with DisableUntrustedLayoutScriptsTemplate: attach show anchors the
+    -- holder to a nameplate, and a frame lacking the UntrustedLayoutScript-
+    -- Execution aspect can't anchor to one that has it ("Anchoring disallowed
+    -- as dependent object would inherit forbidden aspects"). The aspect can
+    -- only be given at creation (docs/nameplate-auras.md, EllesmereUI notes).
+    local okH, holder = pcall(CreateFrame, "Frame", nil, UIParent, "DisableUntrustedLayoutScriptsTemplate")
+    if not okH or not holder then holder = CreateFrame("Frame", nil, UIParent) end
+    holder:SetSize(1, 1)
+    holder:SetPoint("CENTER")
+    holder:Hide()
+
+    local styleFn = (variant == "styled") and NPStyleButton or nil
+    local refreshFn = styleFn or ((variant == "lazy") and NPLazyStyle) or nil
+
+    local function newContainer()
+        local c = CreateFrame("AuraContainer", nil, holder, "CustomAuraContainerTemplate")
+        c:SetSize(1, 1)
+        c.npButtons = {} -- every button this test created, whatever the variant
+        pcall(c.SetFlowLayoutAnchorPoint, c, "BOTTOMLEFT")
+        pcall(c.SetFlowLayoutGrowthDirection, c, 1, 1)
+        pcall(c.SetFlowLayoutMaximumLineSize, c, 6 * (NP_ICON_SIZE + NP_SPACING))
+        return c
+    end
+    local function init(c, key, isBuff, size)
+        return function(btn)
+            c.npButtons[btn] = true
+            if variant == "lean" then
+                NPLeanInit(c, btn, isBuff, size)
+            else
+                aurakit.InitAuraButton(c, btn, key, isBuff, size, false, styleFn)
+            end
+        end
+    end
+    local function group(c, key, filter, maxCount, isBuff, candidates, index)
+        local ok, err = pcall(c.AddAuraGroup, c, key, filter, {
+            maxFrameCount = maxCount,
+            candidateFilters = candidates,
+            initializeFrame = init(c, key, isBuff, NP_ICON_SIZE),
+            layout = aurakit.MakeGroupLayout(NP_ICON_SIZE, NP_SPACING, NP_SPACING, false, index, true),
+        })
+        if not ok then errors[#errors + 1] = key .. ": " .. tostring(err) end
+    end
+
+    local b = { holder = holder, errors = errors, variant = variant }
+
+    b.debuffs = newContainer()
+    group(b.debuffs, "debuffs", "HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL|PLAYER", 12, false,
+        { nameplateShowAll = false, nameplateShowPersonal = (not NPShowAllPersonal()) or nil }, 1)
+
+    b.buffs = newContainer()
+    group(b.buffs, "important", "HELPFUL|INCLUDE_NAME_PLATE_ONLY|IMPORTANT", 2, true, nil, 1)
+    group(b.buffs, "stealable", "HELPFUL|INCLUDE_NAME_PLATE_ONLY|!IMPORTANT", 2, true, { isStealable = true }, 2)
+
+    b.cc = newContainer()
+    group(b.cc, "cc", "HARMFUL|CROWD_CONTROL", 2, false, nil, 1)
+    group(b.cc, "showall", "HARMFUL|!CROWD_CONTROL", 2, false, { nameplateShowAll = true }, 2)
+
+    b.bigdebuff = newContainer()
+    local okS, errS = pcall(b.bigdebuff.AddAuraSlot, b.bigdebuff, "bigdebuff", "HARMFUL|CROWD_CONTROL", {
+        initializeFrame = init(b.bigdebuff, "bigdebuff", false, NP_ICON_SIZE * 2),
+    })
+    if not okS then errors[#errors + 1] = "bigdebuff: " .. tostring(errS) end
+
+    -- styled/lazy: (re)style on aura updates, the same hooks the real
+    -- containers use (our own frames, so always safe).
+    if refreshFn then
+        for _, key in ipairs(NP_CONTAINER_KEYS) do
+            local c = b[key]
+            local function refresh()
+                for btn in pairs(c.npButtons) do pcall(refreshFn, btn) end
+            end
+            if c.UpdateAllAuras then hooksecurefunc(c, "UpdateAllAuras", refresh) end
+            if c.UpdateAuraGroup then hooksecurefunc(c, "UpdateAuraGroup", refresh) end
+        end
+    end
+    return b
+end
+
+-- Buttons created / buttons currently showing an aura / unreadable (secret).
+local function NPCountButtons(b)
+    local total, shown, unknown = 0, 0, 0
+    for _, key in ipairs(NP_CONTAINER_KEYS) do
+        local c = b[key]
+        for btn in pairs(c and c.npButtons or {}) do
+            total = total + 1
+            if NPIsSecret(btn) then
+                unknown = unknown + 1
+            else
+                local ok, isShown = pcall(btn.IsShown, btn)
+                if not ok or NPIsSecret(isShown) then
+                    unknown = unknown + 1
+                elseif isShown then
+                    shown = shown + 1
+                end
+            end
+        end
+    end
+    return total, shown, unknown
+end
+
+local function NPSummarizeBuild(label, variant, count, total, maxOne, memBefore, extra, builtInCombat)
+    local buttons, errs = 0, 0
+    local firstErr
+    for i = #NPPool.bundles - count + 1, #NPPool.bundles do
+        local b = NPPool.bundles[i]
+        if b then
+            buttons = buttons + (NPCountButtons(b))
+            errs = errs + #b.errors
+            firstErr = firstErr or b.errors[1]
+        end
+    end
+    local memAfter = NPMemoryKB()
+    NPAddResult(string.format("[%s, %s%s] %d bundles: total %.1f ms, avg %.2f ms/bundle, slowest %.2f ms, %d buttons (%.3f ms/button)",
+        label, variant, builtInCombat and ", BUILT IN COMBAT" or "", count, total,
+        count > 0 and total / count or 0, maxOne, buttons, buttons > 0 and total / buttons or 0))
+    if memBefore and memAfter then
+        NPAddResult(string.format("    addon memory %+.0f KB after GC (%.2f KB/bundle; now %.0f KB)",
+            memAfter - memBefore, count > 0 and (memAfter - memBefore) / count or 0, memAfter))
+    end
+    if extra then NPAddResult("    " .. extra) end
+    if errs > 0 then
+        NPAddResult(string.format("    %d group/slot errors, first: %s", errs, tostring(firstErr)))
+    end
+    NPAddResult(string.format("    pool now holds %d bundles", #NPPool.bundles))
+end
+
+local function NPBuildSync(count, variant, label)
+    if not NPEnsureAuraContainer() then
+        NPAddResult("Blizzard_AuraContainer not available on this client")
+        return
+    end
+    local memBefore = NPMemoryKB()
+    local builtInCombat = InCombatLockdown()
+    local total, maxOne = 0, 0
+    for _ = 1, count do
+        local t0 = debugprofilestop()
+        NPPool.bundles[#NPPool.bundles + 1] = NPBuildBundle(variant)
+        local dt = debugprofilestop() - t0
+        total = total + dt
+        if dt > maxOne then maxOne = dt end
+    end
+    NPSummarizeBuild(label or "sync build", variant, count, total, maxOne, memBefore, nil, builtInCombat)
+end
+
+local npTrickleFrame
+local function NPBuildTrickle(count, variant, onDone)
+    if not NPEnsureAuraContainer() then
+        NPAddResult("Blizzard_AuraContainer not available on this client")
+        if onDone then onDone() end
+        return
+    end
+    npTrickleFrame = npTrickleFrame or CreateFrame("Frame")
+    local memBefore = NPMemoryKB()
+    local built, total, maxOne = 0, 0, 0
+    local startTime = GetTime()
+    npTrickleFrame:SetScript("OnUpdate", function(self)
+        local t0 = debugprofilestop()
+        NPPool.bundles[#NPPool.bundles + 1] = NPBuildBundle(variant)
+        local dt = debugprofilestop() - t0
+        built, total = built + 1, total + dt
+        if dt > maxOne then maxOne = dt end
+        if built >= count then
+            self:SetScript("OnUpdate", nil)
+            NPSummarizeBuild("trickle, 1/frame", variant, count, total, maxOne, memBefore,
+                string.format("spread over %.2f s of frames; worst single-frame cost %.2f ms", GetTime() - startTime, maxOne))
+            if onDone then onDone() end
+        end
+    end)
+end
+
+local function NPRelease(b)
+    for _, key in ipairs(NP_CONTAINER_KEYS) do
+        pcall(b[key].SetUnit, b[key], "none")
+        if b[key].npOutline then b[key].npOutline:Hide() end
+    end
+    b.holder:Hide()
+    b.holder:ClearAllPoints()
+    b.holder:SetPoint("CENTER")
+    b.inUse = nil
+end
+
+local function NPDetachAll()
+    local n = 0
+    for _, b in ipairs(NPPool.attached) do
+        NPRelease(b)
+        n = n + 1
+    end
+    wipe(NPPool.attached)
+    return n
+end
+
+-- show mode: rows above the nameplate -- CC and big debuff on the left,
+-- debuffs, buffs above them. Only our frames get positioned; anchoring to
+-- the plate doesn't write anything to Blizzard's frame.
+-- Magenta 1px outline around each of our containers (they resize to their
+-- content), so ours can't be mistaken for Blizzard's own icons. Once a
+-- container has an aura group, only frames born with
+-- DisableUntrustedLayoutScriptsTemplate may anchor to it (Blizzard's
+-- AddAuraGroup comment), so the outline gets its own frame from that
+-- template, parented to the bundle's holder. Test-only; failure is ignored.
+local function NPOutline(c, holder)
+    if not c.npOutline then
+        local ok, f = pcall(CreateFrame, "Frame", nil, holder, "DisableUntrustedLayoutScriptsTemplate")
+        if not ok or not f then return end
+        f:SetFrameLevel(c:GetFrameLevel() + 20)
+        f:EnableMouse(false)
+        local okP = pcall(function()
+            f:SetPoint("TOPLEFT", c, "TOPLEFT", -1, 1)
+            f:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 1, -1)
+        end)
+        if not okP then return end
+        for _, pts in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+                               { "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
+            local t = f:CreateTexture(nil, "OVERLAY")
+            t:SetColorTexture(1, 0, 1, 1)
+            t:SetPoint(pts[1], f, pts[1])
+            t:SetPoint(pts[2], f, pts[2])
+            if pts[3] then t:SetHeight(1) else t:SetWidth(1) end
+        end
+        c.npOutline = f
+    end
+    c.npOutline:Show()
+end
+
+-- Each anchor step is labelled, so a restriction error names the exact
+-- anchor that failed. Returns the first failure (or nil).
+local function NPLayoutShown(b, plate)
+    local failed
+    local function step(label, fn)
+        local ok, err = pcall(fn)
+        if not ok and not failed then failed = label .. ": " .. tostring(err) end
+    end
+    -- Well clear of Blizzard's own nameplate auras, which sit just above the
+    -- plate.
+    step("holder -> nameplate", function()
+        b.holder:ClearAllPoints()
+        b.holder:SetPoint("BOTTOM", plate, "TOP", 0, 46)
+    end)
+    step("debuffs -> holder", function()
+        b.debuffs:ClearAllPoints()
+        b.debuffs:SetPoint("BOTTOMLEFT", b.holder, "BOTTOM", -50, 0)
+    end)
+    step("buffs -> debuffs", function()
+        b.buffs:ClearAllPoints()
+        b.buffs:SetPoint("BOTTOMLEFT", b.debuffs, "TOPLEFT", 0, NP_SPACING + NP_ICON_SIZE)
+    end)
+    step("cc -> holder", function()
+        b.cc:ClearAllPoints()
+        b.cc:SetPoint("BOTTOMRIGHT", b.holder, "BOTTOM", -54, 0)
+    end)
+    step("bigdebuff -> cc", function()
+        b.bigdebuff:ClearAllPoints()
+        b.bigdebuff:SetPoint("BOTTOMRIGHT", b.cc, "BOTTOMLEFT", -2 * (NP_ICON_SIZE + NP_SPACING) - 4, 0)
+    end)
+    for _, key in ipairs(NP_CONTAINER_KEYS) do
+        step("outline -> " .. key, function() NPOutline(b[key], b.holder) end)
+    end
+    return failed
+end
+
+-- Binds bundles to the visible nameplates the way a real version would on
+-- NAME_PLATE_UNIT_ADDED: per-plate filters from Blizzard's own settings
+-- (friend/enemy, player/NPC, the aura display CVars), then SetUnit, which
+-- runs the engine's synchronous aura parse.
+-- Binds one bundle to one nameplate unit the way a real version would on
+-- NAME_PLATE_UNIT_ADDED: per-plate filters from Blizzard's own settings
+-- (friend/enemy, player/NPC, the aura display CVars), then SetUnit, which
+-- runs the engine's synchronous aura parse. Returns the time taken and a
+-- description of what was turned on.
+local function NPBind(b, unit)
+    local isFriend = UnitIsFriend("player", unit)
+    local isPlayer = UnitIsPlayer(unit)
+    local t0 = debugprofilestop()
+
+    -- Blizzard: enemy debuffs must be yours; friendly buffs must be yours.
+    pcall(b.debuffs.SetAuraGroupFilterString, b.debuffs, "debuffs",
+        isFriend and "HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL"
+        or "HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL|PLAYER")
+    pcall(b.buffs.SetAuraGroupFilterString, b.buffs, "important",
+        isFriend and "HELPFUL|INCLUDE_NAME_PLATE_ONLY|PLAYER" or "HELPFUL|INCLUDE_NAME_PLATE_ONLY|IMPORTANT")
+    pcall(b.buffs.SetAuraGroupMaxFrameCount, b.buffs, "stealable", isFriend and 0 or 2)
+
+    -- Which categories Blizzard's settings show for this unit type.
+    local npBit = CVarCallbackRegistry and NamePlateConstants and function(cvar, index)
+        return CVarCallbackRegistry:GetCVarBitfieldIndex(cvar, index)
+    end
+    local showBuffs, showDebuffs, showCC, showBig = true, true, true, false
+    if npBit then
+        local E = Enum
+        if isFriend then
+            showBuffs = isPlayer and npBit(NamePlateConstants.FRIENDLY_PLAYER_AURA_DISPLAY_CVAR, E.NamePlateFriendlyPlayerAuraDisplay.Buffs) or false
+            showDebuffs = CVarCallbackRegistry:GetCVarValueBool(NamePlateConstants.SHOW_DEBUFFS_ON_FRIENDLY_CVAR)
+            showCC = false
+            showBig = isPlayer and npBit(NamePlateConstants.FRIENDLY_PLAYER_AURA_DISPLAY_CVAR, E.NamePlateFriendlyPlayerAuraDisplay.LossOfControl) or false
+        elseif isPlayer then
+            showBuffs = npBit(NamePlateConstants.ENEMY_PLAYER_AURA_DISPLAY_CVAR, E.NamePlateEnemyPlayerAuraDisplay.Buffs)
+            showDebuffs = npBit(NamePlateConstants.ENEMY_PLAYER_AURA_DISPLAY_CVAR, E.NamePlateEnemyPlayerAuraDisplay.Debuffs)
+            showCC = false
+            showBig = npBit(NamePlateConstants.ENEMY_PLAYER_AURA_DISPLAY_CVAR, E.NamePlateEnemyPlayerAuraDisplay.LossOfControl)
+        else
+            showBuffs = npBit(NamePlateConstants.ENEMY_NPC_AURA_DISPLAY_CVAR, E.NamePlateEnemyNpcAuraDisplay.Buffs)
+            showDebuffs = npBit(NamePlateConstants.ENEMY_NPC_AURA_DISPLAY_CVAR, E.NamePlateEnemyNpcAuraDisplay.Debuffs)
+            showCC = npBit(NamePlateConstants.ENEMY_NPC_AURA_DISPLAY_CVAR, E.NamePlateEnemyNpcAuraDisplay.CrowdControl)
+            showBig = false
+        end
+    end
+
+    b.holder:Show()
+    for key, shown in pairs({ debuffs = showDebuffs, buffs = showBuffs, cc = showCC, bigdebuff = showBig }) do
+        local c = b[key]
+        c:SetShown(shown and true or false)
+        if shown then pcall(c.SetUnit, c, unit) end
+    end
+    local dt = debugprofilestop() - t0
+    local desc = string.format("%s %s -- categories on: %s%s%s%s",
+        isFriend and "friendly" or "enemy", isPlayer and "player" or "NPC",
+        showDebuffs and "debuffs " or "", showBuffs and "buffs " or "", showCC and "cc " or "",
+        showBig and "big" or "")
+    return dt, desc
+end
+
+local function NPAttachTest(show)
+    NPDetachAll()
+    for _, b in ipairs(NPPool.bundles) do b.inUse = nil end
+
+    local plates = C_NamePlate and C_NamePlate.GetNamePlates() or {}
+    local targets = {}
+    for _, plate in ipairs(plates) do
+        if not (plate.IsForbidden and plate:IsForbidden()) then
+            local unit = plate.unitToken or plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+            if unit then targets[#targets + 1] = { unit = unit, plate = plate } end
+        end
+    end
+    if #targets == 0 then
+        NPAddResult("[attach] no visible nameplates -- stand near some units and run again")
+        return
+    end
+
+    -- Prefer styled/lazy bundles (closest to real); top up with styled.
+    local pick = {}
+    local pickedVariants = {}
+    for _, b in ipairs(NPPool.bundles) do
+        if (b.variant == "styled" or b.variant == "lazy") and #pick < #targets then
+            pick[#pick + 1] = b
+            pickedVariants[b.variant] = (pickedVariants[b.variant] or 0) + 1
+        end
+    end
+    if #pick < #targets then
+        local before = #NPPool.bundles
+        pickedVariants.styled = (pickedVariants.styled or 0) + (#targets - #pick)
+        NPBuildSync(#targets - #pick, "styled", "attach top-up build")
+        for i = before + 1, #NPPool.bundles do pick[#pick + 1] = NPPool.bundles[i] end
+    end
+
+    local total, maxOne = 0, 0
+    local perUnit = {}
+    local lazyBefore = NPPool.lazyStyleCount
+    for i, t in ipairs(targets) do
+        local b, unit = pick[i], t.unit
+        b.inUse = true
+        local dt, desc = NPBind(b, unit)
+
+        total = total + dt
+        if dt > maxOne then maxOne = dt end
+
+        if show then
+            local failed = NPLayoutShown(b, t.plate)
+            if failed then perUnit[#perUnit + 1] = "    LAYOUT FAILED on " .. unit .. " -- " .. failed end
+        end
+
+        local _, shownAuras, unknown = NPCountButtons(b)
+        perUnit[#perUnit + 1] = string.format("    %s: %d auras shown%s -- %s", unit, shownAuras,
+            unknown > 0 and (" + " .. unknown .. " unreadable") or "", desc)
+        NPPool.attached[#NPPool.attached + 1] = b
+    end
+    local variants = {}
+    for v, n in pairs(pickedVariants) do variants[#variants + 1] = n .. " " .. v end
+    NPAddResult(string.format("[attach%s] %d nameplates: total %.2f ms, avg %.3f ms/plate, slowest %.3f ms (bundles: %s)",
+        show and " show" or "", #targets, total, total / #targets, maxOne, table.concat(variants, ", ")))
+    if NPPool.lazyStyleCount > lazyBefore then
+        NPAddResult(string.format("    lazy: %d buttons styled during this attach (first use of those bundles)",
+            NPPool.lazyStyleCount - lazyBefore))
+    end
+    NPAddResult("    (unreadable = the engine hides which buttons are in use; verify with attach show)")
+    for _, line in ipairs(perUnit) do NPAddResult(line) end
+
+    if show then
+        NPAddResult("    ours are the MAGENTA-outlined rows well above each nameplate (Blizzard's stay in their"
+            .. " usual spot) -- /uuidebugnppool detach to release (snapshot: new plates need attach again)")
+    else
+        local r0 = debugprofilestop()
+        local n = NPDetachAll()
+        NPAddResult(string.format("    release: %.2f ms for %d plates", debugprofilestop() - r0, n))
+    end
+end
+
+-- Live mode: attach a bundle as each nameplate appears and release it when
+-- the plate goes away, like the real feature would (minus hiding Blizzard's
+-- own auras). Attach is deferred a frame -- this file's nameplate taint rule.
+-- Plates beyond the pool size get nothing (Blizzard's auras only) and are
+-- counted.
+local npLive = { on = false, byUnit = {}, seq = {}, attaches = 0, total = 0, maxOne = 0,
+                 releases = 0, releaseTotal = 0, exhausted = 0, peak = 0 }
+local npLiveFrame = CreateFrame("Frame")
+
+local function NPLiveInUse()
+    local n = 0
+    for _ in pairs(npLive.byUnit) do n = n + 1 end
+    return n
+end
+
+local function NPLiveAttach(unit)
+    if not npLive.on or npLive.byUnit[unit] then return end
+    local plate = C_NamePlate.GetNamePlateForUnit(unit)
+    if not plate or (plate.IsForbidden and plate:IsForbidden()) then return end
+    local b
+    for _, cand in ipairs(NPPool.bundles) do
+        if not cand.inUse then b = cand break end
+    end
+    if not b then
+        npLive.exhausted = npLive.exhausted + 1
+        return
+    end
+    b.inUse = true
+    npLive.byUnit[unit] = b
+    local dt = NPBind(b, unit)
+    NPLayoutShown(b, plate)
+    npLive.attaches = npLive.attaches + 1
+    npLive.total = npLive.total + dt
+    if dt > npLive.maxOne then npLive.maxOne = dt end
+    local inUse = NPLiveInUse()
+    if inUse > npLive.peak then npLive.peak = inUse end
+end
+
+local function NPLiveRelease(unit)
+    local b = npLive.byUnit[unit]
+    if not b then return end
+    local t0 = debugprofilestop()
+    NPRelease(b)
+    npLive.byUnit[unit] = nil
+    npLive.releases = npLive.releases + 1
+    npLive.releaseTotal = npLive.releaseTotal + (debugprofilestop() - t0)
+end
+
+npLiveFrame:SetScript("OnEvent", function(_, event, unit)
+    if event == "NAME_PLATE_UNIT_ADDED" then
+        -- A token can be removed and re-added before the deferred attach
+        -- runs; the sequence number makes a stale attach a no-op.
+        local seq = (npLive.seq[unit] or 0) + 1
+        npLive.seq[unit] = seq
+        C_Timer.After(0, function()
+            if npLive.seq[unit] == seq then pcall(NPLiveAttach, unit) end
+        end)
+    elseif event == "NAME_PLATE_UNIT_REMOVED" then
+        npLive.seq[unit] = (npLive.seq[unit] or 0) + 1
+        pcall(NPLiveRelease, unit)
+    end
+end)
+
+local function NPLiveSummary()
+    return string.format("[live %s] pool %d, in use %d (peak %d); %d attaches avg %.3f ms, slowest %.3f ms;"
+        .. " %d releases avg %.3f ms; %d plates got nothing (pool empty)",
+        npLive.on and "on" or "off", #NPPool.bundles, NPLiveInUse(), npLive.peak, npLive.attaches,
+        npLive.attaches > 0 and npLive.total / npLive.attaches or 0, npLive.maxOne,
+        npLive.releases, npLive.releases > 0 and npLive.releaseTotal / npLive.releases or 0,
+        npLive.exhausted)
+end
+
+local function NPLiveOn()
+    if npLive.on then return end
+    NPDetachAll()
+    for _, b in ipairs(NPPool.bundles) do b.inUse = nil end
+    if #NPPool.bundles == 0 then
+        NPBuildSync(25, "styled", "live: no pool yet, built")
+    end
+    npLive.on = true
+    npLive.attaches, npLive.total, npLive.maxOne = 0, 0, 0
+    npLive.releases, npLive.releaseTotal, npLive.exhausted, npLive.peak = 0, 0, 0, 0
+    npLiveFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+    npLiveFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+    for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+        if not (plate.IsForbidden and plate:IsForbidden()) then
+            local unit = plate.unitToken or plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+            if unit then pcall(NPLiveAttach, unit) end
+        end
+    end
+end
+
+local function NPLiveOff()
+    if not npLive.on then return end
+    npLive.on = false
+    npLiveFrame:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
+    npLiveFrame:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
+    for unit in pairs(npLive.byUnit) do NPLiveRelease(unit) end
+end
+
+local npLiveRestore = CreateFrame("Frame")
+npLiveRestore:RegisterEvent("PLAYER_ENTERING_WORLD")
+npLiveRestore:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    if uuidb and uuidb.general and uuidb.general.debug_nppool_live then
+        C_Timer.After(1, function()
+            pcall(NPLiveOn)
+            print("|cff33ff99UberUI debug|r nameplate live mode restored after reload (/uuidebugnppool live off to stop).")
+        end)
+    end
+end)
+
+local function NPReport()
+    local lines = { "==== nameplate aura pool test ====", "client: " .. (select(4, GetBuildInfo()) or "?")
+        .. "  in combat: " .. tostring(InCombatLockdown()) }
+    local pending = uuidb and uuidb.general and uuidb.general.debug_nppool_login
+    lines[#lines + 1] = "login test on next /reload: " .. (pending and pending > 0
+        and (pending .. " bundles, " .. (uuidb.general.debug_nppool_variant or "styled")) or "off")
+    lines[#lines + 1] = NPLiveSummary()
+    lines[#lines + 1] = ""
+    if #NPPool.results == 0 then
+        lines[#lines + 1] = "(no results yet)"
+    else
+        for _, l in ipairs(NPPool.results) do lines[#lines + 1] = l end
+    end
+    return table.concat(lines, "\n")
+end
+
+-- Login mode: runs inside PLAYER_LOGIN (still behind the loading screen),
+-- report shown once the world is up.
+local npLoginFrame = CreateFrame("Frame")
+npLoginFrame:RegisterEvent("PLAYER_LOGIN")
+npLoginFrame:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_LOGIN" then
+        local n = uuidb and uuidb.general and tonumber(uuidb.general.debug_nppool_login)
+        if not n or n <= 0 then return end
+        local variant = uuidb.general.debug_nppool_variant
+        if not NP_VARIANTS[variant] then variant = "styled" end
+        NPBuildSync(n, variant, "PLAYER_LOGIN (loading screen)")
+        self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    else
+        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        C_Timer.After(2, function()
+            print("|cff33ff99UberUI debug|r nameplate pool login test done -- see the popup. (/uuidebugnppool login 0 to turn it off)")
+            ShowReport(NPReport())
+        end)
+    end
+end)
+
+SLASH_UBERUIDEBUGNPPOOL1 = "/uuidebugnppool"
+SlashCmdList["UBERUIDEBUGNPPOOL"] = function(msg)
+    local cmd, arg1, arg2 = strsplit(" ", strtrim(msg or ""))
+    cmd = (cmd or ""):lower()
+    local n = tonumber(arg1)
+    local variant = (arg2 or ""):lower()
+    if not NP_VARIANTS[variant] then variant = "styled" end
+    local ok, err = pcall(function()
+        if cmd == "build" then
+            NPBuildSync(n or 20, variant)
+        elseif cmd == "trickle" then
+            print("|cff33ff99UberUI debug|r building " .. (n or 20) .. " " .. variant .. " bundles, one per frame...")
+            NPBuildTrickle(n or 20, variant, function()
+                print("|cff33ff99UberUI debug|r nameplate pool trickle build done.")
+                ShowReport(NPReport())
+            end)
+            return "noreport"
+        elseif cmd == "attach" then
+            NPAttachTest((arg1 or ""):lower() == "show")
+        elseif cmd == "live" then
+            if (arg1 or ""):lower() == "off" then
+                uuidb.general.debug_nppool_live = nil
+                NPLiveOff()
+                NPAddResult(NPLiveSummary())
+                print("|cff33ff99UberUI debug|r nameplate live mode off.")
+            else
+                uuidb.general.debug_nppool_live = true
+                NPLiveOn()
+                print("|cff33ff99UberUI debug|r nameplate live mode ON (stays on across /reload): our styled auras"
+                    .. " (magenta boxes) follow nameplates as they appear. /uuidebugnppool live off to stop, report for stats.")
+                return "noreport"
+            end
+        elseif cmd == "detach" then
+            NPAddResult(string.format("[detach] released %d bundles", NPDetachAll()))
+        elseif cmd == "login" then
+            uuidb.general.debug_nppool_login = n or 0
+            uuidb.general.debug_nppool_variant = variant
+            print("|cff33ff99UberUI debug|r nameplate pool login test: "
+                .. ((n and n > 0) and (n .. " " .. variant .. " bundles on the next /reload") or "off"))
+            return "noreport"
+        elseif cmd == "report" or cmd == "" then
+            -- just show
+        else
+            print("|cff33ff99UberUI debug|r usage: /uuidebugnppool build <n> [lean|full|styled|lazy] | trickle <n> [variant] | login <n> [variant] | attach [show] | live on|off | detach | report")
+            return "noreport"
+        end
+    end)
+    if not ok then NPAddResult("ERROR: " .. tostring(err)) end
+    if ok and err == "noreport" then return end
+    ShowReport(NPReport())
+end
+
+-------------------------------------------------------------------------------
+-- Nameplate health bar layering/border diagnostics (/uuidebugnpbar).
+-- Reports, for the target's nameplate (or the first visible one), the draw
+-- layers, textures/atlases, vertex colors and screen rects of the health
+-- bar's fill (barTexture) and border (bgTexture), so overlap and our
+-- darkening can be read off directly. A/B switches (visible plates only,
+-- until reload / the next re-style):
+--   /uuidebugnpbar           report
+--   /uuidebugnpbar border    set the border's (bgTexture) tint back to white
+--   /uuidebugnpbar dark      re-apply our darkness tint to the border
+--   /uuidebugnpbar blizzbar  put Blizzard's own bar atlas back on the fill
+--   /uuidebugnpbar layers | snap | diff   full draw-order dump / compare
+--   /uuidebugnpbar bgtop | bgback         raise the border texture above the
+--                                         fill / put it back (test)
+-- Read-only except for those switches; never touches Lua fields.
+-------------------------------------------------------------------------------
+
+local function NBSecret(v) return issecretvalue and issecretvalue(v) end
+
+local function NBFmt(...)
+    local out = {}
+    for i = 1, select("#", ...) do
+        local v = select(i, ...)
+        if NBSecret(v) then
+            out[#out + 1] = "<secret>"
+        elseif type(v) == "number" then
+            out[#out + 1] = string.format("%.2f", v)
+        else
+            out[#out + 1] = tostring(v)
+        end
+    end
+    return table.concat(out, ", ")
+end
+
+local function NBCall(obj, method, ...)
+    if not obj or not obj[method] then return "n/a" end
+    local r = { pcall(obj[method], obj, ...) }
+    if not r[1] then return "error: " .. tostring(r[2]) end
+    return NBFmt(select(2, unpack(r)))
+end
+
+local function NBRect(region)
+    if not region then return "n/a" end
+    local ok, l, b, w, h = pcall(region.GetRect, region)
+    if not ok then return "error" end
+    if NBSecret(l) or NBSecret(b) or NBSecret(w) or NBSecret(h) then return "<secret>" end
+    if not l then return "(no rect)" end
+    return string.format("left %.1f right %.1f bottom %.1f top %.1f (w %.1f h %.1f)", l, l + w, b, b + h, w, h)
+end
+
+local function NBTargetPlates()
+    local plates = {}
+    local target = C_NamePlate.GetNamePlateForUnit("target")
+    if target then plates[1] = target end
+    for _, p in ipairs(C_NamePlate.GetNamePlates() or {}) do
+        if p ~= target then plates[#plates + 1] = p end
+    end
+    return plates
+end
+
+local function NBHealthBar(plate)
+    if not plate or (plate.IsForbidden and plate:IsForbidden()) then return nil end
+    local uf = plate.UnitFrame
+    if not uf or (uf.IsForbidden and uf:IsForbidden()) then return nil end
+    local hb = uf.healthBar
+    if not hb or (hb.IsForbidden and hb:IsForbidden()) then return nil end
+    return hb, uf
+end
+
+local function BuildNamePlateBarReport()
+    local lines = { "==== nameplate health bar report ====" }
+    local function add(s) lines[#lines + 1] = s end
+    local style = NamePlateConstants and CVarCallbackRegistry
+        and CVarCallbackRegistry:GetCVarNumberOrDefault(NamePlateConstants.STYLE_CVAR)
+    add("client: " .. tostring(select(4, GetBuildInfo())) .. "  nameplateStyle cvar: " .. tostring(style))
+    local dc = uuidb and uuidb.general and uuidb.general.darkencolor
+    add("our darkness color: " .. (dc and NBFmt(dc.r, dc.g, dc.b, dc.a) or "n/a"))
+
+    local shown = 0
+    for _, plate in ipairs(NBTargetPlates()) do
+        local hb, uf = NBHealthBar(plate)
+        if hb and shown < 2 then
+            shown = shown + 1
+            local unit = plate.unitToken or plate.namePlateUnitToken or uf.unit
+            add("")
+            add(string.format("-- %s%s --", tostring(unit),
+                (unit and UnitIsUnit(unit, "target")) and " (target)" or ""))
+            local bar, fill, bg = hb.barTexture, hb:GetStatusBarTexture(), hb.bgTexture
+            add("healthBar frame level: " .. NBCall(hb, "GetFrameLevel") .. "  strata: " .. NBCall(hb, "GetFrameStrata"))
+            add("healthBar rect: " .. NBRect(hb))
+            add("fill = barTexture (same object)? " .. tostring(fill == bar))
+            for label, t in pairs({ ["barTexture (fill)"] = bar, ["GetStatusBarTexture"] = (fill ~= bar) and fill or nil,
+                                    ["bgTexture (border)"] = bg }) do
+                add(label .. ":")
+                add("    draw layer: " .. NBCall(t, "GetDrawLayer"))
+                add("    texture: " .. NBCall(t, "GetTexture") .. "   atlas: " .. NBCall(t, "GetAtlas"))
+                add("    vertex color: " .. NBCall(t, "GetVertexColor") .. "   alpha: " .. NBCall(t, "GetAlpha")
+                    .. "   shown: " .. NBCall(t, "IsShown"))
+                add("    texcoords: " .. NBCall(t, "GetTexCoord"))
+                add("    rect: " .. NBRect(t))
+            end
+            add("selectedBorder: layer " .. NBCall(hb.selectedBorder, "GetDrawLayer") .. ", shown " .. NBCall(hb.selectedBorder, "IsShown"))
+        end
+    end
+    if shown == 0 then add("no readable nameplates -- target something with a nameplate showing") end
+    return table.concat(lines, "\n")
+end
+
+local function NBForEachBar(fn)
+    local n = 0
+    for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+        local hb = NBHealthBar(plate)
+        if hb then
+            if pcall(fn, hb) then n = n + 1 end
+        end
+    end
+    return n
+end
+
+
+-- Full draw-order dump of a nameplate's health bar (/uuidebugnpbar layers),
+-- with snapshot/diff to compare Blizzard's texture against ours:
+--   /uuidebugnpbar layers   every region of the health bar and its container,
+--                           sorted in actual draw order
+--   /uuidebugnpbar snap     remember the current dump
+--   /uuidebugnpbar diff     show only what changed since the snapshot
+-- Within one frame, regions draw BACKGROUND < BORDER < ARTWORK < OVERLAY <
+-- HIGHLIGHT, then by sublevel (-8..7); a child frame draws above all of its
+-- parent's regions, and frames draw by frame level.
+local NB_LAYER_ORDER = { BACKGROUND = 1, BORDER = 2, ARTWORK = 3, OVERLAY = 4, HIGHLIGHT = 5 }
+local npbarSnapshot
+
+-- parentKey names: Blizzard stores regions as fields on their frame, so a
+-- reverse lookup of the frame's own fields names them (read-only).
+local function NBKeyNames(frame)
+    local names = {}
+    pcall(function()
+        for k, v in pairs(frame) do
+            if type(k) == "string" and type(v) == "table" and not NBSecret(v) and v.GetObjectType then
+                names[v] = names[v] or k
+            end
+        end
+    end)
+    return names
+end
+
+local function NBRegionLines(frame, frameLabel, out)
+    local names = NBKeyNames(frame)
+    local entries = {}
+    local ok, regions = pcall(function() return { frame:GetRegions() } end)
+    if not ok then return end
+    for _, r in ipairs(regions) do
+        local okL, layer, sub = pcall(r.GetDrawLayer, r)
+        if okL and not NBSecret(layer) then
+            local okT, objType = pcall(r.GetObjectType, r)
+            local tex = r.GetAtlas and select(2, pcall(r.GetAtlas, r)) or nil
+            if not tex or tex == "" then tex = r.GetTexture and select(2, pcall(r.GetTexture, r)) or nil end
+            if NBSecret(tex) then tex = "<secret>" end
+            local okS, shown = pcall(r.IsShown, r)
+            local okV, vr, vg, vb, va = pcall(r.GetVertexColor, r)
+            entries[#entries + 1] = {
+                order = (NB_LAYER_ORDER[layer] or 9) * 100 + ((not NBSecret(sub) and sub) or 0),
+                text = string.format("  %-9s %2s  %-22s %-12s shown=%-5s tint=%s  %s",
+                    tostring(layer), tostring(NBSecret(sub) and "?" or sub), names[r] or "(unnamed)",
+                    okT and tostring(objType) or "?", okS and tostring(shown) or "?",
+                    okV and NBFmt(vr, vg, vb, va) or "n/a", tostring(tex)),
+            }
+        end
+    end
+    table.sort(entries, function(a, b) return a.order < b.order end)
+    out[#out + 1] = string.format("%s  [frame level %s]  -- draw order, bottom to top:", frameLabel,
+        NBCall(frame, "GetFrameLevel"))
+    for _, e in ipairs(entries) do out[#out + 1] = e.text end
+end
+
+local function BuildNamePlateLayerLines()
+    local out = {}
+    local plate
+    local target = C_NamePlate.GetNamePlateForUnit("target")
+    for _, p in ipairs(target and { target } or (C_NamePlate.GetNamePlates() or {})) do
+        if NBHealthBar(p) then plate = p break end
+    end
+    local hb = plate and NBHealthBar(plate)
+    if not hb then
+        out[1] = "no readable nameplate -- target something with a nameplate showing"
+        return out
+    end
+    local container = hb:GetParent()
+    NBRegionLines(container, "HealthBarsContainer", out)
+    NBRegionLines(hb, "healthBar (StatusBar)", out)
+    out[#out + 1] = "  fill (GetStatusBarTexture) is barTexture? " .. tostring(hb:GetStatusBarTexture() == hb.barTexture)
+    -- Child frames draw above all of healthBar's own regions.
+    local ok, kids = pcall(function() return { hb:GetChildren() } end)
+    if ok then
+        local names = NBKeyNames(hb)
+        for _, k in ipairs(kids) do
+            out[#out + 1] = string.format("  child frame %-20s level %s shown %s", names[k] or "(unnamed)",
+                NBCall(k, "GetFrameLevel"), NBCall(k, "IsShown"))
+        end
+    end
+    return out
+end
+
+SLASH_UBERUIDEBUGNPBAR1 = "/uuidebugnpbar"
+SlashCmdList["UBERUIDEBUGNPBAR"] = function(msg)
+    local cmd = strtrim(msg or ""):lower()
+    if cmd == "layers" or cmd == "snap" or cmd == "diff" then
+        local ok, lines = pcall(BuildNamePlateLayerLines)
+        if not ok then
+            ShowReport("ERROR building layer dump: " .. tostring(lines))
+            return
+        end
+        if cmd == "snap" then
+            npbarSnapshot = lines
+            print("|cff33ff99UberUI debug|r nameplate layer snapshot saved (" .. #lines .. " lines). Change something, then /uuidebugnpbar diff.")
+            return
+        elseif cmd == "diff" then
+            if not npbarSnapshot then
+                print("|cff33ff99UberUI debug|r no snapshot yet -- run /uuidebugnpbar snap first.")
+                return
+            end
+            local before, after = {}, {}
+            for _, l in ipairs(npbarSnapshot) do before[l] = true end
+            for _, l in ipairs(lines) do after[l] = true end
+            local out = { "==== nameplate layer diff (snapshot -> now) ====", "-- only in SNAPSHOT:" }
+            for _, l in ipairs(npbarSnapshot) do if not after[l] then out[#out + 1] = l end end
+            out[#out + 1] = "-- only NOW:"
+            for _, l in ipairs(lines) do if not before[l] then out[#out + 1] = l end end
+            out[#out + 1] = ""
+            out[#out + 1] = "==== full dump now ===="
+            for _, l in ipairs(lines) do out[#out + 1] = l end
+            ShowReport(table.concat(out, "\n"))
+            return
+        end
+        ShowReport("==== nameplate health bar draw layers ====\n" .. table.concat(lines, "\n"))
+        return
+    elseif cmd == "bgtop" then
+        -- Test: raise the border texture above the fill. Blizzard's own is
+        -- BACKGROUND 0 (Blizzard_NamePlateUnitFrame.lua UpdateAnchors).
+        local n = NBForEachBar(function(hb) hb.bgTexture:SetDrawLayer("ARTWORK", 6) end)
+        print("|cff33ff99UberUI debug|r bgTexture raised above the fill (ARTWORK 6) on " .. n
+            .. " nameplates. /uuidebugnpbar bgback to restore (a re-style or reload also restores it).")
+        return
+    elseif cmd == "bgback" then
+        local n = NBForEachBar(function(hb) hb.bgTexture:SetDrawLayer("BACKGROUND", 0) end)
+        print("|cff33ff99UberUI debug|r bgTexture back on BACKGROUND 0 on " .. n .. " nameplates.")
+        return
+    elseif cmd == "border" then
+        local n = NBForEachBar(function(hb) hb.bgTexture:SetVertexColor(1, 1, 1, 1) end)
+        print("|cff33ff99UberUI debug|r border tint reset to white on " .. n .. " nameplates (reload to undo).")
+        return
+    elseif cmd == "dark" then
+        local dc = uuidb.general.darkencolor
+        local n = NBForEachBar(function(hb) hb.bgTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end)
+        print("|cff33ff99UberUI debug|r darkness tint re-applied to the border on " .. n .. " nameplates.")
+        return
+    elseif cmd == "blizzbar" then
+        local n = NBForEachBar(function(hb) hb.barTexture:SetAtlas("UI-HUD-CoolDownManager-Bar", true) end)
+        print("|cff33ff99UberUI debug|r Blizzard's bar atlas put back on " .. n .. " nameplates (next re-style/reload undoes it).")
+        return
+    end
+    local ok, report = pcall(BuildNamePlateBarReport)
+    if not ok then report = "ERROR building nameplate bar report: " .. tostring(report) end
+    print("|cff33ff99UberUI debug|r nameplate bar report ready -- see the popup window (Ctrl+A, Ctrl+C to copy).")
+    ShowReport(report)
+end

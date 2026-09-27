@@ -30,6 +30,7 @@ core\focusframe.lua
 core\bossframes.lua
 core\miscframes.lua
 core\nameplates.lua
+core\nameplateauras.lua
 core\compactunitframe.lua
 core\compactauras.lua
 core\partyframes.lua

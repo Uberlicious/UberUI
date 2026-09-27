@@ -256,6 +256,46 @@ function aurakit.TryRegisterDispelBorder(button)
     end
 end
 
+-- Rounded white "purgeable" border (opts.stealableRing): a white texture
+-- masked by the same rounded art the dark border uses
+-- (ui-debuff-border-default-noicon -- its ring art is red, so it can't just
+-- be tinted white), registered with the engine so it only shows on stealable
+-- buffs (the flag is secret to us). Replaces Blizzard's stealable glow,
+-- which reaches well past the icon. Registration is refused while aura data
+-- is secret, so it's retried every style pass. Lives on the button, not in
+-- borderHost: the buff border choice "None" and square borders hide that.
+local RING_ATLAS = "ui-debuff-border-default-noicon"
+local ringHosts = setmetatable({}, { __mode = "k" }) -- button -> host frame
+
+local function GetStealableRing(button)
+    local host = ringHosts[button]
+    if not host then
+        if not button.borderHost then return nil end
+        host = CreateFrame("Frame", nil, button)
+        host:SetAllPoints(button.borderHost)
+        host:SetFrameLevel(button.borderHost:GetFrameLevel() + 1)
+        host:EnableMouse(false)
+        host:Hide()
+        local tex = host:CreateTexture(nil, "OVERLAY")
+        tex:SetAllPoints(host)
+        tex:SetColorTexture(1, 1, 1, 1)
+        local mask = host:CreateMaskTexture()
+        mask:SetAtlas(RING_ATLAS)
+        mask:SetAllPoints(host)
+        tex:AddMaskTexture(mask)
+        host.tex = tex
+        ringHosts[button] = host
+    end
+    if not host.registered then
+        local SB = UberUI.squareborders
+        local o = SB and SB.StealableEngineOptions()
+        if o and button.AddDispelTypeTexture and pcall(button.AddDispelTypeTexture, button, host.tex, o) then
+            host.registered = true
+        end
+    end
+    return host
+end
+
 -- button.isBuff is fixed permanently at button creation (see InitAuraButton)
 -- based on which permanent aura group the button belongs to.
 --
@@ -410,7 +450,9 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
             if button.stealableHost then
                 local showStealable = isBuff and UberUI.general:PlayerCanOffensiveDispel() and
                 (opts and opts.showDispel)
-                if showStealable then
+                if opts and opts.stealableRing then
+                    button.stealableHost:Hide() -- the white ring below replaces it
+                elseif showStealable then
                     button.stealableHost:Show()
                 else
                     button.stealableHost:Hide()
@@ -420,6 +462,18 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
     end
 
     aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
+
+    if opts and opts.stealableRing and isBuff then
+        pcall(function()
+            local ring = GetStealableRing(button)
+            if not ring then return end
+            local showStealable = UberUI.general:PlayerCanOffensiveDispel() and opts.showDispel
+            -- Square borders show their own white strips instead.
+            local steal = SBk and SBk.Find(button, 2)
+            local stripsShown = steal and steal:IsShown()
+            ring:SetShown((showStealable and ring.registered and not stripsShown) and true or false)
+        end)
+    end
 end
 
 -- Square borders (core/squareborders.lua) for opts.squareLoc ("target",
@@ -910,9 +964,115 @@ end
 -- collapsing to ~0 when empty -- "no buffs -> debuffs sit where buffs
 -- would've been" for free, no row-counting needed.
 -- opts: { frameObj, refFrame, isEnemyFn(), buffsOnTop, topX, topY, topOnTopX, containerGap }
+-- Blizzard narrows the first 2 aura rows to the frame's TOT_AURA_ROW_WIDTH
+-- (101; Blizzard sets 80 on a small focus frame) while the target-of-target
+-- frame is shown, so auras don't run under the ToT portrait (TargetFrame.lua
+-- UpdateAuras, TargetFrameAuraFlowLayoutMixin:GetMaximumLineSizeForLine).
+-- That per-row width lives in Blizzard's private layout; addon containers
+-- take one width for every row, so the whole container narrows instead --
+-- rows 3+ lose a little width, which few targets ever reach. Frames with no
+-- ToT (boss) stay at the full width. Only reads Blizzard's fields.
+local FULL_AURA_ROW_WIDTH = 122 -- TargetFrameAuraContainerDefaults.FlowLayoutLineSize
+
+-- Frames whose ToT we've moved aside (keyed by the Target/Focus frame;
+-- our table, never a field on Blizzard's frame). Those keep full-width rows.
+local totAside = setmetatable({}, { __mode = "k" })
+
+function aurakit.ApplyToTRowWidth(frameObj, refFrame)
+    local width = FULL_AURA_ROW_WIDTH
+    local tot = refFrame and refFrame.totFrame
+    if tot and tot.IsShown and tot:IsShown() and not totAside[refFrame] then
+        width = tonumber(refFrame.TOT_AURA_ROW_WIDTH) or 101
+    end
+    for _, c in ipairs({ frameObj.customDebuffs, frameObj.customBuffs }) do
+        if c and c.uuRowWidth ~= width then
+            c.uuRowWidth = width
+            pcall(c.SetFlowLayoutMaximumLineSize, c, width)
+        end
+    end
+end
+
+-- "Move ToT Aside": shift the target-of-target frame right, clear of the
+-- aura rows, so they can keep their full width. Blizzard's ToT covers the
+-- last ~21px of a 122px row (it narrows rows to 101), so 24px clears it
+-- with a small gap.
+--
+-- The ToT frame is a protected (secure unit) frame: only moved out of
+-- combat; a change made in combat is applied on PLAYER_REGEN_ENABLED. The
+-- shift is relative to Blizzard's own anchor, captured before we first move
+-- it and re-captured whenever Blizzard re-anchors it itself (FocusFrame:
+-- SetSmallSize -- see RecaptureToTAnchor), so it never compounds; "Narrow
+-- Auras" puts Blizzard's exact anchor back. Only single-anchor ToT frames
+-- (Blizzard's layout) are touched.
+local TOT_ASIDE_X = 24
+local totBase = setmetatable({}, { __mode = "k" })    -- tot frame -> Blizzard's anchor
+local totWanted = setmetatable({}, { __mode = "k" })  -- refFrame -> desired aside state
+local totRegen
+
+local function ReadAnchor(tot)
+    if not tot.GetNumPoints or tot:GetNumPoints() ~= 1 then return nil end
+    local point, rel, relPoint, x, y = tot:GetPoint(1)
+    if not point then return nil end
+    return { point, rel, relPoint, x or 0, y or 0 }
+end
+
+local function ApplyToTPlacementNow(refFrame)
+    local tot = refFrame and refFrame.totFrame
+    if not tot then return end
+    local aside = totWanted[refFrame] and true or false
+    if aside == (totAside[refFrame] and true or false) then return end
+    if aside then
+        totBase[tot] = totBase[tot] or ReadAnchor(tot)
+        local b = totBase[tot]
+        if not b then return end
+        tot:ClearAllPoints()
+        tot:SetPoint(b[1], b[2], b[3], b[4] + TOT_ASIDE_X, b[5])
+        totAside[refFrame] = true
+    else
+        local b = totBase[tot]
+        if b then
+            tot:ClearAllPoints()
+            tot:SetPoint(b[1], b[2], b[3], b[4], b[5])
+        end
+        totAside[refFrame] = nil
+    end
+end
+
+function aurakit.SetToTPlacement(refFrame, aside)
+    if not (refFrame and refFrame.totFrame) then return end
+    totWanted[refFrame] = aside and true or nil
+    if InCombatLockdown() then
+        if not totRegen then
+            totRegen = CreateFrame("Frame")
+            totRegen:SetScript("OnEvent", function(self)
+                self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+                for frame in pairs(totWanted) do pcall(ApplyToTPlacementNow, frame) end
+                -- Frames switched back to Narrow in combat aren't in
+                -- totWanted any more; restore those too.
+                for frame in pairs(totAside) do pcall(ApplyToTPlacementNow, frame) end
+            end)
+        end
+        totRegen:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    pcall(ApplyToTPlacementNow, refFrame)
+end
+
+-- Blizzard just re-anchored this ToT (FocusFrame:SetSmallSize): its new
+-- anchor becomes the base, and an aside shift is re-applied on top of it.
+function aurakit.RecaptureToTAnchor(refFrame)
+    local tot = refFrame and refFrame.totFrame
+    if not tot or InCombatLockdown() then return end
+    totBase[tot] = ReadAnchor(tot)
+    totAside[refFrame] = nil -- Blizzard's SetPoint undid our shift
+    pcall(ApplyToTPlacementNow, refFrame)
+end
+
 function aurakit.UpdatePairedPositions(opts)
     local frameObj, refFrame = opts.frameObj, opts.refFrame
     if not frameObj.customDebuffs or not frameObj.customBuffs or not refFrame then return end
+
+    aurakit.ApplyToTRowWidth(frameObj, refFrame)
 
     local isEnemy = opts.isEnemyFn()
     local primary, secondary

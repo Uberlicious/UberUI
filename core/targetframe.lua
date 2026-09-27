@@ -242,7 +242,8 @@ function targetframes:UpdateAuraButtonStyle(button)
         (uuidb.general.aurastyle_targetdebuffs or "zoom")
     end
     local showDispel = uuidb and uuidb.general and uuidb.general.targetbuffs_showdispel
-    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "target" })
+    -- stealableRing: thin rounded white purgeable border instead of Blizzard's glow.
+    aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "target", stealableRing = true })
 end
 
 local TOP_X = 25
@@ -449,6 +450,26 @@ function targetframes:SetupCustomAuraContainer()
             aurakit.ShowAuraContainers(targetframes, false)
         end)
     end
+    -- Target-of-target appearing/disappearing changes the aura row width
+    -- (aurakit.ApplyToTRowWidth) without any aura changing, so re-run the
+    -- positioning then too.
+    if not self.totFrameHooked and TargetFrame.totFrame then
+        self.totFrameHooked = true
+        local function RefreshToTWidth() targetframes:UpdateAuraPositions() end
+        TargetFrame.totFrame:HookScript("OnShow", RefreshToTWidth)
+        TargetFrame.totFrame:HookScript("OnHide", RefreshToTWidth)
+    end
+
+    self:ApplyToTPlacement()
+end
+
+-- "Target of Target" setting: Narrow Auras (Blizzard's behavior) or Move
+-- ToT Aside (aurakit.SetToTPlacement). Safe to call repeatedly; does
+-- nothing to the ToT frame unless Move ToT Aside is (or was) chosen.
+function targetframes:ApplyToTPlacement()
+    local aside = uuidb and uuidb.targetframes and uuidb.targetframes.totplacement == "aside"
+    aurakit.SetToTPlacement(TargetFrame, aside)
+    if self.customDebuffs and self.customBuffs then self:UpdateAuraPositions() end
 end
 
 -- Initialize immediately if TargetFrame is already present
