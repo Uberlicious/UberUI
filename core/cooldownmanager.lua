@@ -339,6 +339,29 @@ local KNOWN_SPELL_DISPEL = {
 }
 
 local knownDispelCache = {}
+local knownHarmfulCache = {}
+
+local function UpdateTargetAuraCache()
+    if not UnitExists("target") then return end
+    for i = 1, 40 do
+        local d = C_UnitAuras.GetDebuffDataByIndex("target", i)
+        if not d then break end
+        if not (issecretvalue and issecretvalue(d)) then
+            local spellID = d.spellId
+            if spellID and not (issecretvalue and issecretvalue(spellID)) then
+                if d.dispelName and not (issecretvalue and issecretvalue(d.dispelName)) then
+                    knownDispelCache[spellID] = d.dispelName
+                end
+                if d.isHarmful ~= nil and not (issecretvalue and issecretvalue(d.isHarmful)) then
+                    knownHarmfulCache[spellID] = d.isHarmful
+                end
+                if d.name and not (issecretvalue and issecretvalue(d.name)) then
+                    knownDispelCache[d.name] = d.dispelName
+                end
+            end
+        end
+    end
+end
 
 local function SafeShown(region)
     local ok, shown = pcall(region.IsShown, region)
@@ -355,21 +378,12 @@ local function DebuffBorderDark()
 end
 
 local function FindItemAuraData(f)
-    local spellID = (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
-    local spellName = spellID and C_Spell.GetSpellName(spellID)
+    local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
+    local spellName = spellID and type(spellID) == "number" and C_Spell.GetSpellName(spellID)
     local aura, unit
 
-    -- 1. Check frame's own GetAuraData (e.g. player buff from Blizzard's mixin)
-    if f.GetAuraData then
-        local a = f:GetAuraData()
-        if a and not (issecretvalue and issecretvalue(a)) then
-            aura = a
-            unit = "player"
-        end
-    end
-
-    -- 2. Check player auras
-    if not aura and spellID then
+    -- 1. Check player auras
+    if spellID and type(spellID) == "number" then
         local pAura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
         if pAura and not (issecretvalue and issecretvalue(pAura)) then
             aura = pAura
@@ -377,7 +391,7 @@ local function FindItemAuraData(f)
         end
     end
 
-    -- 3. Check target debuffs (for harmful DoTs like Flame Shock)
+    -- 2. Check target debuffs (for harmful DoTs like Flame Shock)
     if not aura and UnitExists("target") then
         for i = 1, 40 do
             local dAura = C_UnitAuras.GetDebuffDataByIndex("target", i)
@@ -392,7 +406,7 @@ local function FindItemAuraData(f)
         end
     end
 
-    -- 4. Check target buffs (in case tracked buff is on target)
+    -- 3. Check target buffs (in case tracked buff is on target)
     if not aura and UnitExists("target") then
         for i = 1, 40 do
             local bAura = C_UnitAuras.GetBuffDataByIndex("target", i)
@@ -407,9 +421,14 @@ local function FindItemAuraData(f)
         end
     end
 
-    -- 5. Cache dispelName if discovered
-    if aura and aura.dispelName and spellID then
-        knownDispelCache[spellID] = aura.dispelName
+    -- 4. Cache dispelName if discovered
+    if aura and aura.dispelName and not (issecretvalue and issecretvalue(aura.dispelName)) then
+        if spellID and type(spellID) == "number" then
+            knownDispelCache[spellID] = aura.dispelName
+        end
+        if spellName then
+            knownDispelCache[spellName] = aura.dispelName
+        end
     end
 
     return aura, unit, spellID
@@ -418,37 +437,44 @@ end
 local function GetItemCooldownAndDuration(f, now)
     now = now or GetTime()
 
-    -- 1. Blizzard's GetCooldownValues
-    if f.GetCooldownValues then
-        local expTime, duration = f:GetCooldownValues()
-        if expTime and duration and duration > 0 and expTime > now then
-            return expTime, duration
+    -- 1. Widget Cooldown frame (direct C++ call, zero Blizzard Lua execution)
+    if f.Cooldown and f.Cooldown.GetCooldownTimes then
+        local okTimes, startTime, duration = pcall(f.Cooldown.GetCooldownTimes, f.Cooldown)
+        if okTimes and startTime and duration then
+            if not (issecretvalue and (issecretvalue(startTime) or issecretvalue(duration))) then
+                if type(startTime) == "number" and type(duration) == "number" and duration > 0 then
+                    local expTime = startTime + duration
+                    if expTime > now then
+                        return expTime, duration
+                    end
+                end
+            end
         end
     end
 
     -- 2. Check aura data on target or player
     local aura = FindItemAuraData(f)
-    if aura and aura.expirationTime and aura.duration and aura.duration > 0 and aura.expirationTime > now then
-        return aura.expirationTime, aura.duration
-    end
-
-    -- 3. Spell cooldown (for Essential / Utility cooldowns)
-    local spellID = (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
-    if spellID then
-        local sc = C_Spell.GetSpellCooldown(spellID)
-        if sc and sc.startTime and sc.duration and sc.duration > 0 then
-            local expTime = sc.startTime + sc.duration
-            if expTime > now then
-                return expTime, sc.duration
+    if aura and aura.expirationTime and aura.duration then
+        if not (issecretvalue and (issecretvalue(aura.expirationTime) or issecretvalue(aura.duration))) then
+            if type(aura.expirationTime) == "number" and type(aura.duration) == "number" and aura.duration > 0 and aura.expirationTime > now then
+                return aura.expirationTime, aura.duration
             end
         end
     end
 
-    -- 4. Edit mode mock data
-    if f.HasEditModeData and f:HasEditModeData() and f.GetCooldownValues then
-        local expTime, duration = f:GetCooldownValues()
-        if expTime and duration and duration > 0 then
-            return expTime, duration
+    -- 3. Spell cooldown (for Essential / Utility cooldowns)
+    local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
+    if spellID and type(spellID) == "number" and spellID > 0 then
+        local sc = C_Spell.GetSpellCooldown(spellID)
+        if sc and sc.startTime and sc.duration then
+            if not (issecretvalue and (issecretvalue(sc.startTime) or issecretvalue(sc.duration))) then
+                if type(sc.startTime) == "number" and type(sc.duration) == "number" and sc.duration > 0 then
+                    local expTime = sc.startTime + sc.duration
+                    if expTime > now then
+                        return expTime, sc.duration
+                    end
+                end
+            end
         end
     end
 
@@ -466,25 +492,34 @@ local function UpdateSquareDebuffColor(f)
         return
     end
 
-    local aura, unit, spellID = FindItemAuraData(f)
+    local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
+    local aura, unit
+    if spellID and type(spellID) == "number" then
+        aura, unit = FindItemAuraData(f)
+    end
 
     local isHarmful = false
     if aura and aura.isHarmful then
         isHarmful = true
     elseif unit == "target" then
         isHarmful = true
-    elseif spellID then
+    elseif spellID and type(spellID) == "number" then
         if KNOWN_SPELL_DISPEL[spellID] then
+            isHarmful = true
+        elseif knownHarmfulCache[spellID] then
             isHarmful = true
         elseif C_Spell.IsSpellHarmful and C_Spell.IsSpellHarmful(spellID) then
             isHarmful = true
         end
     end
 
-    local dispelName = (aura and aura.dispelName)
-        or (spellID and knownDispelCache[spellID])
-        or (spellID and KNOWN_SPELL_DISPEL[spellID])
-        or "None"
+    local dispelName
+    if aura and aura.dispelName and not (issecretvalue and issecretvalue(aura.dispelName)) then
+        dispelName = aura.dispelName
+    elseif spellID and type(spellID) == "number" then
+        dispelName = knownDispelCache[spellID] or KNOWN_SPELL_DISPEL[spellID]
+    end
+    dispelName = dispelName or "None"
 
     local useDispel = isHarmful and (not DebuffBorderDark())
 
@@ -492,7 +527,7 @@ local function UpdateSquareDebuffColor(f)
         local sb = SB.Get(f, 1)
         if useDispel then
             SB.LayoutDispelFor(sb, tex, SQUARE_LOC)
-            SB.ApplyDispelColor(sb, dispelName, unit, aura and aura.auraInstanceID)
+            SB.ApplyDispelColor(sb, dispelName, unit or "target", aura and aura.auraInstanceID)
         else
             SB.LayoutFor(sb, tex, SQUARE_LOC)
             SB.SetDarkColor(sb)
@@ -503,7 +538,7 @@ local function UpdateSquareDebuffColor(f)
         -- Rounded icon: tint f.uberBorder
         if f.uberBorder then
             if useDispel then
-                local r, g, b, a = SB.GetDispelColor(dispelName, unit, aura and aura.auraInstanceID)
+                local r, g, b, a = SB.GetDispelColor(dispelName, unit or "target", aura and aura.auraInstanceID)
                 f.uberBorder:SetVertexColor(r, g, b, a)
             else
                 local dc = uuidb.general.darkencolor
@@ -517,16 +552,9 @@ end
 local function EnsureDebuffHook(f)
     if not f._uberDebuffHooked then
         f._uberDebuffHooked = true
-        if f.RefreshData then
-            hooksecurefunc(f, "RefreshData", function(self)
-                C_Timer.After(0, function() pcall(UpdateSquareDebuffColor, self) end)
-            end)
-        end
-        if f.RefreshActive then
-            hooksecurefunc(f, "RefreshActive", function(self)
-                C_Timer.After(0, function() pcall(UpdateSquareDebuffColor, self) end)
-            end)
-        end
+        f:HookScript("OnShow", function(self)
+            C_Timer.After(0, function() pcall(UpdateSquareDebuffColor, self) end)
+        end)
     end
 end
 
@@ -794,10 +822,10 @@ function cdManager:DebugReport()
                             local r, g, b
                             if sb and sb.edges then r, g, b = sb.edges[1]:GetVertexColor() end
                             local host = pandemicHosts[f]
-                            local spell = f.GetSpellID and f:GetSpellID()
+                            local spell = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID())
                             local aura, unit = FindItemAuraData(f)
                             local expTime, dur = GetItemCooldownAndDuration(f, now)
-                            local rem = (expTime and expTime > now) and (expTime - now) or 0
+                            local rem = (expTime and type(expTime) == "number" and expTime > now) and (expTime - now) or 0
                             lines[#lines + 1] = string.format(
                                 "  spell=%s unit=%s dispel=%s | our border shown=%s color=(%.2f,%.2f,%.2f) | rem=%.1f/%.1f inPan=%s hostShown=%s durState=%s",
                                 fmt(spell), fmt(unit), fmt(aura and aura.dispelName or (spell and KNOWN_SPELL_DISPEL[spell])),
@@ -863,7 +891,7 @@ cdManager:SetScript("OnUpdate", function(self, elapsed)
     local now = GetTime()
     ForEachItemFrame(function(f)
         local okShown, shown = pcall(f.IsShown, f)
-        if okShown and shown and ((not f.IsActive) or f:IsActive()) then
+        if okShown and shown then
             UpdateItemDurationColor(f, now)
             UpdateItemPandemic(f, now)
         else
@@ -899,6 +927,7 @@ cdManager:RegisterUnitEvent("UNIT_AURA", "player", "target")
 
 cdManager:SetScript("OnEvent", function(self, event, addon)
     if event == "PLAYER_TARGET_CHANGED" or event == "UNIT_AURA" then
+        UpdateTargetAuraCache()
         ForEachItemFrame(function(f)
             pcall(UpdateSquareDebuffColor, f)
         end)
