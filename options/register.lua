@@ -26,6 +26,9 @@ local function Register()
         opt.BuildArena(NewPage("Arena"));
     end
     opt.BuildNameplates(NewPage("Nameplates"));
+    if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC and opt.BuildCooldownManager then
+        opt.BuildCooldownManager(NewPage("Cooldown Manager"));
+    end
     opt.BuildOtherUI(NewPage("Other UI"));
 
     Settings.RegisterAddOnCategory(mainCategory);
@@ -61,9 +64,37 @@ hooksecurefunc(SettingsPanel, "DisplayCategory", function(self, category)
     end
 end)
 
+local openPending = false
+local combatWatcher
+
+local function SafeOpenSettings()
+    if InCombatLockdown() then
+        if not openPending then
+            openPending = true
+            print("|cffff0000Uber UI:|r Cannot open settings during combat. Will open automatically once combat ends.")
+            if not combatWatcher then
+                combatWatcher = CreateFrame("Frame")
+                combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+                combatWatcher:SetScript("OnEvent", function(self)
+                    if openPending then
+                        openPending = false
+                        C_Timer.After(0.1, function()
+                            if not InCombatLockdown() then
+                                Settings.OpenToCategory(Settings.UBERUI_CATEGORY_ID)
+                            end
+                        end)
+                    end
+                end)
+            end
+        end
+        return
+    end
+    Settings.OpenToCategory(Settings.UBERUI_CATEGORY_ID)
+end
+
 -- for addon compartment (in .toc)
 function OpenUUISettings()
-    Settings.OpenToCategory(Settings.UBERUI_CATEGORY_ID);
+    SafeOpenSettings()
 end
 
 -- ---------------------------
@@ -71,7 +102,7 @@ end
 -- ---------------------------
 
 SlashCmdList.UBERUI = function()
-    Settings.OpenToCategory(Settings.UBERUI_CATEGORY_ID);
+    SafeOpenSettings()
 end
 
 SLASH_UBERUI1 = "/uui"

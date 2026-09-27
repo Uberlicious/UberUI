@@ -304,23 +304,41 @@ end
 
 local sizeHooked = setmetatable({}, { __mode = "k" })  -- icon holder -> true
 
--- Blizzard's mask only shows the middle of each icon frame: in the 64px mask
--- art (Interface/HUD/UICooldownManagerMask) the opaque area starts 3px in
--- from every edge. The viewers rely on that -- they place icon frames 4 units
--- closer than their size (CooldownViewerMixin:GetAdditionalPaddingOffset) so
--- the visible icons just touch. Square icons are inset by the same 3/64 per
--- side, or unmasked icons overlap their neighbors.
-local MASK_INSET = 3 / 64
 
 -- Tracked auras that are harmful (e.g. your DoTs on the target) get
--- Blizzard's dispel-type border (DebuffBorder, rounded per-type art --
--- CooldownViewerItemDebuffBorderMixin). In Square mode that art is hidden and
--- our square border takes the aura's dispel color instead (Blizzard's "None"
--- red for auras with no type), at the colored-border thickness. The color
--- comes from squareborders.GetDispelColor, which falls back to "None" if the
--- aura data is secret (instanced combat). Re-applied after each of Blizzard's
--- UpdateFromAuraData calls (hook installed on first Square use).
-local debuffHooked = setmetatable({}, { __mode = "k" }) -- DebuffBorder -> item frame
+-- dispel-type border coloring when Cooldown Manager Debuff Border is set to
+-- "dispel". In Square mode our square border takes the aura's dispel color
+-- (or Blizzard's "None" red for auras with no type) at the colored-border
+-- thickness. In Rounded mode our rounded border takes the dispel color.
+local KNOWN_SPELL_DISPEL = {
+    -- Shaman
+    [188389] = "Magic", -- Flame Shock debuff
+    [188838] = "Magic", -- Flame Shock
+    -- Priest
+    [589]    = "Magic", -- Shadow Word: Pain
+    [34914]  = "Magic", -- Vampiric Touch
+    [34433]  = "Magic", -- Shadowfiend
+    -- Druid
+    [8921]   = "Magic", -- Moonfire
+    [93402]  = "Magic", -- Sunfire
+    [155722] = "Bleed", -- Rake
+    [1079]   = "Bleed", -- Rip
+    -- Warlock
+    [980]    = "Curse", -- Agony
+    [172]    = "Magic", -- Corruption
+    [316099] = "Magic", -- Unstable Affliction
+    -- Rogue
+    [703]    = "Bleed", -- Garrote
+    [1943]   = "Bleed", -- Rupture
+    -- Death Knight
+    [191587] = "Disease", -- Virulent Plague
+    [55095]  = "Disease", -- Frost Fever
+    [55078]  = "Disease", -- Blood Plague
+    -- Mage
+    [12654]  = "Magic", -- Ignite
+}
+
+local knownDispelCache = {}
 
 local function SafeShown(region)
     local ok, shown = pcall(region.IsShown, region)
@@ -336,61 +354,185 @@ local function DebuffBorderDark()
     return uuidb and uuidb.cooldown and uuidb.cooldown.debuffborder == "dark"
 end
 
+local function FindItemAuraData(f)
+    local spellID = (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
+    local spellName = spellID and C_Spell.GetSpellName(spellID)
+    local aura, unit
+
+    -- 1. Check frame's own GetAuraData (e.g. player buff from Blizzard's mixin)
+    if f.GetAuraData then
+        local a = f:GetAuraData()
+        if a and not (issecretvalue and issecretvalue(a)) then
+            aura = a
+            unit = "player"
+        end
+    end
+
+    -- 2. Check player auras
+    if not aura and spellID then
+        local pAura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
+        if pAura and not (issecretvalue and issecretvalue(pAura)) then
+            aura = pAura
+            unit = "player"
+        end
+    end
+
+    -- 3. Check target debuffs (for harmful DoTs like Flame Shock)
+    if not aura and UnitExists("target") then
+        for i = 1, 40 do
+            local dAura = C_UnitAuras.GetDebuffDataByIndex("target", i)
+            if not dAura then break end
+            if not (issecretvalue and issecretvalue(dAura)) then
+                if (spellID and dAura.spellId == spellID) or (spellName and dAura.name == spellName) then
+                    aura = dAura
+                    unit = "target"
+                    break
+                end
+            end
+        end
+    end
+
+    -- 4. Check target buffs (in case tracked buff is on target)
+    if not aura and UnitExists("target") then
+        for i = 1, 40 do
+            local bAura = C_UnitAuras.GetBuffDataByIndex("target", i)
+            if not bAura then break end
+            if not (issecretvalue and issecretvalue(bAura)) then
+                if (spellID and bAura.spellId == spellID) or (spellName and bAura.name == spellName) then
+                    aura = bAura
+                    unit = "target"
+                    break
+                end
+            end
+        end
+    end
+
+    -- 5. Cache dispelName if discovered
+    if aura and aura.dispelName and spellID then
+        knownDispelCache[spellID] = aura.dispelName
+    end
+
+    return aura, unit, spellID
+end
+
+local function GetItemCooldownAndDuration(f, now)
+    now = now or GetTime()
+
+    -- 1. Blizzard's GetCooldownValues
+    if f.GetCooldownValues then
+        local expTime, duration = f:GetCooldownValues()
+        if expTime and duration and duration > 0 and expTime > now then
+            return expTime, duration
+        end
+    end
+
+    -- 2. Check aura data on target or player
+    local aura = FindItemAuraData(f)
+    if aura and aura.expirationTime and aura.duration and aura.duration > 0 and aura.expirationTime > now then
+        return aura.expirationTime, aura.duration
+    end
+
+    -- 3. Spell cooldown (for Essential / Utility cooldowns)
+    local spellID = (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
+    if spellID then
+        local sc = C_Spell.GetSpellCooldown(spellID)
+        if sc and sc.startTime and sc.duration and sc.duration > 0 then
+            local expTime = sc.startTime + sc.duration
+            if expTime > now then
+                return expTime, sc.duration
+            end
+        end
+    end
+
+    -- 4. Edit mode mock data
+    if f.HasEditModeData and f:HasEditModeData() and f.GetCooldownValues then
+        local expTime, duration = f:GetCooldownValues()
+        if expTime and duration and duration > 0 then
+            return expTime, duration
+        end
+    end
+
+    return 0, 0
+end
+
 local function UpdateSquareDebuffColor(f)
-    local db = f.DebuffBorder
-    local sb = SB.Find(f, 1)
     local tex = GetIconParts(f)
-    if not (db and tex) then return end
-    if not squareState[f] then
-        -- Rounded: Blizzard's own dispel border, unless Dark was chosen.
-        db:SetAlpha(DebuffBorderDark() and 0 or 1)
+    if not tex then return end
+
+    if uuidb.cooldown.borders == false then
+        local sb = SB.Find(f, 1)
+        if sb then sb:Hide() end
+        if f.uberBorder then f.uberBorder:Hide() end
         return
     end
-    db:SetAlpha(0)
-    -- Blizzard shows the DebuffBorder FRAME for every tracked aura and only
-    -- shows its Texture for harmful ones (AuraUtil.SetAuraBorderAtlasFromAura).
-    if not DebuffBorderDark() and SafeShown(db) and db.Texture and SafeShown(db.Texture) then
-        sb = sb or SB.Get(f, 1)
-        local unit = f.GetAuraDataUnit and f:GetAuraDataUnit()
-        local aura = f.GetAuraDataCached and f:GetAuraDataCached()
-        local dispelName, id
-        if aura and not (issecretvalue and issecretvalue(aura)) then
-            dispelName, id = aura.dispelName, aura.auraInstanceID
+
+    local aura, unit, spellID = FindItemAuraData(f)
+
+    local isHarmful = false
+    if aura and aura.isHarmful then
+        isHarmful = true
+    elseif unit == "target" then
+        isHarmful = true
+    elseif spellID then
+        if KNOWN_SPELL_DISPEL[spellID] then
+            isHarmful = true
+        elseif C_Spell.IsSpellHarmful and C_Spell.IsSpellHarmful(spellID) then
+            isHarmful = true
         end
-        SB.LayoutDispelFor(sb, tex, SQUARE_LOC)
-        SB.ApplyDispelColor(sb, dispelName, unit, id)
-        SB.RaiseAbove(sb, f.Cooldown or f, 2)
-        sb:Show()
-    elseif sb then
-        if uuidb.cooldown.borders == false then
-            sb:Hide()
+    end
+
+    local dispelName = (aura and aura.dispelName)
+        or (spellID and knownDispelCache[spellID])
+        or (spellID and KNOWN_SPELL_DISPEL[spellID])
+        or "None"
+
+    local useDispel = isHarmful and (not DebuffBorderDark())
+
+    if SquareOn() then
+        local sb = SB.Get(f, 1)
+        if useDispel then
+            SB.LayoutDispelFor(sb, tex, SQUARE_LOC)
+            SB.ApplyDispelColor(sb, dispelName, unit, aura and aura.auraInstanceID)
         else
             SB.LayoutFor(sb, tex, SQUARE_LOC)
             SB.SetDarkColor(sb)
-            sb:Show()
+        end
+        SB.RaiseAbove(sb, f.Cooldown or f, 2)
+        sb:Show()
+    else
+        -- Rounded icon: tint f.uberBorder
+        if f.uberBorder then
+            if useDispel then
+                local r, g, b, a = SB.GetDispelColor(dispelName, unit, aura and aura.auraInstanceID)
+                f.uberBorder:SetVertexColor(r, g, b, a)
+            else
+                local dc = uuidb.general.darkencolor
+                f.uberBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            end
+            f.uberBorder:Show()
         end
     end
 end
 
 local function EnsureDebuffHook(f)
-    local db = f.DebuffBorder
-    if not db or not db.UpdateFromAuraData or debuffHooked[db] then return end
-    debuffHooked[db] = f
-    hooksecurefunc(db, "UpdateFromAuraData", function(self)
-        local item = debuffHooked[self]
-        C_Timer.After(0, function()
-            if item then pcall(UpdateSquareDebuffColor, item) end
-        end)
-    end)
+    if not f._uberDebuffHooked then
+        f._uberDebuffHooked = true
+        if f.RefreshData then
+            hooksecurefunc(f, "RefreshData", function(self)
+                C_Timer.After(0, function() pcall(UpdateSquareDebuffColor, self) end)
+            end)
+        end
+        if f.RefreshActive then
+            hooksecurefunc(f, "RefreshActive", function(self)
+                C_Timer.After(0, function() pcall(UpdateSquareDebuffColor, self) end)
+            end)
+        end
+    end
 end
 
 local function LayoutSquareIcon(f, tex, holder)
-    local ok, w = pcall(holder.GetWidth, holder)
-    if not ok or type(w) ~= "number" or w <= 0 then return end
-    local inset = w * MASK_INSET
     tex:ClearAllPoints()
-    tex:SetPoint("TOPLEFT", holder, "TOPLEFT", inset, -inset)
-    tex:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -inset, inset)
+    tex:SetAllPoints(holder)
     if f.Cooldown then
         f.Cooldown:ClearAllPoints()
         f.Cooldown:SetAllPoints(tex)
@@ -464,21 +606,13 @@ end
 -------------------------------------------------------------------------------
 -- Pandemic highlight ("Cooldown Manager Pandemic Highlight")
 --
--- Blizzard decides the pandemic window itself (CooldownViewerItemMixin:
--- CheckPandemicTimeDisplay) and calls ShowPandemicStateFrame /
--- HidePandemicStateFrame on the item; its own art (PandemicIcon, a pooled
--- CooldownPandemicFXTemplate) is rounded. With any style but "Blizzard", that
--- art is faded out and our highlight (aurakit.StyleHighlight -- the same
--- Border / Proc Glow / Marching Ants as nameplate auras, in the chosen color,
--- square when the icons are) is shown instead. No aura data is read, so it
--- works in combat and while aura data is secret. Hooks go on only once a
--- non-Blizzard style is picked; ShowPandemicStateFrame runs every frame while
--- in the window, so the hook only acts on changes, deferred a frame.
+-- Tracked auras in their pandemic window (<= 30% of base duration remaining)
+-- get styled with the chosen highlight (Border, Proc Glow, or Marching Ants)
+-- in the user's selected color.
 -------------------------------------------------------------------------------
 local aurakit = UberUI.aurakit
 local PANDEMIC_DEFAULT_COLOR = "ffff2626"
 local pandemicHosts = setmetatable({}, { __mode = "k" })  -- item frame -> host
-local pandemicHooked = setmetatable({}, { __mode = "k" }) -- item frame -> true
 
 local function PandemicStyle()
     return (uuidb and uuidb.cooldown and uuidb.cooldown.pandemicstyle) or "blizzard"
@@ -517,87 +651,159 @@ local function StylePandemicHost(f)
     return host
 end
 
--- Our highlight and Blizzard's art for the item's current pandemic state.
-local function UpdatePandemic(f)
-    local inWindow = f.PandemicIcon ~= nil and SafeShown(f.PandemicIcon)
+local function UpdateItemPandemic(f, now)
     local custom = PandemicStyle() ~= "blizzard"
-    if f.PandemicIcon then f.PandemicIcon:SetAlpha(custom and 0 or 1) end
-    local host = pandemicHosts[f]
-    if custom and inWindow then
-        host = StylePandemicHost(f)
-        if host then host:Show() end
-    elseif host then
-        host:Hide()
+    if not custom then
+        if f._uberInPandemic then
+            f._uberInPandemic = nil
+            if pandemicHosts[f] then pandemicHosts[f]:Hide() end
+        end
+        return
     end
-end
 
-local pandemicPending = setmetatable({}, { __mode = "k" })
-local function QueuePandemic(f)
-    if pandemicPending[f] then return end
-    pandemicPending[f] = true
-    C_Timer.After(0, function()
-        pandemicPending[f] = nil
-        pcall(UpdatePandemic, f)
-    end)
-end
+    local expTime, duration = GetItemCooldownAndDuration(f, now)
+    local inPandemic = false
+    if expTime and duration and duration > 0 then
+        local remaining = expTime - now
+        if remaining > 0 and remaining <= (duration * 0.3) then
+            inPandemic = true
+        end
+    end
 
-local function EnsurePandemicHooks(f)
-    if pandemicHooked[f] or not f.ShowPandemicStateFrame then return end
-    pandemicHooked[f] = true
-    hooksecurefunc(f, "ShowPandemicStateFrame", function(self)
-        -- Every frame while in the window: only act when ours isn't up yet.
-        local host = pandemicHosts[self]
-        if PandemicStyle() ~= "blizzard" and host and host:IsShown() then return end
-        QueuePandemic(self)
-    end)
-    if f.HidePandemicStateFrame then
-        hooksecurefunc(f, "HidePandemicStateFrame", function(self) QueuePandemic(self) end)
+    if inPandemic ~= f._uberInPandemic then
+        f._uberInPandemic = inPandemic
+        local host = pandemicHosts[f]
+        if inPandemic and f:IsShown() then
+            host = StylePandemicHost(f)
+            if host then host:Show() end
+        elseif host then
+            host:Hide()
+        end
     end
 end
 
 local VIEWERS = { "EssentialCooldownViewer", "UtilityCooldownViewer", "BuffIconCooldownViewer", "BuffBarCooldownViewer" }
 
 local function ForEachItemFrame(fn)
+    local visited = {}
     for _, name in ipairs(VIEWERS) do
         local viewer = _G[name]
         if viewer then
+            if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then
+                for f in viewer.itemFramePool:EnumerateActive() do
+                    if f and f.Icon and not visited[f] then
+                        visited[f] = true
+                        fn(f, viewer)
+                    end
+                end
+            end
             for _, f in ipairs({ viewer:GetChildren() }) do
-                if f and f.Icon then fn(f) end
+                if f and f.Icon and not visited[f] then
+                    visited[f] = true
+                    fn(f, viewer)
+                end
             end
         end
     end
 end
 
+-------------------------------------------------------------------------------
+-- Expiration text coloring ("Cooldown Duration Colors")
+-------------------------------------------------------------------------------
+local function GetDurationColors()
+    local c = uuidb and uuidb.cooldown or {}
+    local threshold = tonumber(c.durationthreshold) or 5
+    if threshold < 0 then threshold = 0 end
+    return c.durationcolor or "ffffffff", c.durationexpiringcolor or "ffff3333", threshold
+end
+
+local function HexToRGB(hex, defR, defG, defB)
+    if type(hex) ~= "string" or not hex:match("^%x%x%x%x%x%x%x%x$") then return defR or 1, defG or 1, defB or 1 end
+    local ok, col = pcall(CreateColorFromHexString, hex)
+    if ok and col then return col.r, col.g, col.b end
+    return defR or 1, defG or 1, defB or 1
+end
+
+local function UpdateItemDurationColor(f, now)
+    local expTime, duration = GetItemCooldownAndDuration(f, now)
+    if not expTime or type(expTime) ~= "number" or expTime <= 0 then
+        f._uberDurationState = nil
+        return
+    end
+
+    local remaining = expTime - now
+    if remaining <= 0 then
+        f._uberDurationState = nil
+        return
+    end
+
+    local normalHex, expiringHex, threshold = GetDurationColors()
+    local isExpiring = (remaining <= threshold)
+    local state = isExpiring and "expiring" or "normal"
+    if f._uberDurationState == state then return end
+    f._uberDurationState = state
+
+    local r, g, b
+    if isExpiring then
+        r, g, b = HexToRGB(expiringHex, 1, 0.2, 0.2)
+    else
+        r, g, b = HexToRGB(normalHex, 1, 1, 1)
+    end
+
+    local cdText = f.Cooldown and f.Cooldown.GetCountdownFontString and f.Cooldown:GetCountdownFontString()
+    if not cdText and f.Cooldown then
+        for _, region in ipairs({ f.Cooldown:GetRegions() }) do
+            if region:IsObjectType("FontString") then cdText = region; break end
+        end
+    end
+    if cdText then
+        pcall(cdText.SetTextColor, cdText, r, g, b, 1)
+    end
+
+    local durText = (f.GetDurationFontString and f:GetDurationFontString()) or (f.Bar and f.Bar.Duration)
+    if durText then
+        pcall(durText.SetTextColor, durText, r, g, b, 1)
+    end
+end
+
+
+
 -- Debug (/uuidebugcdm): what each tracked buff icon is actually drawing.
 function cdManager:DebugReport()
-    local lines = { "==== cooldown manager icon report ====",
+    local lines = { "==== cooldown manager report ====",
         "square: " .. tostring(SquareOn()) .. "  pandemic style: " .. PandemicStyle() }
     local function fmt(v)
         if issecretvalue and issecretvalue(v) then return "<secret>" end
         if type(v) == "number" then return string.format("%.2f", v) end
         return tostring(v)
     end
-    for _, name in ipairs({ "BuffIconCooldownViewer", "EssentialCooldownViewer" }) do
+    local now = GetTime()
+    for _, name in ipairs(VIEWERS) do
         local viewer = _G[name]
         if viewer then
-            lines[#lines + 1] = "-- " .. name
+            lines[#lines + 1] = string.format("-- %s (isHoriz=%s, stride=%s)",
+                name, tostring(viewer.IsHorizontal and viewer:IsHorizontal()), fmt(viewer.GetStride and viewer:GetStride()))
             local n = 0
-            for _, f in ipairs({ viewer:GetChildren() }) do
-                if f.Icon and n < 8 then
-                    local okS, shown = pcall(f.IsShown, f)
-                    if okS and shown == true then
-                        n = n + 1
-                        local db = f.DebuffBorder
-                        local sb = SB.Find(f, 1)
-                        local r, g, b
-                        if sb and sb.edges then r, g, b = sb.edges[1]:GetVertexColor() end
-                        local host = pandemicHosts[f]
-                        local spell = f.GetSpellID and f:GetSpellID()
-                        lines[#lines + 1] = string.format(
-                            "  spell=%s debuffFrame=%s debuffTex=%s dbAlpha=%s | our border shown=%s color=%s,%s,%s | pandemicIcon=%s ourHost=%s",
-                            fmt(spell), fmt(db and db:IsShown()), fmt(db and db.Texture and db.Texture:IsShown()),
-                            fmt(db and db:GetAlpha()), fmt(sb and sb:IsShown()), fmt(r), fmt(g), fmt(b),
-                            fmt(f.PandemicIcon ~= nil), fmt(host and host:IsShown()))
+            if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then
+                for f in viewer.itemFramePool:EnumerateActive() do
+                    if f.Icon and n < 8 then
+                        local okS, shown = pcall(f.IsShown, f)
+                        if okS and shown == true then
+                            n = n + 1
+                            local sb = SB.Find(f, 1)
+                            local r, g, b
+                            if sb and sb.edges then r, g, b = sb.edges[1]:GetVertexColor() end
+                            local host = pandemicHosts[f]
+                            local spell = f.GetSpellID and f:GetSpellID()
+                            local aura, unit = FindItemAuraData(f)
+                            local expTime, dur = GetItemCooldownAndDuration(f, now)
+                            local rem = (expTime and expTime > now) and (expTime - now) or 0
+                            lines[#lines + 1] = string.format(
+                                "  spell=%s unit=%s dispel=%s | our border shown=%s color=(%.2f,%.2f,%.2f) | rem=%.1f/%.1f inPan=%s hostShown=%s durState=%s",
+                                fmt(spell), fmt(unit), fmt(aura and aura.dispelName or (spell and KNOWN_SPELL_DISPEL[spell])),
+                                fmt(sb and sb:IsShown()), r or 0, g or 0, b or 0,
+                                rem, dur or 0, fmt(f._uberInPandemic), fmt(host and host:IsShown()), fmt(f._uberDurationState))
+                        end
                     end
                 end
             end
@@ -609,17 +815,11 @@ end
 function cdManager:StyleIcons()
     if not (uuidb and uuidb.cooldown and SB) then return end
     local square = SquareOn()
-    ForEachItemFrame(function(f)
+    ForEachItemFrame(function(f, viewer)
         pcall(ApplySquareIcon, f, square)
-        if DebuffBorderDark() then EnsureDebuffHook(f) end
-        if debuffHooked[f.DebuffBorder or 0] then pcall(UpdateSquareDebuffColor, f) end
-        if PandemicStyle() ~= "blizzard" then EnsurePandemicHooks(f) end
-        if pandemicHooked[f] then
-            -- Restyle a highlight that's up (settings change) or put
-            -- Blizzard's art back.
-            if pandemicHosts[f] then pcall(StylePandemicHost, f) end
-            pcall(UpdatePandemic, f)
-        end
+        EnsureDebuffHook(f)
+        pcall(UpdateSquareDebuffColor, f)
+        if pandemicHosts[f] then pcall(StylePandemicHost, f) end
         -- Our rounded border (Color) only in Rounded mode.
         if f.uberBorder then f.uberBorder:SetShown(not square) end
     end)
@@ -646,10 +846,33 @@ local function EnsureLayoutHooks()
     for _, name in ipairs(VIEWERS) do
         local viewer = _G[name]
         if viewer and viewer.RefreshLayout then
-            hooksecurefunc(viewer, "RefreshLayout", QueueStyle)
+            hooksecurefunc(viewer, "RefreshLayout", function(self)
+                QueueStyle()
+            end)
         end
     end
 end
+
+-- Centralized update loop for cooldown countdown text coloring and pandemic glows
+local tickerElapsed = 0
+cdManager:SetScript("OnUpdate", function(self, elapsed)
+    tickerElapsed = tickerElapsed + elapsed
+    if tickerElapsed < 0.05 then return end
+    tickerElapsed = 0
+
+    local now = GetTime()
+    ForEachItemFrame(function(f)
+        local okShown, shown = pcall(f.IsShown, f)
+        if okShown and shown and ((not f.IsActive) or f:IsActive()) then
+            UpdateItemDurationColor(f, now)
+            UpdateItemPandemic(f, now)
+        else
+            if pandemicHosts[f] then pandemicHosts[f]:Hide() end
+            f._uberDurationState = nil
+            f._uberInPandemic = nil
+        end
+    end)
+end)
 
 -- Register the specific callback we need
 local function RegisterCooldownCallbacks()
@@ -671,8 +894,17 @@ end
 -- Wait for CooldownViewer to load
 cdManager:RegisterEvent("ADDON_LOADED")
 cdManager:RegisterEvent("PLAYER_ENTERING_WORLD")
+cdManager:RegisterEvent("PLAYER_TARGET_CHANGED")
+cdManager:RegisterUnitEvent("UNIT_AURA", "player", "target")
 
 cdManager:SetScript("OnEvent", function(self, event, addon)
+    if event == "PLAYER_TARGET_CHANGED" or event == "UNIT_AURA" then
+        ForEachItemFrame(function(f)
+            pcall(UpdateSquareDebuffColor, f)
+        end)
+        return
+    end
+
     if event == "ADDON_LOADED" and addon == "Blizzard_CooldownViewer" then
         local function applyStyling()
             cdManager:Texture()
@@ -711,6 +943,12 @@ function cdManager:Refresh()
     self:Texture()
     self:Color()
     self:StyleIcons()
+    ForEachItemFrame(function(f)
+        f._uberDurationState = nil
+        f._uberInPandemic = nil
+        if pandemicHosts[f] then pcall(StylePandemicHost, f) end
+        pcall(UpdateSquareDebuffColor, f)
+    end)
 end
 
 UberUI.cdManager = cdManager

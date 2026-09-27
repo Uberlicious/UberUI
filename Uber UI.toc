@@ -23,6 +23,7 @@ options\unitframes.lua
 options\groupframes.lua
 options\arena.lua
 options\nameplates.lua
+options\cooldownmanager.lua
 options\otherui.lua
 options\register.lua
 
