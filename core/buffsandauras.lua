@@ -401,9 +401,23 @@ function buffsandauras:StyleAuraButton(button)
             showCustomBorder = true
         elseif isTempEnchant then
             if teBorder and not IsSecret(teBorder) then
+                -- Blizzard's TempEnchantBorder art is 32x32 over a 30x30
+                -- icon (1px inset), much tighter than DebuffBorder's 40x40
+                -- (5px inset) -- reusing the debuff `pad` here oversized it.
+                -- Zoom crops the icon's edge, so (matching the zoom-only
+                -- path below) nudge the inset out slightly to compensate.
+                local teRatio = zoomEnabled and (2 / 30) or (1 / 30)
+                local tePad = zoomEnabled and 2 or 1
+                pcall(function()
+                    local iconWidth = iconTexture.GetWidth and iconTexture:GetWidth()
+                    if IsSecret(iconWidth) then return end
+                    if type(iconWidth) == "number" and iconWidth > 0 then
+                        tePad = math.max(1, math.floor(iconWidth * teRatio + 0.5))
+                    end
+                end)
                 teBorder:ClearAllPoints()
-                teBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
-                teBorder:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
+                teBorder:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -tePad, tePad)
+                teBorder:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", tePad, -tePad)
                 teBorder:SetAlpha(0)
             end
             showCustomBorder = true

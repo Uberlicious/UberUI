@@ -51,6 +51,15 @@ function aurakit.GetSafeMineMaxFrameCount(unit, isHarmful, normalMaxCount)
     return normalMaxCount
 end
 
+-- Blizzard's real Target/Focus/Boss frames (TargetFrameAuraContainerPrivateMixin,
+-- Interface/AddOns/Blizzard_UnitFrame/Shared/TargetFrameAuraContainer.lua) hide
+-- other players'/pets' debuffs by default, governed by the "noBuffDebuffFilterOnTarget"
+-- CVar. Our custom "debuffs_other" group has no such rule built in (it's a plain
+-- HARMFUL|!PLAYER filter), so callers gate that group's max frame count on this.
+function aurakit.ShowAllTargetDebuffs()
+    return CVarCallbackRegistry:GetCVarValueBool("noBuffDebuffFilterOnTarget") and true or false
+end
+
 -- exactLineSpacing: rows exactly spacingY apart (Blizzard's target frame);
 -- otherwise spacingY + 2.
 function aurakit.MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, layoutIndex, exactLineSpacing)
@@ -1250,6 +1259,55 @@ function aurakit.StyleHighlight(host, opts)
         else
             host.uuSquare:Hide()
         end
+    end
+
+    -- Occluder: a solid border inside the host, under the highlight art.
+    -- The engine marks a pandemic region's Shown aspect secret
+    -- (CustomAuraButtonSharedMixin:AddPandemicRegion), so insecure code can
+    -- never learn when the window opens -- no OnShow fires and IsShown reads
+    -- secret. Hiding the debuff's own dispel-colored border on entry is
+    -- therefore impossible; covering it from inside the host isn't, because
+    -- the engine shows the host for us. opts.occlude = { r, g, b }.
+    local occ = opts.occlude
+    if occ and opts.square and SB and opts.icon then
+        if not host.uuCover then
+            host.uuCover = SB.CreateBorder(host)
+        end
+        -- Same frame level as the host, with the strips dropped to ARTWORK:
+        -- a child frame at host+1 would outrank the glow and ants, which are
+        -- OVERLAY textures on the host itself (frame level beats draw
+        -- layer), and swallow the animation. At equal level the draw layer
+        -- decides, so the fx stay on top while the cover still hides the
+        -- debuff border, which sits below on borderHost.
+        host.uuCover:SetFrameLevel(host:GetFrameLevel())
+        for i = 1, 4 do
+            local e = host.uuCover.edges and host.uuCover.edges[i]
+            if e then e:SetDrawLayer("ARTWORK", 0) end
+        end
+        SB.LayoutDispelFor(host.uuCover, opts.icon, opts.loc)
+        SB.SetColor(host.uuCover, occ.r, occ.g, occ.b, 1)
+        host.uuCover:Show()
+    elseif occ and not opts.square and opts.ringFrom then
+        if not host.uuCoverRing then
+            local ring = host:CreateTexture(nil, "OVERLAY", nil, 2)
+            ring:SetColorTexture(1, 1, 1, 1)
+            ring:SetTexelSnappingBias(0)
+            ring:SetSnapToPixelGrid(false)
+            local mask = host:CreateMaskTexture()
+            mask:SetAtlas(HIGHLIGHT_RING_ATLAS)
+            mask:SetAllPoints(ring)
+            mask:SetTexelSnappingBias(0)
+            mask:SetSnapToPixelGrid(false)
+            ring:AddMaskTexture(mask)
+            host.uuCoverRing = ring
+        end
+        host.uuCoverRing:ClearAllPoints()
+        host.uuCoverRing:SetAllPoints(opts.ringFrom)
+        host.uuCoverRing:SetVertexColor(occ.r, occ.g, occ.b, 1)
+        host.uuCoverRing:Show()
+    else
+        if host.uuCover then host.uuCover:Hide() end
+        if host.uuCoverRing then host.uuCoverRing:Hide() end
     end
 
     local glowDef = HIGHLIGHT_GLOWS[kind]

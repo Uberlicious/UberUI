@@ -257,8 +257,9 @@ function bossframes:UpdateAuras(i)
     local buffCount = (styleBuffs ~= "none") and 32 or 0
     local debuffMineCount = aurakit.GetSafeMineMaxFrameCount(slot.unit, true, debuffCount)
     local buffMineCount = aurakit.GetSafeMineMaxFrameCount(slot.unit, false, buffCount)
+    local debuffOtherCount = aurakit.ShowAllTargetDebuffs() and debuffCount or 0
     pcall(slot.customDebuffs.SetAuraGroupMaxFrameCount, slot.customDebuffs, "debuffs_mine", debuffMineCount)
-    pcall(slot.customDebuffs.SetAuraGroupMaxFrameCount, slot.customDebuffs, "debuffs_other", debuffCount)
+    pcall(slot.customDebuffs.SetAuraGroupMaxFrameCount, slot.customDebuffs, "debuffs_other", debuffOtherCount)
     pcall(slot.customBuffs.SetAuraGroupMaxFrameCount, slot.customBuffs, "buffs_mine", buffMineCount)
     pcall(slot.customBuffs.SetAuraGroupMaxFrameCount, slot.customBuffs, "buffs_other", buffCount)
 

@@ -127,9 +127,17 @@ function opt.BuildNameplates(page)
         onChange = RefreshNameplateAuraStyle,
     }), pandemicInit, PandemicOn);
 
+    local nameplatePandemicClassInit = opt.AddCheckbox(page, {
+        variable = "nameplatePandemicClassColor", name = "Nameplate Pandemic: Use Class Color",
+        tooltip = "Color the pandemic highlight (Border, Proc Glow and Marching Ants) in your character's class color instead of the color below.",
+        db = "general", field = "nameplatepandemicclasscolor", default = false,
+        onChange = RefreshNameplateAuraStyle,
+    });
+    opt.DependsOn(nameplatePandemicClassInit, pandemicInit, PandemicOn);
+
     opt.DependsOn(opt.AddColorSwatch(page, {
         variable = "nameplatePandemicColorHex", name = "Pandemic Highlight Color",
-        tooltip = "Color of the pandemic highlight (border or glow).",
+        tooltip = "Color of the pandemic highlight (border or glow), unless Use Class Color is on.",
         db = "general", field = "nameplatepandemiccolor", default = "ffff3030",
         -- An early build stored preset names here; anything that isn't a
         -- hex color reads as the default.
@@ -138,7 +146,9 @@ function opt.BuildNameplates(page)
             return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff3030"
         end,
         onChange = RefreshNameplateAuraStyle,
-    }), pandemicInit, PandemicOn);
+    }), nameplatePandemicClassInit, function()
+        return PandemicOn() and not (uuidb.general and uuidb.general.nameplatepandemicclasscolor)
+    end);
 
     opt.Header(page, "Friendly Raid Target Icons");
 

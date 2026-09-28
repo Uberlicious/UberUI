@@ -137,10 +137,18 @@ function squareborders.LayoutFor(sb, region, loc)
     return squareborders.Layout(sb, region, squareborders.Thickness(loc), squareborders.IsInset(loc))
 end
 
--- Dispel-colored borders are 1px thicker than the dark border so the color
--- reads at small sizes.
+-- Dispel-colored borders can optionally be drawn 1px thicker than the dark
+-- border so the color reads better at small sizes. On by default (matches
+-- the original, unconditional behavior); one option, not per-location, since
+-- the bonus itself was never per-location either.
+function squareborders.DispelThicknessBonusEnabled()
+    local g = uuidb and uuidb.general
+    return g ~= nil and g.squaredispelborderthicker == true
+end
+
 function squareborders.DispelThickness(loc)
-    return squareborders.Thickness(loc) + 1
+    local bonus = squareborders.DispelThicknessBonusEnabled() and 1 or 0
+    return squareborders.Thickness(loc) + bonus
 end
 
 function squareborders.LayoutDispelFor(sb, region, loc)

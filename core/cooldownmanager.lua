@@ -1,6 +1,14 @@
 local addon, ns = ...
 local cdManager = UberUI:CreateFrame("frame")
 local IsSecret, SafeShown = UberUI.util.IsSecret, UberUI.util.SafeShown
+
+-- Diagnostic sink, set by core/cdmdebug.lua while /uicdmdebug is watching.
+-- Nil (and free) otherwise.
+function CdmDebugLog(fmt, ...)
+    local sink = UberUI.cdmDebugLog
+    if not sink then return end
+    sink(fmt, ...)
+end
 local IsSquareBarBG, SquareBarsOn -- defined with the Tracked Bars code
 local darkenedBarArt = setmetatable({}, { __mode = "k" }) -- texture -> true
 
@@ -1246,17 +1254,62 @@ local function GetViewerAlign(viewer)
     return entry[2]
 end
 
--- Re-pack as items show/hide. Only installed once a viewer uses our layout.
+-- Re-pack as items show/hide, or as an item's own active/aura state changes
+-- (procs, aura gain/loss) -- confirmed via /uicdmdebug that Blizzard's item
+-- container has its own independent, always-on relayout path that resets our
+-- positions on those same triggers without ever calling RefreshLayout.
+-- Hooking the container's own :Layout() to react to that (tried first)
+-- backfired: our own repositioning inside that hook perturbs the container's
+-- dirty-tracking, retriggering :Layout() again -> visible jitter. Hooking
+-- these per-item, semantic events instead (same ones CooldownManagerCentered
+-- reacts to) can't be retriggered by our own SetPoint calls, since we never
+-- touch the container or the item's active/aura state.
+-- Only installed once a viewer uses our layout.
 local repackHooked = setmetatable({}, { __mode = "k" })
 local function EnsureRepackHook(f)
     if repackHooked[f] then return end
     repackHooked[f] = true
-    local function requeue(self)
-        local p = self._uberViewer or (self.GetParent and self:GetParent())
-        if p and GetViewerAlign(p) ~= "blizzard" then QueueStyle() end
+    local function requeueFor(tag)
+        return function(self)
+            local p = self._uberViewer or (self.GetParent and self:GetParent())
+            if p and GetViewerAlign(p) ~= "blizzard" then QueueStyle(tag) end
+        end
     end
-    f:HookScript("OnShow", requeue)
-    f:HookScript("OnHide", requeue)
+    f:HookScript("OnShow", requeueFor("item:OnShow"))
+    f:HookScript("OnHide", requeueFor("item:OnHide"))
+    if f.OnActiveStateChanged then
+        pcall(hooksecurefunc, f, "OnActiveStateChanged", requeueFor("item:ActiveStateChanged"))
+    end
+    if f.OnUnitAuraAddedEvent then
+        pcall(hooksecurefunc, f, "OnUnitAuraAddedEvent", requeueFor("item:AuraAdded"))
+    end
+    if f.OnUnitAuraRemovedEvent then
+        pcall(hooksecurefunc, f, "OnUnitAuraRemovedEvent", requeueFor("item:AuraRemoved"))
+    end
+end
+
+-- EnsureRepackHook only reaches item frames that are active during one of our
+-- layout passes, so a frame first used later never got hooked and its procs
+-- never re-centered -- the intermittent case that only cleared after an Edit
+-- Mode save forced a full pool rebuild. Blizzard calls OnAcquireItemFrame for
+-- every frame as it's acquired, so hooking that closes the gap at the source.
+--
+-- Installed per viewer, only once a viewer actually uses our layout, and never
+-- for one left on Blizzard alignment. ApplyCustomViewerLayout calls this after
+-- its own align check, so switching a viewer to Centered/Packed installs it
+-- live (QueueStyle re-runs that pass) with no reload.
+local acquireHooked = setmetatable({}, { __mode = "k" }) -- viewer -> true
+local function EnsureAcquireHook(viewer)
+    if acquireHooked[viewer] or type(viewer.OnAcquireItemFrame) ~= "function" then return end
+    acquireHooked[viewer] = true
+    hooksecurefunc(viewer, "OnAcquireItemFrame", function(self, itemFrame)
+        if not itemFrame then return end
+        -- Items are parented to the item container, not the viewer, so the
+        -- parent walk in requeue can't find the align setting without this.
+        itemFrame._uberViewer = self
+        if GetViewerAlign(self) == "blizzard" then return end
+        EnsureRepackHook(itemFrame)
+    end)
 end
 
 -- Edit Mode padding/direction as CooldownViewerMixin:RefreshLayout reads
@@ -1284,6 +1337,10 @@ local function ApplyCustomViewerLayout(viewer)
     if not viewer or IsEditModeActive() then return end
     local align = GetViewerAlign(viewer)
     if align == "blizzard" then return end
+
+    -- Past the align check: this viewer uses our layout, so it's worth
+    -- hooking acquisitions (see EnsureAcquireHook). Idempotent.
+    EnsureAcquireHook(viewer)
 
     -- Only shown items get a slot, so hidden (inactive) ones leave no gap.
     local items = {}
@@ -1364,6 +1421,7 @@ local function ApplyCustomViewerLayout(viewer)
 
     local numItems = #items
     local numLines = math.ceil(numItems / stride)
+    local moved = 0
     for k = 1, numItems do
         local line = math.floor((k - 1) / stride)
         local i = (k - 1) % stride
@@ -1376,15 +1434,37 @@ local function ApplyCustomViewerLayout(viewer)
         end
 
         local item = items[k]
-        item:ClearAllPoints()
+        local point, wantX, wantY
         if align == "center" then
             local x = -(nx - 1) * stepX / 2 + col * stepX
             local y = -(ny - 1) * stepY / 2 + row * stepY
-            item:SetPoint("CENTER", viewer, "CENTER", xDir * x, yDir * y)
+            point, wantX, wantY = "CENTER", xDir * x, yDir * y
         else
-            item:SetPoint(anchorPoint, viewer, anchorPoint, xDir * col * stepX, yDir * row * stepY)
+            point, wantX, wantY = anchorPoint, xDir * col * stepX, yDir * row * stepY
+        end
+
+        -- Only re-anchor when it actually moved. Touching an item that's
+        -- already in place re-dirties Blizzard's container layout, which
+        -- re-flows it back to its own grid and leaves us re-correcting it
+        -- every frame (visible jitter).
+        local settled = false
+        pcall(function()
+            local p, rel, relPoint, x, y = item:GetPoint(1)
+            if IsSecret(p) or IsSecret(x) or IsSecret(y) then return end
+            if p == point and rel == viewer and relPoint == point
+                and type(x) == "number" and type(y) == "number"
+                and math.abs(x - wantX) < 1 and math.abs(y - wantY) < 1 then
+                settled = true
+            end
+        end)
+        if not settled then
+            moved = moved + 1
+            item:ClearAllPoints()
+            item:SetPoint(point, viewer, point, wantX, wantY)
         end
     end
+    CdmDebugLog("%-22s layout    align=%-8s count=%d moved=%d", tostring(viewer.GetName and viewer:GetName()),
+        align, numItems, moved)
 
     -- Moved: re-align the art to whole pixels.
     for k = 1, numItems do
@@ -1399,11 +1479,14 @@ end
 -- Viewers re-create item frames when they lay out: restyle once it's done.
 local layoutHooked = false
 local stylePending = false
-function QueueStyle()
+function QueueStyle(reason)
+    CdmDebugLog("queue     reason=%s%s", tostring(reason or "?"), stylePending and " (coalesced)" or "")
     if stylePending then return end
     stylePending = true
+    local queuedAt = GetTime()
     C_Timer.After(0, function()
         stylePending = false
+        CdmDebugLog("apply:start  waited=%.3f", GetTime() - queuedAt)
         cdManager:Texture()
         cdManager:Color()
         cdManager:StyleIcons()
@@ -1411,6 +1494,7 @@ function QueueStyle()
             local v = _G[name]
             if v then pcall(ApplyCustomViewerLayout, v) end
         end
+        CdmDebugLog("apply:done")
     end)
 end
 
@@ -1421,9 +1505,15 @@ local function EnsureLayoutHooks()
         local viewer = _G[name]
         if viewer and viewer.RefreshLayout then
             hooksecurefunc(viewer, "RefreshLayout", function(self)
-                QueueStyle()
+                QueueStyle("RefreshLayout")
             end)
         end
+        -- Do NOT hook the item container's own :Layout() here: its
+        -- alwaysUpdateLayout flag makes it re-apply Blizzard's grid
+        -- positions on essentially any child change, including the ones
+        -- our own repositioning causes, so reacting to it becomes a
+        -- self-sustaining loop (tried, caused visible jitter). Item-level
+        -- state hooks in EnsureRepackHook cover the same triggers instead.
     end
 end
 
@@ -1454,17 +1544,17 @@ local function RegisterCooldownCallbacks()
     if cdManager._callbackRegistered then return end
 
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnEnterItem", function(cooldownItem)
-        QueueStyle()
+        QueueStyle("settings:OnEnterItem")
     end, cdManager)
 
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
-        QueueStyle()
+        QueueStyle("settings:OnDataChanged")
     end, cdManager)
 
     if EventRegistry.RegisterCallback then
         pcall(function()
             EventRegistry:RegisterCallback("EditMode.Exit", function()
-                QueueStyle()
+                QueueStyle("editmode:exit")
             end, cdManager)
         end)
     end
@@ -1472,7 +1562,7 @@ local function RegisterCooldownCallbacks()
     if EditModeManagerFrame and EditModeManagerFrame.HookScript then
         pcall(function()
             EditModeManagerFrame:HookScript("OnHide", function()
-                QueueStyle()
+                QueueStyle("editmode:hide")
             end)
         end)
     end
@@ -1485,10 +1575,25 @@ cdManager:RegisterEvent("PLAYER_ENTERING_WORLD")
 -- Pixel alignment depends on UI scale and resolution.
 cdManager:RegisterEvent("UI_SCALE_CHANGED")
 cdManager:RegisterEvent("DISPLAY_SIZE_CHANGED")
+-- Target-tracked items (e.g. a DoT/bleed icon) hide then re-show as
+-- Blizzard's own CooldownViewerMixin re-evaluates them for the new target
+-- (OnNewTarget forces inactive, then RefreshData re-checks truth); that
+-- re-check can lag a frame or two behind the switch itself (aura data for a
+-- newly-targeted/just-loaded unit isn't always available yet), so our
+-- RefreshLayout/OnShow/OnHide-driven QueueStyle can settle on a stale item
+-- count. Re-run it a couple more times shortly after, same fix as
+-- targetframe.lua's PLAYER_TARGET_CHANGED handling.
+cdManager:RegisterEvent("PLAYER_TARGET_CHANGED")
 
 cdManager:SetScript("OnEvent", function(self, event, addon)
     if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
-        QueueStyle()
+        QueueStyle("uiscale")
+        return
+    end
+    if event == "PLAYER_TARGET_CHANGED" then
+        QueueStyle("targetchanged")
+        C_Timer.After(0.1, function() QueueStyle("targetchanged+0.1") end)
+        C_Timer.After(0.3, function() QueueStyle("targetchanged+0.3") end)
         return
     end
     if event == "ADDON_LOADED" and addon == "Blizzard_CooldownViewer" then

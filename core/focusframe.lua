@@ -319,8 +319,9 @@ function focusframes:UpdateAuras()
     end
     local debuffMineCount = aurakit.GetSafeMineMaxFrameCount("focus", true, debuffCount)
     local buffMineCount = aurakit.GetSafeMineMaxFrameCount("focus", false, buffCount)
+    local debuffOtherCount = aurakit.ShowAllTargetDebuffs() and debuffCount or 0
     pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_mine", debuffMineCount)
-    pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_other", debuffCount)
+    pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_other", debuffOtherCount)
     pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_mine", buffMineCount)
     pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_other", buffCount)
 

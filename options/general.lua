@@ -63,6 +63,20 @@ function opt.BuildGeneral(page)
         ddOnChange = function() UberUI.misc:AllFramesHealthManaTexture() end,
     });
 
+    opt.Header(page, "Square Aura Borders");
+
+    opt.AddCheckbox(page, {
+        variable = "squareDispelBorderThicker", name = "Thicker Dispel/Enchant Square Borders",
+        tooltip = "Draw the colored square border (dispel-type color on debuffs, purple on weapon enchants) 1px thicker than the regular square border, everywhere (Player, Target, Focus, Boss, Party, Compact Raid/Party, Arena, Nameplates, Cooldown Manager), so the color reads better at small sizes.\n\nOn (default): 1px thicker. Off: the colored border is the same thickness as the regular square border.",
+        db = "general", field = "squaredispelborderthicker", default = true,
+        onChange = function()
+            UberUI.buffsandauras:Refresh();
+            if UberUI.targetframes then UberUI.targetframes:UpdateAuras() end
+            if UberUI.focusframes and UberUI.focusframes.UpdateAuras then UberUI.focusframes:UpdateAuras() end
+            if UberUI.bossframes and UberUI.bossframes.UpdateAllAuras then UberUI.bossframes:UpdateAllAuras() end
+        end,
+    });
+
     -- One-time copy of aura settings into every location (see
     -- opt.AddAllAurasOptions); per-location settings stay on their own pages.
     opt.Header(page, "All Auras  |cffff4040(overwrites every frame's aura settings)|r");

@@ -89,6 +89,28 @@ function opt.BuildUnitFrames(page)
         end,
     });
 
+    -- This is Blizzard's own CVar (default off), not an Uber UI setting.
+    -- One CVar governs Target, Focus, and Boss (all three share Blizzard's
+    -- TargetFrameTemplate aura container), so there's a single checkbox
+    -- here rather than one per frame. When our aura style options replace
+    -- Blizzard's aura display with our own custom container (see
+    -- aurakit.ShowAllTargetDebuffs, used to gate the "debuffs_other" group's
+    -- max frame count), it reproduces this same CVar check, so this setting
+    -- keeps applying either way.
+    opt.AddCheckbox(page, {
+        variable = "showAllTargetFocusDebuffs", name = "Show All Debuffs on Target/Focus/Boss",
+        tooltip = "Blizzard's own setting, shared by the Target, Focus, and Boss frames: off (the default) only shows debuffs you (or your pet) applied; other players' debuffs are hidden entirely. On shows every debuff regardless of who cast it.\n\nA change may not show up until the next time the frame's auras update (e.g. re-targeting).",
+        default = false,
+        regKey = "showAllTargetFocusDebuffs", regTable = {},
+        get = function() return CVarCallbackRegistry:GetCVarValueBool("noBuffDebuffFilterOnTarget") end,
+        set = function(value) C_CVar.SetCVar("noBuffDebuffFilterOnTarget", value and "1" or "0") end,
+        onChange = function()
+            if UberUI.targetframes then UberUI.targetframes:UpdateAuras() end
+            if UberUI.focusframes and UberUI.focusframes.UpdateAuras then UberUI.focusframes:UpdateAuras() end
+            if UberUI.bossframes and UberUI.bossframes.UpdateAllAuras then UberUI.bossframes:UpdateAllAuras() end
+        end,
+    });
+
     opt.AddCheckbox(page, {
         variable = "targetCastBarIconBorder", name = "Target Cast Bar Icon Border",
         tooltip = "Give the spell icon on the Target cast bar a border, in the Target aura border style (Border Shape, Thickness and Position above) and the darkness color, with the icon zoomed like aura icons.",

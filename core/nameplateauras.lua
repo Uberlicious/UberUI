@@ -165,6 +165,18 @@ end
 local PANDEMIC_DEFAULT_COLOR = "ffff3030"
 local pandemicHosts = setmetatable({}, { __mode = "k" }) -- button -> host frame
 
+-- Class color when that option is on, else the configured hex color.
+local function PandemicColor()
+    local g = uuidb and uuidb.general or {}
+    if g.nameplatepandemicclasscolor then
+        local _, class = UnitClass("player")
+        local cc = UberUI.util.ClassColor(class)
+        if cc then return cc.r, cc.g, cc.b end
+    end
+    local col = HexColor(g.nameplatepandemiccolor, nil) or HexColor(PANDEMIC_DEFAULT_COLOR)
+    return col.r, col.g, col.b
+end
+
 local StyleButton
 
 local function HideDebuffBorders(button)
@@ -207,14 +219,19 @@ local function GetPandemicHost(button)
     host:Hide()
     pandemicHosts[button] = host
 
+    -- These two never fire once AddPandemicRegion has run: the engine marks
+    -- the region's Shown aspect secret, so insecure handlers are not called
+    -- and IsShown reads secret. Kept only for a client without that API,
+    -- where the host would be an ordinary frame. Anything that must appear
+    -- during the pandemic window belongs inside the host instead (see the
+    -- occluder in aurakit.StyleHighlight) -- it cannot be driven from here.
     host:HookScript("OnShow", function()
         HideDebuffBorders(button)
         local SB = UberUI.squareborders
         if host.uuSquare and button.icon and SB then
             SB.LayoutDispelFor(host.uuSquare, button.icon, SQUARE_LOC)
-            local g = uuidb and uuidb.general or {}
-            local color = HexColor(g.nameplatepandemiccolor, nil) or HexColor(PANDEMIC_DEFAULT_COLOR)
-            SB.SetColor(host.uuSquare, color.r, color.g, color.b, 1)
+            local pr, pg, pb = PandemicColor()
+            SB.SetColor(host.uuSquare, pr, pg, pb, 1)
         end
         if host.uuRing and button.borderHost then
             host.uuRing:ClearAllPoints()
@@ -297,10 +314,20 @@ local function StylePandemic(button, style)
     end
 
     local SB = UberUI.squareborders
-    local color = HexColor(g.nameplatepandemiccolor, nil) or HexColor(PANDEMIC_DEFAULT_COLOR)
+    local pr, pg, pb = PandemicColor()
+    local kind = on and (g.nameplatepandemicstyle or "border") or "none"
+    -- Border style already paints over the debuff's own border in the
+    -- pandemic color; Proc Glow and Marching Ants sit on top of it and would
+    -- leave the dispel color showing through, so those cover it in the same
+    -- pandemic color (class color included -- see PandemicColor).
+    local occlude
+    if on and kind ~= "border" then
+        occlude = { r = pr, g = pg, b = pb }
+    end
     aurakit.StyleHighlight(host, {
-        kind = on and (g.nameplatepandemicstyle or "border") or "none",
-        r = color.r, g = color.g, b = color.b,
+        kind = kind,
+        r = pr, g = pg, b = pb,
+        occlude = occlude,
         square = style ~= "none" and SB and SB.IsEnabled(SQUARE_LOC),
         loc = SQUARE_LOC, icon = button.icon,
         ringFrom = button.borderHost,
@@ -711,5 +738,71 @@ events:SetScript("OnEvent", function(_, event, arg1, arg2)
         if isLogin or isReload then QueueRestyleAll() end
     end
 end)
+
+-- /uinpaura: for every nameplate debuff button currently in its pandemic
+-- window, report which border objects are still drawing. Pandemic is meant to
+-- suppress all of them, so anything shown here with alpha > 0 is the leak.
+SLASH_UBERUINPAURA1 = "/uinpaura"
+SlashCmdList["UBERUINPAURA"] = function()
+    local out = {}
+    local function add(fmt, ...) out[#out + 1] = string.format(fmt, ...) end
+    local g = uuidb and uuidb.general or {}
+    add("style=%s square=%s pandemic=%s pandemicStyle=%s classColor=%s",
+        tostring(g.aurastyle_nameplatedebuffs or "zoom"),
+        tostring(UberUI.squareborders and UberUI.squareborders.IsEnabled(SQUARE_LOC)),
+        tostring(g.nameplatepandemic ~= false), tostring(g.nameplatepandemicstyle or "border"),
+        tostring(g.nameplatepandemicclasscolor))
+    add("")
+
+    local function state(obj)
+        if not obj then return "nil" end
+        local okS, shown = pcall(obj.IsShown, obj)
+        local okA, alpha = pcall(obj.GetAlpha, obj)
+        if IsSecret(shown) or IsSecret(alpha) then return "secret" end
+        return string.format("shown=%s alpha=%.2f", tostring(okS and shown), okA and alpha or -1)
+    end
+
+    local n = 0
+    for _, b in ipairs(pool) do
+        if b.inUse and b.debuffs then
+            for _, key in ipairs({ "debuffs" }) do
+                local i = 1
+                while true do
+                    local okF, btn = pcall(b.debuffs.GetAuraGroupFrame, b.debuffs, key, i)
+                    if not okF or not btn then break end
+                    if btn._uberInPandemic then
+                        n = n + 1
+                        add("button #%d (unit=%s)  _uberInPandemic=true", n, tostring(b.unit))
+                        add("  borderHost        %s", state(btn.borderHost))
+                        add("  borderTex         %s", state(btn.borderTex))
+                        add("  dispelBorderHost  %s", state(btn.dispelBorderHost))
+                        add("  roundDispelHost   %s", state(btn.roundDispelHost))
+                        add("  stealableHost     %s", state(btn.stealableHost))
+                        local SB = UberUI.squareborders
+                        if SB then
+                            for _, slot in ipairs({ 1, 3 }) do
+                                local sb = SB.Find(btn, slot)
+                                add("  square slot %d     %s", slot, state(sb))
+                                if sb and sb.edges then
+                                    local okE, a = pcall(sb.edges[1].GetAlpha, sb.edges[1])
+                                    add("    edge[1] alpha   %s", okE and tostring(a) or "?")
+                                end
+                            end
+                        end
+                        local host = pandemicHosts[btn]
+                        add("  pandemicHost      %s", state(host))
+                        add("")
+                    end
+                    i = i + 1
+                end
+            end
+        end
+    end
+    if n == 0 then
+        add("No nameplate debuff is in its pandemic window right now.")
+        add("Apply a DoT, wait until it's in pandemic range, then run this again.")
+    end
+    UberUI.ShowDebugReport("Uber UI - Nameplate Aura Pandemic", out)
+end
 
 UberUI.nameplateauras = nameplateauras
