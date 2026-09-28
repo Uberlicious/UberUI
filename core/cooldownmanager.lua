@@ -463,6 +463,10 @@ local function GetItemCooldownAndDuration(f, now)
         if okTimes and startTime and duration then
             if not (issecretvalue and (issecretvalue(startTime) or issecretvalue(duration))) then
                 if type(startTime) == "number" and type(duration) == "number" and duration > 0 then
+                    if startTime > (now * 2) or duration > 1000 then
+                        startTime = startTime / 1000
+                        duration = duration / 1000
+                    end
                     local expTime = startTime + duration
                     if expTime > now then
                         return expTime, duration
@@ -476,8 +480,16 @@ local function GetItemCooldownAndDuration(f, now)
     local aura = FindItemAuraData(f)
     if aura and aura.expirationTime and aura.duration then
         if not (issecretvalue and (issecretvalue(aura.expirationTime) or issecretvalue(aura.duration))) then
-            if type(aura.expirationTime) == "number" and type(aura.duration) == "number" and aura.duration > 0 and aura.expirationTime > now then
-                return aura.expirationTime, aura.duration
+            local expTime = aura.expirationTime
+            local duration = aura.duration
+            if type(expTime) == "number" and type(duration) == "number" and duration > 0 then
+                if expTime > (now * 2) or duration > 1000 then
+                    expTime = expTime / 1000
+                    duration = duration / 1000
+                end
+                if expTime > now then
+                    return expTime, duration
+                end
             end
         end
     end
@@ -488,10 +500,16 @@ local function GetItemCooldownAndDuration(f, now)
         local sc = C_Spell.GetSpellCooldown(spellID)
         if sc and sc.startTime and sc.duration then
             if not (issecretvalue and (issecretvalue(sc.startTime) or issecretvalue(sc.duration))) then
-                if type(sc.startTime) == "number" and type(sc.duration) == "number" and sc.duration > 0 then
-                    local expTime = sc.startTime + sc.duration
+                local startTime = sc.startTime
+                local duration = sc.duration
+                if type(startTime) == "number" and type(duration) == "number" and duration > 0 then
+                    if startTime > (now * 2) or duration > 1000 then
+                        startTime = startTime / 1000
+                        duration = duration / 1000
+                    end
+                    local expTime = startTime + duration
                     if expTime > now then
-                        return expTime, sc.duration
+                        return expTime, duration
                     end
                 end
             end
@@ -790,45 +808,91 @@ local function HexToRGB(hex, defR, defG, defB)
     return defR or 1, defG or 1, defB or 1
 end
 
+local function GetCountdownFontString(f)
+    if f._uberCdText then return f._uberCdText end
+
+    local cd = f.Cooldown
+    if cd then
+        if cd.GetCountdownFontString then
+            local fs = cd:GetCountdownFontString()
+            if fs then f._uberCdText = fs; return fs end
+        end
+        if cd.timer and cd.timer.text then
+            f._uberCdText = cd.timer.text
+            return cd.timer.text
+        end
+        if cd.text then
+            f._uberCdText = cd.text
+            return cd.text
+        end
+        for _, region in ipairs({ cd:GetRegions() }) do
+            if region:IsObjectType("FontString") then
+                f._uberCdText = region
+                return region
+            end
+        end
+    end
+
+    for _, region in ipairs({ f:GetRegions() }) do
+        if region:IsObjectType("FontString") and region ~= f.Count and region ~= f.count then
+            f._uberCdText = region
+            return region
+        end
+    end
+
+    local durText = (f.Bar and f.Bar.Duration) or f.Duration
+    if durText then
+        f._uberCdText = durText
+        return durText
+    end
+
+    return nil
+end
+
 local function UpdateItemDurationColor(f, now)
     local expTime, duration = GetItemCooldownAndDuration(f, now)
+    local cdText = GetCountdownFontString(f)
+
     if not expTime or type(expTime) ~= "number" or expTime <= 0 then
-        f._uberDurationState = nil
+        if f._uberDurationState then
+            f._uberDurationState = nil
+            if cdText then
+                local normalHex = GetDurationColors()
+                local r, g, b = HexToRGB(normalHex, 1, 1, 1)
+                pcall(cdText.SetTextColor, cdText, r, g, b, 1)
+            end
+        end
         return
     end
 
     local remaining = expTime - now
     if remaining <= 0 then
-        f._uberDurationState = nil
+        if f._uberDurationState then
+            f._uberDurationState = nil
+            if cdText then
+                local normalHex = GetDurationColors()
+                local r, g, b = HexToRGB(normalHex, 1, 1, 1)
+                pcall(cdText.SetTextColor, cdText, r, g, b, 1)
+            end
+        end
         return
     end
 
     local normalHex, expiringHex, threshold = GetDurationColors()
     local isExpiring = (remaining <= threshold)
     local state = isExpiring and "expiring" or "normal"
-    if f._uberDurationState == state then return end
-    f._uberDurationState = state
 
-    local r, g, b
-    if isExpiring then
-        r, g, b = HexToRGB(expiringHex, 1, 0.2, 0.2)
-    else
-        r, g, b = HexToRGB(normalHex, 1, 1, 1)
-    end
-
-    local cdText = f.Cooldown and f.Cooldown.GetCountdownFontString and f.Cooldown:GetCountdownFontString()
-    if not cdText and f.Cooldown then
-        for _, region in ipairs({ f.Cooldown:GetRegions() }) do
-            if region:IsObjectType("FontString") then cdText = region; break end
+    if f._uberDurationState ~= state or isExpiring then
+        f._uberDurationState = state
+        local r, g, b
+        if isExpiring then
+            r, g, b = HexToRGB(expiringHex, 1, 0.2, 0.2)
+        else
+            r, g, b = HexToRGB(normalHex, 1, 1, 1)
         end
-    end
-    if cdText then
-        pcall(cdText.SetTextColor, cdText, r, g, b, 1)
-    end
-
-    local durText = (f.GetDurationFontString and f:GetDurationFontString()) or (f.Bar and f.Bar.Duration)
-    if durText then
-        pcall(durText.SetTextColor, durText, r, g, b, 1)
+        if cdText then
+            pcall(cdText.SetTextColor, cdText, r, g, b, 1)
+        end
     end
 end
 
