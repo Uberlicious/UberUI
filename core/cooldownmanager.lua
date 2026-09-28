@@ -304,6 +304,26 @@ end
 
 local sizeHooked = setmetatable({}, { __mode = "k" })  -- icon holder -> true
 
+-- Blizzard's rounded masks leave empty transparent space around each icon's
+-- edge; Blizzard offsets adjacent item frames closer than their size
+-- (CooldownViewerMixin:GetAdditionalPaddingOffset) so the visible icons just touch.
+-- Square icons are inset by the same 3/64 per side, or unmasked icons overlap their neighbors.
+local MASK_INSET = 3 / 64
+
+local function IsAuraViewer(f)
+    local p = f and (f._uberViewer or f:GetParent())
+    if p then
+        if p == _G["BuffIconCooldownViewer"] or p == _G["BuffBarCooldownViewer"] then
+            return true
+        end
+        local pName = p.GetName and p:GetName()
+        if pName == "BuffIconCooldownViewer" or pName == "BuffBarCooldownViewer" then
+            return true
+        end
+    end
+    return false
+end
+
 
 -- Tracked auras that are harmful (e.g. your DoTs on the target) get
 -- dispel-type border coloring when Cooldown Manager Debuff Border is set to
@@ -485,6 +505,11 @@ local function UpdateSquareDebuffColor(f)
     local tex = GetIconParts(f)
     if not tex then return end
 
+    local square = SquareOn()
+    if f.DebuffBorder then
+        f.DebuffBorder:SetAlpha(square and 0 or (DebuffBorderDark() and 0 or 1))
+    end
+
     if uuidb.cooldown.borders == false then
         local sb = SB.Find(f, 1)
         if sb then sb:Hide() end
@@ -492,38 +517,41 @@ local function UpdateSquareDebuffColor(f)
         return
     end
 
-    local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
-    local aura, unit
-    if spellID and type(spellID) == "number" then
-        aura, unit = FindItemAuraData(f)
-    end
-
     local isHarmful = false
-    if aura and aura.isHarmful then
-        isHarmful = true
-    elseif unit == "target" then
-        isHarmful = true
-    elseif spellID and type(spellID) == "number" then
-        if KNOWN_SPELL_DISPEL[spellID] then
-            isHarmful = true
-        elseif knownHarmfulCache[spellID] then
-            isHarmful = true
-        elseif C_Spell.IsSpellHarmful and C_Spell.IsSpellHarmful(spellID) then
-            isHarmful = true
-        end
-    end
+    local dispelName = "None"
+    local aura, unit
 
-    local dispelName
-    if aura and aura.dispelName and not (issecretvalue and issecretvalue(aura.dispelName)) then
-        dispelName = aura.dispelName
-    elseif spellID and type(spellID) == "number" then
-        dispelName = knownDispelCache[spellID] or KNOWN_SPELL_DISPEL[spellID]
+    -- Only tracked buff/debuff auras can have dispel colors.
+    -- Essential Cooldowns and Utility Cooldowns are always plain dark borders.
+    if IsAuraViewer(f) then
+        local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
+        if spellID and type(spellID) == "number" then
+            aura, unit = FindItemAuraData(f)
+        end
+
+        if aura and aura.isHarmful then
+            isHarmful = true
+        elseif unit == "target" then
+            isHarmful = true
+        elseif spellID and type(spellID) == "number" then
+            if KNOWN_SPELL_DISPEL[spellID] then
+                isHarmful = true
+            elseif knownHarmfulCache[spellID] then
+                isHarmful = true
+            end
+        end
+
+        if aura and aura.dispelName and not (issecretvalue and issecretvalue(aura.dispelName)) then
+            dispelName = aura.dispelName
+        elseif spellID and type(spellID) == "number" then
+            dispelName = knownDispelCache[spellID] or KNOWN_SPELL_DISPEL[spellID]
+        end
+        dispelName = dispelName or "None"
     end
-    dispelName = dispelName or "None"
 
     local useDispel = isHarmful and (not DebuffBorderDark())
 
-    if SquareOn() then
+    if square then
         local sb = SB.Get(f, 1)
         if useDispel then
             SB.LayoutDispelFor(sb, tex, SQUARE_LOC)
@@ -532,7 +560,7 @@ local function UpdateSquareDebuffColor(f)
             SB.LayoutFor(sb, tex, SQUARE_LOC)
             SB.SetDarkColor(sb)
         end
-        SB.RaiseAbove(sb, f.Cooldown or f, 2)
+        SB.RaiseAbove(sb, f.DebuffBorder or f.Cooldown or f, 2)
         sb:Show()
     else
         -- Rounded icon: tint f.uberBorder
@@ -559,8 +587,15 @@ local function EnsureDebuffHook(f)
 end
 
 local function LayoutSquareIcon(f, tex, holder)
+    local ok, w = pcall(holder.GetWidth, holder)
+    local inset = (ok and type(w) == "number" and w > 0) and (w * MASK_INSET) or 0
     tex:ClearAllPoints()
-    tex:SetAllPoints(holder)
+    if inset > 0 then
+        tex:SetPoint("TOPLEFT", holder, "TOPLEFT", inset, -inset)
+        tex:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -inset, inset)
+    else
+        tex:SetAllPoints(holder)
+    end
     if f.Cooldown then
         f.Cooldown:ClearAllPoints()
         f.Cooldown:SetAllPoints(tex)
@@ -589,7 +624,7 @@ local function ApplySquareIcon(f, square)
         end
         SB.Hide(f, 1)
         squareState[f] = nil
-        if f.DebuffBorder then f.DebuffBorder:SetAlpha(1) end
+        if f.DebuffBorder then f.DebuffBorder:SetAlpha(DebuffBorderDark() and 0 or 1) end
         return
     end
 
@@ -608,6 +643,7 @@ local function ApplySquareIcon(f, square)
         squareState[f] = state
     end
     if state.ring then state.ring:SetAlpha(0) end
+    if f.DebuffBorder then f.DebuffBorder:SetAlpha(0) end
     tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     -- Edit Mode's icon size changes resize the frame directly.
     if not sizeHooked[holder] then
@@ -721,6 +757,7 @@ local function ForEachItemFrame(fn)
                 for f in viewer.itemFramePool:EnumerateActive() do
                     if f and f.Icon and not visited[f] then
                         visited[f] = true
+                        f._uberViewer = viewer
                         fn(f, viewer)
                     end
                 end
@@ -728,6 +765,7 @@ local function ForEachItemFrame(fn)
             for _, f in ipairs({ viewer:GetChildren() }) do
                 if f and f.Icon and not visited[f] then
                     visited[f] = true
+                    f._uberViewer = viewer
                     fn(f, viewer)
                 end
             end
