@@ -20,7 +20,6 @@ local MASK_OPTS = {
 function prd:StyleStatusBar(healthBar)
     if not healthBar then return end
 
-    -- 1. Apply Status Bar Texture
     local textureToApply
     if uuidb.general.personalresourcebartextures and uuidb.general.personalresourcebartexture ~= "Blizzard" then
         textureToApply = uuidb.statusbars[uuidb.general.personalresourcebartexture]
@@ -31,13 +30,11 @@ function prd:StyleStatusBar(healthBar)
     if textureToApply and type(textureToApply) == "string" then
         healthBar:SetStatusBarTexture(textureToApply)
 
-        -- Force draw layer to ensure it shows over atlases
         local sbt = healthBar:GetStatusBarTexture()
         if sbt then
             sbt:SetDrawLayer("ARTWORK", 1)
         end
 
-        -- Handle Background
         local bgRegions = { healthBar:GetRegions() }
         for _, region in ipairs(bgRegions) do
             if region:IsObjectType("Texture") and region:GetDrawLayer() == "BACKGROUND" then
@@ -47,7 +44,6 @@ function prd:StyleStatusBar(healthBar)
         end
     end
 
-    -- MASKING LOGIC
     if healthBar.CreateMaskTexture and healthBar.GetStatusBarTexture then
         local opts = MASK_OPTS
         local L, T, R, B = opts.insetL or 0, opts.insetT or 0, opts.insetR or 0, opts.insetB or 0
@@ -72,7 +68,6 @@ function prd:StyleStatusBar(healthBar)
             m:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", -R + SX, B + SY)
         end
 
-        -- Apply the mask to the fill texture
         local fill = healthBar:GetStatusBarTexture()
         if fill and m and fill.AddMaskTexture and not fill._masked then
             fill:AddMaskTexture(m)
@@ -84,7 +79,6 @@ end
 function prd:StylePRD(frame)
     if not frame then return end
 
-    -- Style Health Bar
     if frame.HealthBarsContainer and frame.HealthBarsContainer.healthBar then
         local healthBar = frame.HealthBarsContainer.healthBar
         self:StyleStatusBar(healthBar)
@@ -125,12 +119,10 @@ function prd:StylePRD(frame)
         end
     end
 
-    -- Style Power Bar
     if frame.PowerBar then
         self:StyleStatusBar(frame.PowerBar)
     end
 
-    -- Style Alternate Power Bar
     if frame.AlternatePowerBar then
         self:StyleStatusBar(frame.AlternatePowerBar)
     end
@@ -144,12 +136,11 @@ local function EnsureDarkenHook()
     if not (uuidb and uuidb.general and uuidb.general.darkenpersonalresourceborder) then return end
     darkenHookInstalled = true
 
-    -- Hook for Darkening Borders (In 12.1, PRD borders are actually atlased on the StatusBar)
+    -- In 12.1 the border art is atlased on the StatusBar itself.
     hooksecurefunc(PersonalResourceDisplayMixin, "Setup", function(self)
         if uuidb.general.darkenpersonalresourceborder then
             local dc = uuidb.general.darkencolor
 
-            -- Darken Health Bar border/background
             if self.HealthBarsContainer and self.HealthBarsContainer.healthBar then
                 local regions = { self.HealthBarsContainer.healthBar:GetRegions() }
                 for _, region in ipairs(regions) do
@@ -159,7 +150,6 @@ local function EnsureDarkenHook()
                 end
             end
 
-            -- Darken Power Bar border/background
             if self.PowerBar then
                 local regions = { self.PowerBar:GetRegions() }
                 for _, region in ipairs(regions) do
@@ -187,7 +177,6 @@ local function EnsureTextureHook()
     if not IsPRDTextureActive() then return end
     textureHookInstalled = true
 
-    -- Hook to apply textures when the PRD is loaded/updated
     hooksecurefunc(PersonalResourceDisplayMixin, "Setup", function(self)
         UberUI.personalresource:StylePRD(self)
     end)
@@ -216,7 +205,6 @@ end)
 function prd:ForceTexture()
     EnsureDarkenHook()
     EnsureTextureHook()
-    -- Apply the update to the PRD if it currently exists
     if PersonalResourceDisplayFrame then
         self:StylePRD(PersonalResourceDisplayFrame)
         if PersonalResourceDisplayFrame.UpdateHealthColor then

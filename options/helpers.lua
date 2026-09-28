@@ -18,13 +18,10 @@ function opt.Header(page, text)
     page.layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text));
 end
 
--- Registers a setting the same way this addon always has (RegisterAddOnSetting
--- with GetValue/SetValue/Commit overridden). o: variable, name, db (uuidb
--- sub-table name), field, default, onChange(value); optional get()/set(value)
--- for values stored in a different shape; regKey/regTable override what's
--- passed to RegisterAddOnSetting (defaults: field, uuidb[db]). Variable names
--- and saved fields must never change -- they're what players' saved settings
--- are keyed on.
+-- Registers a setting (RegisterAddOnSetting with GetValue/SetValue/Commit
+-- overridden). o: variable, name, db (uuidb sub-table), field, default,
+-- onChange(value); optional get()/set(value), regKey/regTable. Variable names
+-- and saved fields must never change: saved settings are keyed on them.
 local function RegisterSetting(page, o, varType)
     local function getValue()
         if o.get then return o.get() end
@@ -42,10 +39,8 @@ local function RegisterSetting(page, o, varType)
             uuidb[o.db][o.field] = value;
         end
         if o.onChange then o.onChange(value) end
-        -- This override replaces SettingMixin:SetValue, which is what fires
-        -- the setting's value-changed event. Dependent rows (DependsOn /
-        -- SetParentInitializer) only re-check their greyed-out state on that
-        -- event, so fire it ourselves.
+        -- Replacing SetValue skips its value-changed event, which dependent
+        -- rows re-check their greyed-out state on, so fire it ourselves.
         if self and self.TriggerValueChanged then
             self:TriggerValueChanged(value);
         end
@@ -70,8 +65,7 @@ function opt.AddSlider(page, o)
     return Settings.CreateSlider(page.category, setting, options, o.tooltip), setting;
 end
 
--- Color swatch (Blizzard's own settings control): opens the color picker,
--- stored as an "AARRGGBB" hex string (what the control reads and writes).
+-- Color swatch; stored as an "AARRGGBB" hex string.
 function opt.AddColorSwatch(page, o)
     local setting = RegisterSetting(page, o, Settings.VarType.String);
     local initializer = Settings.CreateColorSwatchInitializer(setting, nil, o.tooltip);
@@ -89,8 +83,7 @@ end
 -- Generic dropdown -----------------------------------------------------------
 
 -- o: variable, name, tooltip, default, values = { {value, label}, ... },
--- get() / set(value), onChange(value). Values are stored however get/set
--- decide -- the dropdown's own registration only uses a throwaway proxy.
+-- get() / set(value), onChange(value).
 function opt.AddDropdown(page, o)
     o.regKey = o.regKey or o.variable;
     o.regTable = o.regTable or { [o.variable] = o.get and o.get() or o.default };
@@ -109,9 +102,8 @@ end
 
 -- Bar texture checkbox + dropdown pairs --------------------------------------
 
--- Ours plus every LibSharedMedia statusbar texture (UberUI:GetBarTextureChoices
--- in config.lua), each with a preview. Built each time the dropdown opens, so
--- textures other addons register later show up too.
+-- Ours plus every LibSharedMedia statusbar texture, with previews; rebuilt
+-- on open so late-registered textures show up.
 local function GetBarTextureOptionsWithTextures()
     local container = Settings.CreateControlTextContainer();
     local choices = UberUI:GetBarTextureChoices();
@@ -136,7 +128,6 @@ function opt.AddBarTextureSetting(page, opts)
     local cbOnChange = opts.cbOnChange or function() end;
     local ddOnChange = opts.ddOnChange or function() end;
 
-    -- checkbox
     local cbdefaultValue = false;
     local function cbgetValue()
         if (dbTable) then return dbTable[cbfield]
@@ -150,7 +141,6 @@ function opt.AddBarTextureSetting(page, opts)
         Settings.VarType.Boolean, opts.cbName, cbdefaultValue)
     cbsetting.GetValue, cbsetting.SetValue, cbsetting.Commit = cbgetValue, cbsetValue, commitValue;
 
-    -- drop down
     local dddefaultValue = "Blizzard";
     local function ddgetValue()
         if (dbTable) then
@@ -178,13 +168,10 @@ end
 
 -- Per-location aura rows -------------------------------------------------------
 
--- Each location's look is still stored as the two original style strings,
--- aurastyle_<loc>buffs / aurastyle_<loc>debuffs ("both" | "border" | "zoom" |
--- "none"), which are exactly the four combinations of two independent
--- choices -- Zoom on/off x Dark border on/off -- so the controls below just
--- read and write those halves. "none" (zoom off + Blizzard border) is also
--- where a location hands its auras back to Blizzard's own display, same as
--- before. Nothing is migrated; existing saved looks show up unchanged.
+-- A location's look is stored as aurastyle_<loc>buffs / debuffs ("both" |
+-- "border" | "zoom" | "none"): the four combinations of Zoom on/off x Dark
+-- border on/off, which the controls below read and write. "none" hands the
+-- location's auras back to Blizzard's display.
 local function StyleParts(key, default)
     local s = (uuidb.general and uuidb.general[key]) or default;
     return (s == "both" or s == "zoom"), (s == "both" or s == "border");
@@ -204,13 +191,10 @@ local function SetStylePart(key, default, zoom, dark)
     uuidb.general[key] = ComposeStyle(zoom, dark);
 end
 
--- o: loc ("player", "target", ...), label ("Target"), suffix (variable-name
--- suffix, e.g. "Target"), buffKey/debuffKey (aurastyle_* fields), refresh(),
--- buffName/debuffName (default "<label> Buff Border" / "... Debuff Border"),
--- buffNative/debuffNative (label of the Blizzard choice: "None" /
--- "Dispel Color"), buffTooltip/debuffTooltip, zoomTooltip, shapeTooltip,
--- positionDetail, squareVarSuffix (thickness variable suffix; "" for
--- Player's original name).
+-- o: loc, label, suffix (variable-name suffix), buffKey/debuffKey,
+-- refresh(), buffName/debuffName, buffNative/debuffNative (label of the
+-- Blizzard choice), buffTooltip/debuffTooltip, zoomTooltip, shapeTooltip,
+-- positionDetail, squareVarSuffix ("" for Player's original name).
 function opt.AddAuraOptions(page, o)
     local SBkeys = UberUI.squareborders.Keys(o.loc);
     local refresh = o.refresh;
@@ -298,8 +282,7 @@ end
 
 -- All Auras: one-time apply to every location ---------------------------------
 
--- Every aura location, with its style keys and live-refresh call. Keep in
--- sync with the per-page AddAuraOptions calls.
+-- Every aura location; keep in sync with the per-page AddAuraOptions calls.
 local AURA_LOCATIONS = {
     { loc = "player",  buffKey = "aurastyle_playerbuffs",  debuffKey = "aurastyle_playerdebuffs",
       refresh = function() if UberUI.buffsandauras then UberUI.buffsandauras:Refresh() end end },
@@ -319,11 +302,10 @@ local AURA_LOCATIONS = {
       refresh = function() if UberUI.nameplateauras then UberUI.nameplateauras:RefreshStyle() end end },
 };
 
--- Copies chosen aura parts into every location's own settings. parts: any of
--- zoom ("on"/"off"), buffborder / debuffborder ("dark"/"blizzard"), shape
--- ("rounded"/"square"), thickness ("1".."8"), position ("inside"/"outside");
--- anything missing or "keep" is left alone. A copy, not a live override:
--- afterwards each location can still be changed on its own.
+-- Copies chosen aura parts into every location's settings (a one-time copy,
+-- not a live override). parts: zoom ("on"/"off"), buffborder / debuffborder
+-- ("dark"/"blizzard"), shape ("rounded"/"square"), thickness ("1".."8"),
+-- position ("inside"/"outside"); missing or "keep" is left alone.
 function opt.ApplyAuraParts(parts)
     local g = uuidb.general;
     if not g or not parts then return end
@@ -331,9 +313,8 @@ function opt.ApplyAuraParts(parts)
     local shape, position = parts.shape, parts.position;
     local thickness = tonumber(parts.thickness);
 
-    -- true / false / nil (= leave unchanged). Not written as
-    -- `(v == on and true) or (v == off and false) or nil`: in Lua that turns
-    -- the false case into nil, which silently dropped every "off" choice.
+    -- true / false / nil (= unchanged). Not `(v == on and true) or
+    -- (v == off and false) or nil`, which turns false into nil.
     local function Choice(v, onValue, offValue)
         if v == onValue then return true end
         if v == offValue then return false end
@@ -361,10 +342,8 @@ function opt.ApplyAuraParts(parts)
     UberUI:Save();
 end
 
--- All Auras section: one-shot actions, not settings. Picking a value
--- immediately copies just that part into every location (opt.ApplyAuraParts)
--- and the dropdown snaps back to "Set All..." -- the choice is never stored
--- and nothing ever reads it again.
+-- All Auras: one-shot actions. Picking a value copies that part everywhere
+-- and the dropdown snaps back to "Set All..." (never stored).
 function opt.AddAllAurasOptions(page)
     local NONE = { "none", "Set All..." };
 
@@ -385,8 +364,7 @@ function opt.AddAllAurasOptions(page)
                 opt.ApplyAuraParts({ [part] = value });
                 print("|cff33ff99Uber UI|r: " .. name:gsub("^All Auras: ", "") .. " set to "
                     .. (labels[value] or value) .. " on every aura location.");
-                -- Snap the dropdown back to "Set All..." (deferred: we're
-                -- inside the setting's own SetValue right now).
+                -- Deferred: we're inside the setting's own SetValue.
                 C_Timer.After(0, function()
                     if setting then setting:SetValue("none") end
                 end);

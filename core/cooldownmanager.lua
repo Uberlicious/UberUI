@@ -1,5 +1,8 @@
 local addon, ns = ...
 local cdManager = UberUI:CreateFrame("frame")
+local IsSecret, SafeShown = UberUI.util.IsSecret, UberUI.util.SafeShown
+local IsSquareBarBG, SquareBarsOn -- defined with the Tracked Bars code
+local darkenedBarArt = setmetatable({}, { __mode = "k" }) -- texture -> true
 
 local function GetMaskTexture()
     if uuidb and uuidb.masks and uuidb.masks.cdm_mask then
@@ -39,194 +42,44 @@ local function ApplyMask(bar, opts)
     m:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -R + SX, B + SY)
 end
 
-function cdManager:Texture()
-    if not BuffBarCooldownViewer then return end
-    if not BuffBarCooldownViewer:IsShown() then return end
-    if not uuidb or not uuidb.statusbars or not uuidb.general then return end
+local VIEWERS = { "EssentialCooldownViewer", "UtilityCooldownViewer", "BuffIconCooldownViewer", "BuffBarCooldownViewer" }
 
-    local applyCustomLook = false
-    local texture = nil
-
-    if uuidb.cooldown.bartextures and uuidb.cooldown.bartexture ~= "Blizzard" then
-        applyCustomLook = true
-        texture = uuidb.statusbars[uuidb.cooldown.bartexture]
-    elseif uuidb.general.allbartextures and uuidb.general.texture ~= "Blizzard" then
-        applyCustomLook = true
-        texture = uuidb.statusbars[uuidb.general.texture]
-    end
-
-    if not texture then return end
-
-    if not BuffBarCooldownViewer then return end
-    local children = { BuffBarCooldownViewer:GetChildren() }
-    if #children == 0 then return end
-
-    for _, f in ipairs(children) do
-        if f and f.Bar then
-            local bar = f.Bar
-
-            -- Only the fill is masked.
-            local fill
-            if bar:GetObjectType() == "StatusBar" then
-                bar:SetStatusBarTexture(texture)
-                fill = bar:GetStatusBarTexture()
-            else
-                for _, r in ipairs({ bar:GetRegions() }) do
-                    if r:IsObjectType("Texture") and r:GetDrawLayer() == "ARTWORK" then
-                        fill = r; break
-                    end
-                end
-                if not fill then
-                    fill = bar:CreateTexture(nil, "ARTWORK")
-                end
-                fill:SetAllPoints(bar)
-                fill:SetTexture(texture)
-            end
-
-            ApplyMask(bar, MASK_OPTS)
-
-            if fill and bar._uberMask and not fill._masked then
-                fill:AddMaskTexture(bar._uberMask)
-                fill._masked = true
-            end
-
-            if not bar._uberStyler then
-                bar._uberStyler = true
-                bar:HookScript("OnSizeChanged", function(self)
-                    if self._uberMask then ApplyMask(self, MASK_OPTS) end
-                end)
-            end
-        end
-    end
-end
-
-function cdManager:Color()
-    if not uuidb or not uuidb.general then return end
-
-    if uuidb.cooldown.borders == false then
-        local function DestroyBorders(viewer)
-            if not viewer then return end
-            for _, f in ipairs({ viewer:GetChildren() }) do
-                if f.uberBorder then
-                    f.uberBorder:Hide()
-                    f.uberBorder = nil
-                    f.styled = nil
-                end
-            end
-        end
-        if BuffBarCooldownViewer then DestroyBorders(BuffBarCooldownViewer) end
-        if BuffIconCooldownViewer then DestroyBorders(BuffIconCooldownViewer) end
-        if UtilityCooldownViewer then DestroyBorders(UtilityCooldownViewer) end
-        if EssentialCooldownViewer then DestroyBorders(EssentialCooldownViewer) end
-        return
-    end
-
-    local dc = uuidb.general.darkencolor
-
-    local AURA_BORDER_ATLAS = "ui-debuff-border-default-noicon"
-
-    -- Proportional to the icon's width (Edit Mode resizes icons). 3/30 rather
-    -- than the aura borders' 5/30 so neighbors at 0 padding don't overlap.
-    local function GetBorderPad(anchor)
-        local ok, width = pcall(anchor.GetWidth, anchor)
-        if not ok or (issecretvalue and issecretvalue(width)) or type(width) ~= "number" or width <= 0 then return 3 end
-        return math.max(1, math.floor(width * (3 / 30) + 0.5))
-    end
-
-    local function PositionBorder(border, anchor)
-        local pad = GetBorderPad(anchor)
-        border:ClearAllPoints()
-        border:SetPoint("TOPLEFT", anchor, "TOPLEFT", -pad, pad)
-        border:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", pad, -pad)
-    end
-
-    local function CreateBorder(parent, anchor)
-        local holder
-        if anchor:IsObjectType("Frame") then
-            holder = anchor
-        else
-            holder = anchor:GetParent()
-        end
-
-        local borderTexture = holder:CreateTexture(nil, "OVERLAY", nil, -8)
-        borderTexture:SetAtlas(AURA_BORDER_ATLAS)
-        borderTexture:SetDesaturated(true)
-        borderTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        PositionBorder(borderTexture, anchor)
-
-        if not holder._uberBorderSized then
-            holder._uberBorderSized = true
-            holder:HookScript("OnSizeChanged", function()
-                PositionBorder(borderTexture, anchor)
-            end)
-        end
-
-        return borderTexture
-    end
-
-    if BuffBarCooldownViewer and BuffBarCooldownViewer:IsShown() then
-        local children = { BuffBarCooldownViewer:GetChildren() }
-        for _, f in ipairs(children) do
-            if f and f.Bar then
-                for _, r in ipairs({ f.Bar:GetRegions() }) do
-                    if r:IsObjectType("Texture") and r:GetDrawLayer() == "BACKGROUND" then
-                        r:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                    end
-                end
-            end
-
-            if f and not f.styled and f.Icon then
-                local iconFrame = f.Icon
-                local iconTexture
-                for _, region in ipairs({ iconFrame:GetRegions() }) do
-                    if region:IsObjectType("Texture") then
-                        iconTexture = region
-                        break
-                    end
-                end
-
-                if iconTexture then
-                    f.uberBorder = CreateBorder(f, iconFrame)
-                    f.styled = true
-                end
-            end
-        end
-    end
-
-    local function ApplyBordersToIconViewer(viewer)
+local function ForEachItemFrame(fn, includeInactive)
+    local visited = {}
+    for _, name in ipairs(VIEWERS) do
+        local viewer = _G[name]
         if viewer then
-            local children = { viewer:GetChildren() }
-            for _, f in ipairs(children) do
-                if f and not f.styled and f.Icon then
-                    local icon = f.Icon
-                    if icon:IsObjectType("Frame") then
-                        local iconFrame = icon
-                        local iconTexture
-                        for _, region in ipairs({ iconFrame:GetRegions() }) do
-                            if region:IsObjectType("Texture") then
-                                iconTexture = region
-                                break
-                            end
+            if viewer.itemFramePool then
+                if viewer.itemFramePool.EnumerateActive then
+                    for f in viewer.itemFramePool:EnumerateActive() do
+                        if f and (f.Icon or f.Bar) and not visited[f] then
+                            visited[f] = true
+                            f._uberViewer = viewer
+                            fn(f, viewer)
                         end
-
-                        if iconTexture then
-                            f.uberBorder = CreateBorder(f, iconFrame)
-                            f.styled = true
-                        end
-                    elseif icon:IsObjectType("Texture") then
-                        local iconTexture = icon
-                        f.uberBorder = CreateBorder(f, iconTexture)
-                        f.styled = true
                     end
+                end
+                if includeInactive and viewer.itemFramePool.EnumerateInactive then
+                    for f in viewer.itemFramePool:EnumerateInactive() do
+                        if f and (f.Icon or f.Bar) and not visited[f] then
+                            visited[f] = true
+                            f._uberViewer = viewer
+                            fn(f, viewer)
+                        end
+                    end
+                end
+            end
+            for _, f in ipairs({ viewer:GetChildren() }) do
+                if f and (f.Icon or f.Bar) and not visited[f] then
+                    visited[f] = true
+                    f._uberViewer = viewer
+                    fn(f, viewer)
                 end
             end
         end
     end
-
-    ApplyBordersToIconViewer(BuffIconCooldownViewer)
-    ApplyBordersToIconViewer(UtilityCooldownViewer)
-    ApplyBordersToIconViewer(EssentialCooldownViewer)
 end
+
 
 -------------------------------------------------------------------------------
 -- Square icons: Blizzard's rounded mask, ring overlay and rounded swipe are
@@ -271,11 +124,8 @@ local BLIZZARD_PADDING_OFFSET = -4
 local MASK_INSET = 3 / 64
 
 local function GetPaddingOffset(viewer)
-    if viewer and viewer.GetAdditionalPaddingOffset then
-        local ok, v = pcall(viewer.GetAdditionalPaddingOffset, viewer)
-        if ok and type(v) == "number" and not (issecretvalue and issecretvalue(v)) then return v end
-    end
-    return BLIZZARD_PADDING_OFFSET
+    local name = viewer and viewer.GetName and viewer:GetName()
+    return name == "BuffBarCooldownViewer" and -2 or BLIZZARD_PADDING_OFFSET
 end
 
 local function IsAuraViewer(f)
@@ -298,50 +148,28 @@ end
 
 local QueueStyle -- defined further down
 
-local function SafeShown(region)
-    local ok, shown = pcall(region.IsShown, region)
-    if not ok or (issecretvalue and issecretvalue(shown)) then return false end
-    return shown and true or false
-end
-
-local function IsSecret(v)
-    return issecretvalue and issecretvalue(v)
-end
 
 -- The aura's spell if showing one, else the (override) spell. Not
 -- f.cooldownID: that's the Cooldown Manager's own ID.
 local function ItemSpellID(f)
-    local ok, id
-    if f.GetAuraSpellID then
-        ok, id = pcall(f.GetAuraSpellID, f)
-        if ok and type(id) == "number" and not IsSecret(id) and id > 0 then return id end
-    end
-    if f.GetSpellID then
-        ok, id = pcall(f.GetSpellID, f)
-        if ok and type(id) == "number" and not IsSecret(id) and id > 0 then return id end
-    end
-    if f.GetBaseSpellID then
-        ok, id = pcall(f.GetBaseSpellID, f)
-        if ok and type(id) == "number" and not IsSecret(id) and id > 0 then return id end
+    local id = f.auraSpellID
+    if type(id) == "number" and not IsSecret(id) and id > 0 then return id end
+    local info = f.cooldownInfo
+    if type(info) == "table" and not IsSecret(info) then
+        for _, key in ipairs({ "overrideSpellID", "spellID" }) do
+            id = info[key]
+            if type(id) == "number" and not IsSecret(id) and id > 0 then return id end
+        end
     end
     return nil
 end
 
 -- The aura the item is displaying, its unit and instance ID. Fields may be secret.
 local function ItemAura(f)
-    local aura, unit, id
-    if f.GetAuraDataCached then
-        local ok, a = pcall(f.GetAuraDataCached, f)
-        if ok and a and not IsSecret(a) then aura = a end
-    end
-    if f.GetAuraDataUnit then
-        local ok, u = pcall(f.GetAuraDataUnit, f)
-        if ok and type(u) == "string" and not IsSecret(u) then unit = u end
-    end
-    if f.GetAuraSpellInstanceID then
-        local ok, i = pcall(f.GetAuraSpellInstanceID, f)
-        if ok and type(i) == "number" and not IsSecret(i) then id = i end
-    end
+    local aura, unit, id = f.auraDataCached, f.auraDataUnit, f.auraInstanceID
+    if IsSecret(aura) or type(aura) ~= "table" then aura = nil end
+    if IsSecret(unit) or type(unit) ~= "string" then unit = nil end
+    if IsSecret(id) or type(id) ~= "number" then id = nil end
     if not id and aura and not IsSecret(aura.auraInstanceID) then id = aura.auraInstanceID end
     return aura, unit, id
 end
@@ -440,6 +268,68 @@ local function EnsureProcGlowHook()
     end)
 end
 
+local AURA_BORDER_ATLAS = "ui-debuff-border-default-noicon"
+
+-- Proportional to the icon's width (Edit Mode resizes icons). 3/30 rather
+-- than the aura borders' 5/30 so neighbors at 0 padding don't overlap.
+local function GetBorderPad(anchor)
+    local ok, width = pcall(anchor.GetWidth, anchor)
+    if not ok or IsSecret(width) or type(width) ~= "number" or width <= 0 then return 3 end
+    return math.max(1, math.floor(width * (3 / 30) + 0.5))
+end
+
+local function PositionBorder(border, anchor)
+    local pad = GetBorderPad(anchor)
+    border:ClearAllPoints()
+    border:SetPoint("TOPLEFT", anchor, "TOPLEFT", -pad, pad)
+    border:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", pad, -pad)
+end
+
+local function CreateBorder(parent, anchor, dc)
+    local holder
+    if anchor:IsObjectType("Frame") then
+        holder = anchor
+    else
+        holder = anchor:GetParent()
+    end
+
+    local borderTexture = holder:CreateTexture(nil, "OVERLAY", nil, -8)
+    borderTexture:SetAtlas(AURA_BORDER_ATLAS)
+    borderTexture:SetDesaturated(true)
+    if dc then
+        borderTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
+    PositionBorder(borderTexture, anchor)
+
+    if not holder._uberBorderSized then
+        holder._uberBorderSized = true
+        holder:HookScript("OnSizeChanged", function()
+            PositionBorder(borderTexture, anchor)
+        end)
+    end
+
+    return borderTexture
+end
+
+local function EnsureRoundedBorder(f, dc)
+    dc = dc or (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    if f.uberBorder then
+        f.uberBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        f.uberBorder:Show()
+        return f.uberBorder
+    end
+    local anchor = f.Icon
+    if not anchor then
+        local tex, holder = GetIconParts(f)
+        anchor = holder or tex
+    end
+    if not anchor then return end
+    f.uberBorder = CreateBorder(f, anchor, dc)
+    f.styled = true
+    f.uberBorder:Show()
+    return f.uberBorder
+end
+
 -- Blizzard shows/hides DebuffBorder itself, so it's faded by alpha.
 local function UpdateSquareDebuffColor(f)
     local tex = GetIconParts(f)
@@ -447,7 +337,14 @@ local function UpdateSquareDebuffColor(f)
 
     if f.DebuffBorder then f.DebuffBorder:SetAlpha(0) end
 
-    if uuidb.cooldown.borders == false then
+    if f._uberInPandemic then
+        local sb = SB.Find(f, 1)
+        if sb then sb:Hide() end
+        if f.uberBorder then f.uberBorder:Hide() end
+        return
+    end
+
+    if uuidb and uuidb.cooldown and uuidb.cooldown.borders == false then
         local sb = SB.Find(f, 1)
         if sb then sb:Hide() end
         if f.uberBorder then f.uberBorder:Hide() end
@@ -461,12 +358,62 @@ local function UpdateSquareDebuffColor(f)
         SB.RaiseAbove(sb, f.DebuffBorder or f.Cooldown or f, 2)
         sb:Show()
         RaiseProcGlow(f)
-    elseif f.uberBorder then
-        local dc = uuidb.general.darkencolor
-        f.uberBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-        f.uberBorder:Show()
+        if f.uberBorder then f.uberBorder:Hide() end
+    else
+        local sb = SB.Find(f, 1)
+        if sb then sb:Hide() end
+        local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+        EnsureRoundedBorder(f, dc)
     end
 end
+
+function cdManager:Color()
+    if not uuidb or not uuidb.general then return end
+
+    local bordersEnabled = not (uuidb.cooldown and uuidb.cooldown.borders == false)
+    local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    local square = SquareOn and SquareOn()
+
+    ForEachItemFrame(function(f, viewer)
+        -- "Darken Tracked Bars": Blizzard's bar background/border art. Square
+        -- bars hide that art, so it's left alone there.
+        if f and f.Bar then
+            local darken = uuidb.cooldown.darkenbars ~= false and not SquareBarsOn()
+            for _, r in ipairs({ f.Bar:GetRegions() }) do
+                if r:IsObjectType("Texture") and r:GetDrawLayer() == "BACKGROUND" and not IsSquareBarBG(r) then
+                    if darken then
+                        r:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                        darkenedBarArt[r] = true
+                    elseif darkenedBarArt[r] then
+                        r:SetVertexColor(1, 1, 1, 1)
+                        darkenedBarArt[r] = nil
+                    end
+                end
+            end
+        end
+
+        if not bordersEnabled or f._uberInPandemic then
+            if f.uberBorder then f.uberBorder:Hide() end
+            if SB then SB.Hide(f, 1) end
+            return
+        end
+
+        if square then
+            if f.uberBorder then f.uberBorder:Hide() end
+            local sb = SB and SB.Find(f, 1)
+            if sb then
+                SB.SetDarkColor(sb)
+                sb:Show()
+            else
+                pcall(UpdateSquareDebuffColor, f)
+            end
+        else
+            if SB then SB.Hide(f, 1) end
+            EnsureRoundedBorder(f, dc)
+        end
+    end, true)
+end
+
 
 local function QueueDebuffColor(f)
     if f._uberDebuffQueued then return end
@@ -495,6 +442,8 @@ end
 -- Item sizes in the items' own units (CooldownViewer.xml; bars: the Icon
 -- frame). Edit Mode's icon size is a SetScale on top, so these are constant.
 -- Fallback for when GetSize comes back secret.
+local barIconSizes = setmetatable({}, { __mode = "k" }) -- bar icon frame -> size we set
+
 local TEMPLATE_SIZES = {
     EssentialCooldownViewer = 50,
     UtilityCooldownViewer   = 30,
@@ -509,6 +458,7 @@ local function HolderSize(holder)
         and type(h) == "number" and h > 0 then
         return w, h
     end
+    if barIconSizes[holder] then return barIconSizes[holder], barIconSizes[holder] end
     local item = (holder.layoutIndex ~= nil) and holder or holder:GetParent()
     local viewer = item and (item._uberViewer or item:GetParent())
     local name = viewer and viewer.GetName and viewer:GetName()
@@ -518,6 +468,7 @@ local function HolderSize(holder)
 end
 
 local function IconInset(holder)
+    if barIconSizes[holder] then return 0 end
     local w = HolderSize(holder)
     if not w then return 0 end
     local inset
@@ -641,31 +592,283 @@ local function ApplySquareIcon(f, square)
 end
 
 -------------------------------------------------------------------------------
+-- Tracked Bars: texture, square border and icon size.
+-------------------------------------------------------------------------------
+local BAR_ATLAS = "UI-HUD-CoolDownManager-Bar"
+local BAR_HEIGHT = 19     -- CooldownViewerBuffBarItemTemplate's bar
+local BAR_ICON_SIZE = 30  -- ... and icon
+local SQUARE_BAR_BG_ALPHA = 0.6
+local barState = setmetatable({}, { __mode = "k" })   -- bar -> { textured, bg }
+local maskedFills = setmetatable({}, { __mode = "k" }) -- fill texture -> true
+
+function SquareBarsOn()
+    return uuidb and uuidb.cooldown and uuidb.cooldown.squarebars == true
+end
+
+function IsSquareBarBG(region)
+    for _, st in pairs(barState) do
+        if st.bg == region then return true end
+    end
+    return false
+end
+
+-- The bar texture in effect, or nil for Blizzard's. Square bars need a flat
+-- texture, so they default to "Blizzard_Flat".
+local function GetBarTexture()
+    local c, g, bars = uuidb.cooldown, uuidb.general, uuidb.statusbars
+    local tex
+    if c.bartextures and c.bartexture ~= "Blizzard" then
+        tex = bars[c.bartexture]
+    elseif g.allbartextures and g.texture ~= "Blizzard" then
+        tex = bars[g.texture]
+    elseif SquareBarsOn() then
+        tex = bars["Blizzard_Flat"] or bars["blizzard_flat"] or "Interface\\AddOns\\Uber UI\\textures\\statusbars\\nameplate"
+    end
+    return type(tex) == "string" and tex or nil
+end
+
+local function StyleBarFill(bar, texture, square)
+    local st = barState[bar]
+    if texture then
+        bar:SetStatusBarTexture(texture)
+        st.textured = true
+    elseif st.textured then
+        local fill = bar:GetStatusBarTexture()
+        if fill then fill:SetAtlas(BAR_ATLAS) end
+        st.textured = nil
+    end
+    local fill = bar:GetStatusBarTexture()
+    if not fill then return end
+    -- Our rounded-end mask only on custom textures in rounded mode.
+    local wantMask = texture ~= nil and not square
+    if wantMask then
+        ApplyMask(bar, MASK_OPTS)
+        if not bar._uberStyler then
+            bar._uberStyler = true
+            bar:HookScript("OnSizeChanged", function(self)
+                if self._uberMask then ApplyMask(self, MASK_OPTS) end
+            end)
+        end
+    end
+    if bar._uberMask then
+        if wantMask and not maskedFills[fill] then
+            fill:AddMaskTexture(bar._uberMask)
+            maskedFills[fill] = true
+        elseif not wantMask and maskedFills[fill] then
+            fill:RemoveMaskTexture(bar._uberMask)
+            maskedFills[fill] = nil
+        end
+    end
+    -- Unsnapped like the border strips, so their shared edge can't round apart.
+    if square and fill.SetSnapToPixelGrid then
+        fill:SetSnapToPixelGrid(false)
+        fill:SetTexelSnappingBias(0)
+    end
+end
+
+-- Square: Blizzard's rounded bar background faded out for a flat dark one,
+-- and square strips just outside the bar.
+local function StyleBarBorder(bar, square)
+    local st = barState[bar]
+    if not square then
+        if st.bg then st.bg:Hide() end
+        if bar.BarBG then
+            bar.BarBG:SetAlpha(1)
+            bar.BarBG:Show()
+        end
+        SB.Hide(bar, 1)
+        return
+    end
+    if not st.bg then
+        st.bg = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
+        st.bg:SetColorTexture(0, 0, 0, 1)
+        st.bg:SetAllPoints(bar)
+        st.bg:SetSnapToPixelGrid(false)
+        st.bg:SetTexelSnappingBias(0)
+    end
+    st.bg:SetVertexColor(0, 0, 0, SQUARE_BAR_BG_ALPHA)
+    st.bg:Show()
+    -- Blizzard's rounded background/border art; Blizzard never re-shows it.
+    if bar.BarBG then
+        bar.BarBG:SetAlpha(0)
+        bar.BarBG:Hide()
+    end
+    local sb = SB.Get(bar, 1)
+    SB.LayoutFor(sb, bar, SQUARE_LOC)
+    SB.SetDarkColor(sb)
+    SB.RaiseAbove(sb, bar, 2)
+    sb:Show()
+end
+
+-- "Scale Tracked Bar Icon to Bar Height": the icon frame shrinks to the bar's
+-- height (the bar is anchored to it, so it follows).
+local BAR_ROW_OVERLAP = 2 -- BuffBarCooldownViewerMixin:GetAdditionalPaddingOffset() (-2)
+local barRowResized = setmetatable({}, { __mode = "k" }) -- item frame -> true
+
+-- The icon's visible art matches the bar height: square icons fill their
+-- frame (no inset), rounded ones are enlarged past their mask's transparent
+-- edge. The row shrinks to bar height + the overlap Blizzard's grid applies,
+-- so rows touch at Edit Mode padding 0.
+local function SizeBarIcon(f)
+    local icon, bar = f.Icon, f.Bar
+    if not (icon and icon.IsObjectType and icon:IsObjectType("Frame")) then return end
+    if uuidb.cooldown.baricontobar then
+        local ok, h = pcall(bar.GetHeight, bar)
+        if not ok or IsSecret(h) or type(h) ~= "number" or h <= 0 then h = BAR_HEIGHT end
+        local size = SquareOn() and h or (h / (1 - 2 * MASK_INSET))
+        if barIconSizes[icon] ~= size then
+            barIconSizes[icon] = size
+            icon:SetSize(size, size)
+        end
+        f:SetHeight(h + BAR_ROW_OVERLAP)
+        barRowResized[f] = true
+    else
+        if barIconSizes[icon] then
+            barIconSizes[icon] = nil
+            icon:SetSize(BAR_ICON_SIZE, BAR_ICON_SIZE)
+        end
+        if barRowResized[f] then
+            barRowResized[f] = nil
+            f:SetHeight(BAR_ICON_SIZE)
+        end
+    end
+end
+
+function cdManager:Texture()
+    if not BuffBarCooldownViewer or not BuffBarCooldownViewer:IsShown() then return end
+    if not uuidb or not uuidb.statusbars or not uuidb.general then return end
+    local texture = GetBarTexture()
+    local square = SquareBarsOn()
+    for _, f in ipairs({ BuffBarCooldownViewer:GetChildren() }) do
+        local bar = f and f.Bar
+        if bar and bar.GetStatusBarTexture then
+            barState[bar] = barState[bar] or {}
+            pcall(SizeBarIcon, f)
+            pcall(StyleBarFill, bar, texture, square)
+            pcall(StyleBarBorder, bar, square)
+        end
+    end
+end
+
+-------------------------------------------------------------------------------
 -- Pandemic highlight: Border, Proc Glow or Marching Ants in place of
 -- Blizzard's own pandemic effect.
 -------------------------------------------------------------------------------
 local aurakit = UberUI.aurakit
-local PANDEMIC_DEFAULT_COLOR = "ffff2626"
+local PANDEMIC_DEFAULT_COLOR = "ffff3030"
 local pandemicHosts = setmetatable({}, { __mode = "k" })  -- item frame -> host
 
-local function PandemicStyle()
-    return (uuidb and uuidb.cooldown and uuidb.cooldown.pandemicstyle) or "blizzard"
+-- Tracked Bars have their own pandemic settings (barpandemic*).
+local function PandemicStyle(f)
+    local c = uuidb and uuidb.cooldown
+    if f and f.Bar then return (c and c.barpandemicstyle) or "blizzard" end
+    return (c and c.pandemicstyle) or "blizzard"
 end
 
-local function PandemicColor()
-    if uuidb and uuidb.cooldown and uuidb.cooldown.pandemicclasscolor then
+local function PandemicColor(f)
+    local c = uuidb and uuidb.cooldown or {}
+    local bar = f and f.Bar ~= nil
+    if (bar and c.barpandemicclasscolor) or (not bar and c.pandemicclasscolor) then
         local _, class = UnitClass("player")
-        local c = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or RAID_CLASS_COLORS[class])
-        if c then return c.r, c.g, c.b end
+        local cc = UberUI.util.ClassColor(class)
+        if cc then return cc.r, cc.g, cc.b end
     end
-    local hex = uuidb and uuidb.cooldown and uuidb.cooldown.pandemiccolor
-    if type(hex) ~= "string" or not hex:match("^%x%x%x%x%x%x%x%x$") then hex = PANDEMIC_DEFAULT_COLOR end
-    local ok, c = pcall(CreateColorFromHexString, hex)
-    if ok and c then return c.r, c.g, c.b end
-    return 1, 0.15, 0.15
+    local col = UberUI.util.HexColor(bar and c.barpandemiccolor or c.pandemiccolor)
+        or UberUI.util.HexColor(PANDEMIC_DEFAULT_COLOR)
+    return col.r, col.g, col.b
+end
+
+-- "Bar Fill Color": the bar's fill takes the pandemic color; its own color is
+-- saved first and put back afterward (Blizzard never recolors it itself).
+local barFillSaved = setmetatable({}, { __mode = "k" }) -- bar -> { r, g, b, a }
+local function SetBarPandemicFill(f, on)
+    local bar = f and f.Bar
+    if not bar then return end
+    if on then
+        if not barFillSaved[bar] then
+            local ok, r, g, b, a = pcall(bar.GetStatusBarColor, bar)
+            if ok and type(r) == "number" and not IsSecret(r) and not IsSecret(g) and not IsSecret(b) then
+                barFillSaved[bar] = { r, g, b, (type(a) == "number" and not IsSecret(a)) and a or 1 }
+            else
+                barFillSaved[bar] = { 1, 0.5, 0.25, 1 } -- the template's color
+            end
+        end
+        local r, g, b = PandemicColor(f)
+        bar:SetStatusBarColor(r, g, b, 1)
+    elseif barFillSaved[bar] then
+        local c = barFillSaved[bar]
+        barFillSaved[bar] = nil
+        bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
+    end
 end
 
 local CDM_GLOW_SCALE = 1.1
+
+-- Tracked Bars: highlight the bar (Blizzard's placement, default) or its icon.
+local function PandemicOnBar(f)
+    return f.Bar ~= nil and (uuidb.cooldown.barpandemic or "bar") == "bar"
+end
+
+-- Bar size in the item's own units; from Blizzard's fields when secret.
+local function BarSize(f)
+    local ok, w, h = pcall(f.Bar.GetSize, f.Bar)
+    if ok and not IsSecret(w) and not IsSecret(h) and type(w) == "number" and w > 0
+        and type(h) == "number" and h > 0 then
+        return w, h
+    end
+    local viewer = f._uberViewer or f:GetParent()
+    local itemW = (tonumber(viewer and viewer.baseBarWidth) or 220) * (tonumber(viewer and viewer.barWidthScale) or 1)
+    return itemW - (barIconSizes[f.Icon] or BAR_ICON_SIZE) - 2, BAR_HEIGHT
+end
+
+-- Proc Glow on a bar: Blizzard's own bar pandemic effect
+-- (CooldownPandemicBarFXTemplate) rebuilt in our host and tinted: a bar-shaped
+-- border plus a rotating swirl masked to it, padded like
+-- BuffBarCooldownViewerMixin:AnchorPandemicStateFrame.
+local function StyleBarPandemicFX(host, bar, show, r, g, b)
+    local fx = host.uuBarFX
+    if not show then
+        if fx then
+            fx:Hide()
+            fx.spin:Stop()
+        end
+        return
+    end
+    if not fx then
+        fx = CreateFrame("Frame", nil, host)
+        fx:EnableMouse(false)
+        fx.border = fx:CreateTexture(nil, "ARTWORK")
+        fx.border:SetAtlas("UI-CooldownManager-PandemicBorderBar")
+        fx.border:SetAllPoints(fx)
+        fx.swirl = fx:CreateTexture(nil, "ARTWORK", nil, 1)
+        fx.swirl:SetAtlas("UI-CooldownManager-PandemicFX-Bar")
+        fx.swirl:SetPoint("TOPLEFT", fx, "TOPLEFT", -256, 95)
+        fx.swirl:SetPoint("BOTTOMRIGHT", fx, "BOTTOMRIGHT", 251, -199)
+        local mask = fx:CreateMaskTexture()
+        mask:SetAtlas("UI-CooldownManager-PandemicBorderBar-Mask", false)
+        mask:SetAllPoints(fx)
+        fx.swirl:AddMaskTexture(mask)
+        fx.spin = fx.swirl:CreateAnimationGroup()
+        fx.spin:SetLooping("REPEAT")
+        local rot = fx.spin:CreateAnimation("Rotation")
+        rot:SetDegrees(360)
+        rot:SetDuration(5)
+        rot:SetOrigin("CENTER", 0, 0)
+        host.uuBarFX = fx
+    end
+    fx:ClearAllPoints()
+    -- Symmetric like Blizzard's (the art is sliced by its atlas, so it fits
+    -- any bar width); one unit wider on square bars, which have no rounded ends.
+    local padX = SquareBarsOn() and 10 or 9
+    fx:SetPoint("TOPLEFT", bar, "TOPLEFT", -padX, 10)
+    fx:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", padX, -10)
+    for _, t in ipairs({ fx.border, fx.swirl }) do
+        t:SetDesaturated(true)
+        t:SetVertexColor(r, g, b, 1)
+    end
+    fx:Show()
+    if not fx.spin:IsPlaying() then fx.spin:Play() end
+end
 
 local function StylePandemicHost(f)
     local tex, holder = GetIconParts(f)
@@ -673,20 +876,44 @@ local function StylePandemicHost(f)
     local host = pandemicHosts[f]
     if not host then
         host = CreateFrame("Frame", nil, f)
-        host:SetAllPoints(holder)
-        host:SetFrameLevel((f.Cooldown or holder):GetFrameLevel() + 4)
         host:EnableMouse(false)
         host:Hide()
         pandemicHosts[f] = host
     end
+    local r, g, b = PandemicColor(f)
+
+    if PandemicOnBar(f) then
+        local bar = f.Bar
+        host:ClearAllPoints()
+        host:SetAllPoints(bar)
+        local level = bar:GetFrameLevel()
+        local bsb = SB.Find(bar, 1)
+        if bsb then level = math.max(level, bsb:GetFrameLevel()) end
+        host:SetFrameLevel(level + 2)
+        local bw, bh = BarSize(f)
+        local style = PandemicStyle(f)
+        StyleBarPandemicFX(host, bar, style == "glow", r, g, b)
+        aurakit.StyleHighlight(host, {
+            kind = (style == "glow" or style == "fill") and "none" or style,
+            r = r, g = g, b = b,
+            square = true, loc = SQUARE_LOC, icon = bar,
+            center = bar, size = bw, sizeH = bh, glowScale = CDM_GLOW_SCALE,
+        })
+        if host.uuSquare then SB.LayoutDispelFor(host.uuSquare, bar, SQUARE_LOC) end
+        return host
+    end
+
+    StyleBarPandemicFX(host, nil, false)
+    host:ClearAllPoints()
+    host:SetAllPoints(holder)
     local level = (f.Cooldown or holder):GetFrameLevel()
     local sb = SB.Find(f, 1)
     if sb then level = math.max(level, sb:GetFrameLevel()) end
     host:SetFrameLevel(level + 2)
     local w = IconWidth(holder)
-    local r, g, b = PandemicColor()
+    local iconStyle = PandemicStyle(f)
     aurakit.StyleHighlight(host, {
-        kind = PandemicStyle(),
+        kind = iconStyle == "fill" and "none" or iconStyle,
         r = r, g = g, b = b,
         square = squareState[f] ~= nil,
         loc = SQUARE_LOC, icon = tex,
@@ -717,14 +944,14 @@ local function EnsurePandemicShowHook(f)
     if pandemicShowHooked[f] or not HasBlizzardPandemic(f) then return end
     pandemicShowHooked[f] = true
     hooksecurefunc(f, "ShowPandemicStateFrame", function(self)
-        if PandemicStyle() == "blizzard" or self._uberPandemicPending then return end
+        if PandemicStyle(self) == "blizzard" or self._uberPandemicPending then return end
         local p = self.PandemicIcon
         local ok, a = pcall(p and p.GetAlpha, p)
         if not ok or IsSecret(a) or a == 0 then return end
         self._uberPandemicPending = true
         C_Timer.After(0, function()
             self._uberPandemicPending = nil
-            if PandemicStyle() ~= "blizzard" then SetBlizzardPandemicAlpha(self, 0) end
+            if PandemicStyle(self) ~= "blizzard" then SetBlizzardPandemicAlpha(self, 0) end
         end)
     end)
 
@@ -744,13 +971,15 @@ local function EnsurePandemicShowHook(f)
 end
 
 local function UpdateItemPandemic(f, now)
-    local custom = PandemicStyle() ~= "blizzard"
-    if not custom then
+    local style = PandemicStyle(f)
+    if style ~= "fill" then SetBarPandemicFill(f, false) end
+    if style == "blizzard" then
         -- Pooled: a frame we faded may come back on another item.
         SetBlizzardPandemicAlpha(f, 1)
         if f._uberInPandemic then
             f._uberInPandemic = nil
             if pandemicHosts[f] then pandemicHosts[f]:Hide() end
+            pcall(UpdateSquareDebuffColor, f)
         end
         return
     end
@@ -772,48 +1001,34 @@ local function UpdateItemPandemic(f, now)
         end
     end
 
+    if style == "none" then inPandemic = false end
+
     if inPandemic ~= f._uberInPandemic then
         f._uberInPandemic = inPandemic
         local host = pandemicHosts[f]
-        if inPandemic and f:IsShown() then
+        SetBarPandemicFill(f, inPandemic and style == "fill" and f:IsShown())
+        if inPandemic and style == "fill" then
+            if host then host:Hide() end
+        elseif inPandemic and f:IsShown() then
             local ok, res = pcall(StylePandemicHost, f)
             if ok and res then
                 res:Show()
+                -- A highlight on the icon replaces the icon's own border.
+                if not PandemicOnBar(f) then
+                    if f.uberBorder then f.uberBorder:Hide() end
+                    local sb = SB and SB.Find(f, 1)
+                    if sb then sb:Hide() end
+                end
             elseif not ok then
                 UberUI:ReportError("Cooldown Manager pandemic highlight", res)
             end
         elseif host then
             host:Hide()
+            pcall(UpdateSquareDebuffColor, f)
         end
     end
 end
 
-local VIEWERS = { "EssentialCooldownViewer", "UtilityCooldownViewer", "BuffIconCooldownViewer", "BuffBarCooldownViewer" }
-
-local function ForEachItemFrame(fn)
-    local visited = {}
-    for _, name in ipairs(VIEWERS) do
-        local viewer = _G[name]
-        if viewer then
-            if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then
-                for f in viewer.itemFramePool:EnumerateActive() do
-                    if f and f.Icon and not visited[f] then
-                        visited[f] = true
-                        f._uberViewer = viewer
-                        fn(f, viewer)
-                    end
-                end
-            end
-            for _, f in ipairs({ viewer:GetChildren() }) do
-                if f and f.Icon and not visited[f] then
-                    visited[f] = true
-                    f._uberViewer = viewer
-                    fn(f, viewer)
-                end
-            end
-        end
-    end
-end
 
 -------------------------------------------------------------------------------
 -- Countdown text colors
@@ -826,9 +1041,8 @@ local function GetDurationColors()
 end
 
 local function HexToRGB(hex, defR, defG, defB)
-    if type(hex) ~= "string" or not hex:match("^%x%x%x%x%x%x%x%x$") then return defR or 1, defG or 1, defB or 1 end
-    local ok, col = pcall(CreateColorFromHexString, hex)
-    if ok and col then return col.r, col.g, col.b end
+    local col = UberUI.util.HexColor(hex)
+    if col then return col.r, col.g, col.b end
     return defR or 1, defG or 1, defB or 1
 end
 
@@ -869,12 +1083,10 @@ local function GetCountdownFontString(f)
         end
     end
 
-    local durText = (f.Bar and f.Bar.Duration) or f.Duration
-    if durText then
-        f._uberCdText = durText
-        return durText
+    if f.Duration then
+        f._uberCdText = f.Duration
+        return f.Duration
     end
-
     return nil
 end
 
@@ -929,10 +1141,22 @@ local function GetCountdownFormatter()
     return f
 end
 
+-- "Color Countdown Text" off (the default): Blizzard's own countdown, untouched.
+local function CountdownColorsOn()
+    return uuidb and uuidb.cooldown and uuidb.cooldown.durationcolors == true
+end
+
 -- True once the item's countdown is the engine's job.
 local function ApplyCountdownFormatter(f)
     local cd = f.Cooldown
     if not (cd and cd.SetCountdownFormatter) then return false end
+    if not CountdownColorsOn() then
+        if formatterAttached[cd] then
+            formatterAttached[cd] = nil
+            pcall(cd.SetCountdownFormatter, cd, nil)
+        end
+        return true
+    end
     local formatter = GetCountdownFormatter()
     if not formatter then return false end
     if formatterAttached[cd] ~= formatter then
@@ -944,6 +1168,15 @@ end
 
 local function UpdateItemDurationColor(f, now)
     if ApplyCountdownFormatter(f) then return end
+    if not CountdownColorsOn() then
+        -- Bars: put back Blizzard's color if we changed it.
+        if f._uberDurationState then
+            f._uberDurationState = nil
+            local text = GetCountdownFontString(f)
+            if text then pcall(text.SetTextColor, text, 1, 1, 1, 1) end
+        end
+        return
+    end
 
     -- Bars: Blizzard sets Bar.Duration's text from Lua, so color it by time
     -- left; while that's secret, keep the last known state until it would end.
@@ -1000,8 +1233,8 @@ end
 local ALIGN_FIELDS = {
     EssentialCooldownViewer = { "essential_align", "blizzard" },
     UtilityCooldownViewer   = { "utility_align", "blizzard" },
-    BuffIconCooldownViewer  = { "bufficon_align", "pack" },
-    BuffBarCooldownViewer   = { "buffbar_align", "pack" },
+    BuffIconCooldownViewer  = { "bufficon_align", "blizzard" },
+    BuffBarCooldownViewer   = { "buffbar_align", "blizzard" },
 }
 
 local function GetViewerAlign(viewer)
@@ -1030,11 +1263,7 @@ end
 -- them, with getter fallbacks for other clients.
 local function GetViewerPadding(viewer)
     local pad = viewer.iconPadding
-    if type(pad) ~= "number" and viewer.GetPadding then
-        local ok, v = pcall(viewer.GetPadding, viewer)
-        if ok then pad = v end
-    end
-    if type(pad) ~= "number" or pad < 0 then pad = 0 end
+    if type(pad) ~= "number" or IsSecret(pad) or pad < 0 then pad = 0 end
     return pad
 end
 
@@ -1046,18 +1275,8 @@ local function GetViewerDirection(viewer, isHoriz)
         return (not isHoriz) or right, (not isHoriz) and right
     end
     local toRight, toTop = true, false
-    if viewer.addIconsToRight ~= nil then
-        toRight = viewer.addIconsToRight
-    elseif viewer.GetAddIconsToRight then
-        local ok, v = pcall(viewer.GetAddIconsToRight, viewer)
-        if ok and v ~= nil then toRight = v end
-    end
-    if viewer.addIconsToTop ~= nil then
-        toTop = viewer.addIconsToTop
-    elseif viewer.GetAddIconsToTop then
-        local ok, v = pcall(viewer.GetAddIconsToTop, viewer)
-        if ok and v ~= nil then toTop = v end
-    end
+    if viewer.addIconsToRight ~= nil then toRight = viewer.addIconsToRight end
+    if viewer.addIconsToTop ~= nil then toTop = viewer.addIconsToTop end
     return toRight, toTop
 end
 
@@ -1101,9 +1320,17 @@ local function ApplyCustomViewerLayout(viewer)
     if type(w) ~= "number" or w <= 0 then w = 36 end
     if type(h) ~= "number" or h <= 0 then h = 36 end
 
-    local isHoriz = (viewer.IsHorizontal and viewer:IsHorizontal()) ~= false
-    local stride = (viewer.GetStride and viewer:GetStride()) or 8
-    if not stride or stride <= 0 then stride = 8 end
+    -- Fields only: GetStride() on the buff viewers runs Blizzard's cooldown
+    -- data provider from our code, which taints Blizzard's own later reads.
+    local orient = Enum and Enum.CooldownViewerOrientation
+    local isHoriz = not (orient and viewer.orientationSetting == orient.Vertical)
+    local stride
+    if IsAuraViewer(sample) then
+        stride = #items -- the buff viewers are always a single row/column
+    else
+        stride = tonumber(viewer.iconLimit) or 8
+    end
+    if stride <= 0 then stride = 8 end
     -- Whole pixels, so every gap is the same width.
     local padPx = PixelUnit(sample)
     local pad = math.floor(GetViewerPadding(viewer) / padPx + 0.5) * padPx
@@ -1111,7 +1338,14 @@ local function ApplyCustomViewerLayout(viewer)
     -- Not rounded: PixelAlignedInsets aligns each icon afterward, which only
     -- lines neighbors up when their unrounded edges coincide.
     local stepX, stepY = w + pad, h + pad
-    if not sample.Bar then
+    if sample.Bar then
+        stepX, stepY = stepX - BAR_ROW_OVERLAP, stepY - BAR_ROW_OVERLAP
+        if pad == 0 and SquareBarsOn() then
+            local t = SB.PixelsToUIUnits(sample, SB.Thickness(SQUARE_LOC))
+            local shared = SB.IsInset(SQUARE_LOC) and -t or t
+            stepX, stepY = stepX + shared, stepY + shared
+        end
+    else
         -- Padding is between the visible icons, not the (overlapping) frames.
         local inset = IconInset(sample)
         stepX, stepY = w - 2 * inset + pad, h - 2 * inset + pad
@@ -1208,6 +1442,7 @@ cdManager:SetScript("OnUpdate", function(self, elapsed)
             UpdateItemPandemic(f, now)
         else
             if pandemicHosts[f] then pandemicHosts[f]:Hide() end
+            SetBarPandemicFill(f, false)
             f._uberDurationState = nil
             f._uberDurationExp = nil
             f._uberInPandemic = nil

@@ -1,10 +1,8 @@
 local addon, ns = ...
 
--- Cache frequently accessed globals for performance
 local UnitPowerType = UnitPowerType
 local PowerBarColor = PowerBarColor
 
--- Helper function for applying darken color
 local function ApplyDarkenColor(region)
     local dc = uuidb.general.darkencolor
     region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
@@ -61,7 +59,6 @@ targetframes:SetScript("OnEvent", function(self, event, unit)
     end
 end)
 
--- Cached subframe lookups.
 local function GetTargetFrameMain()
     return TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
 end
@@ -468,7 +465,6 @@ function targetframes:ApplyToTPlacement()
     if self.customDebuffs and self.customBuffs then self:UpdateAuraPositions() end
 end
 
--- Initialize immediately if TargetFrame is already present
 targetframes:SetupCustomAuraContainer()
 
 if TargetFrame and TargetFrame.UpdateAuras then

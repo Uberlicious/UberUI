@@ -1,5 +1,4 @@
 local addon, ns = ...
-arenaframes = {}
 
 local arenaframes = UberUI:CreateFrame("Frame")
 arenaframes:RegisterEvent("PLAYER_ENTERING_WORLD")

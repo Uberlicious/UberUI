@@ -10,10 +10,12 @@ misc:RegisterEvent("PLAYER_TARGET_CHANGED")
 misc:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_ENTERING_WORLD" then
         misc:EndCaps()
+        if UberUI.swingtimers then UberUI.swingtimers:Apply() end
         C_Timer.After(1, function()
             misc:StatusTrackingBars()
             misc:BagSlots()
             misc:MicroButtons()
+            if UberUI.swingtimers then UberUI.swingtimers:Apply() end
         end)
         misc:ObjectiveTrackerFrames()
     elseif event == "ADDON_LOADED" then
@@ -26,11 +28,7 @@ function misc:EndCaps()
 
     local function ColorEndCap(endCap)
         if not endCap then return end
-        -- These are Frames (MainMenuBarEndCaps.xml), not Textures, so
-        -- SetVertexColor lives on their .Texture child -- checking
-        -- type(endCap.SetVertexColor) here can read as a function even though
-        -- calling it directly throws "attempt to call a nil value", so we
-        -- gate the direct-call branch on the widget's real object type.
+        -- End caps are Frames; their color lives on the .Texture child.
         if endCap.Texture and type(endCap.Texture.SetVertexColor) == "function" then
             endCap.Texture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         elseif endCap.IsObjectType and endCap:IsObjectType("Texture") and type(endCap.SetVertexColor) == "function" then
@@ -125,11 +123,7 @@ function misc:StatusTrackingBars()
 
     EnsureBarHooks()
 
-    -- XP/reputation/honor (retail 12.1 AND Forever 1.60.1 both use this
-    -- shared container system) render as children of these containers, but
-    -- each child (StatusTrackingBarTemplate) is a plain Frame wrapping the
-    -- actual StatusBar rather than being one itself -- see
-    -- FindStatusBarWidget above.
+    -- XP/reputation/honor bars are Frames wrapping the real StatusBar.
     local containers = { MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }
     for _, container in ipairs(containers) do
         if container then
@@ -143,25 +137,15 @@ function misc:StatusTrackingBars()
                 end
 
                 if isExperience and XP_REP_RETEXTURE_ENABLED and texture and bar.UpdateStatusBarTextures then
-                    -- ExpBarMixin:Update() only reaches UpdateStatusBarTextures
-                    -- when the player is capped at max level -- for a normal
-                    -- leveling character it just updates the bar's fill value
-                    -- and never touches the texture at all. Call the real
-                    -- function directly instead, with the same isRested
-                    -- Blizzard itself would compute.
+                    -- Update() only re-textures at max level, so call the
+                    -- texture update directly (with Blizzard's isRested).
                     pcall(bar.UpdateStatusBarTextures, bar, GetRestState() == 1)
                 elseif isReputation and XP_REP_RETEXTURE_ENABLED and texture and bar.Update then
-                    -- ReputationStatusBarMixin:Update() calls UpdateBarTextures
-                    -- unconditionally, so nudging it is enough here.
                     pcall(bar.Update, bar)
                 elseif not isExperience and not isReputation and texture then
                     local statusBar = FindStatusBarWidget(bar, 2)
                     if statusBar then
-                        -- Confirmed in-game: this bar's fill is exposed as
-                        -- StatusBar.BarTexture (a plain Texture region), not
-                        -- via a working SetStatusBarTexture() call -- set
-                        -- the region directly, and still try the method as
-                        -- a harmless belt-and-suspenders fallback.
+                        -- The fill is StatusBar.BarTexture; the method is a fallback.
                         if statusBar.BarTexture and statusBar.BarTexture.SetTexture then
                             statusBar.BarTexture:SetTexture(texture)
                         elseif statusBar.SetStatusBarTexture then
@@ -173,8 +157,7 @@ function misc:StatusTrackingBars()
         end
     end
 
-    -- Classic-family (Forever): XP/reputation are their own standalone
-    -- StatusBar widgets, not children of a shared container.
+    -- Forever: XP/reputation are standalone StatusBars.
     if XP_REP_RETEXTURE_ENABLED and texture and MainMenuExpBar and MainMenuExpBar.SetStatusBarTexture then
         MainMenuExpBar:SetStatusBarTexture(texture)
     end
@@ -248,12 +231,8 @@ function misc:BagSlots()
         if bag.SlotHighlightTexture then bag.SlotHighlightTexture:SetVertexColor(r, g, b, dc.a) end
     end
 
-    -- Explicit belt-and-suspenders: MainMenuBarBackpackButtonBase (the
-    -- mixin/template MainMenuBarBackpackButton is supposed to inherit) is
-    -- only defined for the "mainline" game type in Blizzard's own .toc --
-    -- excluded for Forever's "camelot" type, whose own XML still tries to
-    -- inherit from it. If that leaves GetNormalTexture() unreliable on
-    -- this button specifically, the raw auto-named global still isn't.
+    -- Its template isn't loaded on Forever, so the auto-named global is the
+    -- reliable way to reach its normal texture.
     if MainMenuBarBackpackButtonNormalTexture then
         MainMenuBarBackpackButtonNormalTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
@@ -262,9 +241,7 @@ function misc:BagSlots()
         BagsBar.BorderArt:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 
-    -- Forever's bags bar has dividers between the bag buttons, same pooled
-    -- setup as the main action bar (retail's has none; HookDividers skips
-    -- bars without UpdateDividers).
+    -- Forever's bags bar has pooled dividers like the main action bar.
     UberUI.general:HookDividers(BagsBar)
 
     local bagNames = {
@@ -336,7 +313,6 @@ function misc:MicroButtons()
             local btn = _G[name]
             if btn then
                 if btn.Background then btn.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a) end
-                -- MicroButton backgrounds are sometimes just a texture called "...MicroButton-BG"
                 local bgTexture = _G[name .. "-BG"] or _G[name .. "BG"]
                 if bgTexture and type(bgTexture.SetVertexColor) == "function" then
                     bgTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
@@ -353,7 +329,6 @@ function misc:AllFramesColor()
     self:ObjectiveTrackerFrames();
     if UberUI.swingtimers then UberUI.swingtimers:Apply() end
     if UberUI.partyframes then UberUI.partyframes:Color() end
-    -- Nameplate border ring and health bar edges use the darkness color.
     if UberUI.nameplates then UberUI.nameplates:ForceNameplateTexture() end
     UberUI.playerframes:Color();
     UberUI.targetframes:Color();
@@ -372,12 +347,7 @@ function misc:AllFramesHealthColor()
     UberUI.focusframes:HealthBarColor();
     UberUI.partyframes:HealthBarColor();
     if UberUI.bossframes then UberUI.bossframes:HealthBarColor() end
-    -- NOTE: arenaframes has no HealthBarColor of its own (arena health-bar
-    -- coloring is left to Blizzard's native CompactUnitFrame handling) --
-    -- LoopFrames() here only reapplies bar TEXTURES, a pre-existing mismatch
-    -- against this function's name. Left as-is (harmless/idempotent); flagged
-    -- during the settings audit rather than changed, since untangling arena's
-    -- color model is out of scope for that fix.
+    -- Arena has no health color of its own; this re-applies its bar textures.
     UberUI.arenaframes:LoopFrames();
 end
 

@@ -20,7 +20,7 @@ local BOSS_CONTAINER_GAP = 2
 
 local bossframes = UberUI:CreateFrame("frame")
 
--- Per-slot state (1..5), stored on our table to avoid tainting Blizzard frames.
+-- Per-slot state (1..5) in our own table, never on Blizzard's frames.
 local slots = {}
 for i = 1, MAX_BOSS_FRAMES do
     slots[i] = { unit = "boss" .. i, isUpdatingAuras = false }
@@ -445,9 +445,8 @@ bossframes:RegisterEvent("PLAYER_REGEN_ENABLED")
 bossframes:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
 bossframes:RegisterEvent("GROUP_ROSTER_UPDATE")
 bossframes:RegisterEvent("PARTY_LEADER_CHANGED")
--- Same rationale as target/focus: the engine's PLAYER/!PLAYER caster
--- classification (aurakit.HasAmbiguousMineMatch) can go ambiguous or clear
--- up a few seconds after a zone transition, not instantly at the event.
+-- The PLAYER/!PLAYER caster classification can settle a few seconds after a
+-- zone transition, so re-check after a delay.
 bossframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 bossframes:RegisterEvent("ZONE_CHANGED")
 bossframes:RegisterEvent("ZONE_CHANGED_INDOORS")
@@ -484,8 +483,7 @@ bossframes:SetScript("OnEvent", function(self, event, unit)
         C_Timer.After(3, function() bossframes:UpdateAllAuras() end)
         C_Timer.After(5, function() bossframes:UpdateAllAuras() end)
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Force a correctness pass once combat lockdown lifts, in case any
-        -- styling was skipped or failed while we were in combat.
+        -- Re-check anything skipped or failed during combat.
         bossframes:UpdateAllAuras()
     end
 end)

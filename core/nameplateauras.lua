@@ -46,9 +46,7 @@ local hookedAuras = setmetatable({}, { __mode = "k" }) -- AurasFrame -> true
 local fadedLists = setmetatable({}, { __mode = "k" })  -- AurasFrame -> true
 local dispellableToken = true                          -- false once DISPELLABLE is refused
 
-local function IsSecret(v)
-    return issecretvalue and issecretvalue(v)
-end
+local IsSecret = UberUI.util.IsSecret
 
 local function Enabled()
     return uuidb and uuidb.general and uuidb.general.nameplateauras == true
@@ -93,10 +91,7 @@ local function DurationSettings()
 end
 
 local function HexColor(hex, fallback)
-    if type(hex) ~= "string" or not hex:match("^%x%x%x%x%x%x%x%x$") then return fallback end
-    local ok, c = pcall(CreateColorFromHexString, hex)
-    if ok and c then return c end
-    return fallback
+    return UberUI.util.HexColor(hex) or fallback
 end
 
 local durationFormatter
@@ -167,8 +162,39 @@ end
 -- Pandemic highlight on debuffs: the engine shows the region
 -- (AddPandemicRegion) only inside the refresh window and while data is
 -- secret; its shown state is secret to us, so we only style its children.
-local PANDEMIC_DEFAULT_COLOR = "ffff2626"
+local PANDEMIC_DEFAULT_COLOR = "ffff3030"
 local pandemicHosts = setmetatable({}, { __mode = "k" }) -- button -> host frame
+
+local StyleButton
+
+local function HideDebuffBorders(button)
+    button._uberInPandemic = true
+    if button.borderHost then button.borderHost:Hide() end
+    if button.borderTex then button.borderTex:Hide() end
+    if button.roundDispelHost then button.roundDispelHost:Hide() end
+    if button.dispelBorderHost then button.dispelBorderHost:Hide() end
+    local SB = UberUI.squareborders
+    if SB then
+        local main = SB.Find(button, 1)
+        if main then
+            main:Hide()
+            if main.edges then
+                for i = 1, 4 do
+                    if main.edges[i] then main.edges[i]:SetAlpha(0) end
+                end
+            end
+        end
+        local dark = SB.Find(button, 3)
+        if dark then
+            dark:Hide()
+            if dark.edges then
+                for i = 1, 4 do
+                    if dark.edges[i] then dark.edges[i]:SetAlpha(0) end
+                end
+            end
+        end
+    end
+end
 
 local function GetPandemicHost(button)
     local host = pandemicHosts[button]
@@ -180,6 +206,68 @@ local function GetPandemicHost(button)
     host:EnableMouse(false)
     host:Hide()
     pandemicHosts[button] = host
+
+    host:HookScript("OnShow", function()
+        HideDebuffBorders(button)
+        local SB = UberUI.squareborders
+        if host.uuSquare and button.icon and SB then
+            SB.LayoutDispelFor(host.uuSquare, button.icon, SQUARE_LOC)
+            local g = uuidb and uuidb.general or {}
+            local color = HexColor(g.nameplatepandemiccolor, nil) or HexColor(PANDEMIC_DEFAULT_COLOR)
+            SB.SetColor(host.uuSquare, color.r, color.g, color.b, 1)
+        end
+        if host.uuRing and button.borderHost then
+            host.uuRing:ClearAllPoints()
+            host.uuRing:SetAllPoints(button.borderHost)
+        end
+    end)
+
+    host:HookScript("OnHide", function()
+        if not button._uberInPandemic then return end
+        button._uberInPandemic = nil
+        local SB = UberUI.squareborders
+        if SB then
+            local main = SB.Find(button, 1)
+            if main and main.edges then
+                for i = 1, 4 do
+                    if main.edges[i] then main.edges[i]:SetAlpha(1) end
+                end
+            end
+            local dark = SB.Find(button, 3)
+            if dark and dark.edges then
+                for i = 1, 4 do
+                    if dark.edges[i] then dark.edges[i]:SetAlpha(1) end
+                end
+            end
+        end
+        local okShown, shown = pcall(button.IsShown, button)
+        if okShown and shown and StyleButton then
+            StyleButton(button)
+        end
+    end)
+
+    if not button._uberPandemicBtnHooked then
+        button._uberPandemicBtnHooked = true
+        button:HookScript("OnHide", function()
+            button._uberInPandemic = nil
+            local SB = UberUI.squareborders
+            if SB then
+                local main = SB.Find(button, 1)
+                if main and main.edges then
+                    for i = 1, 4 do
+                        if main.edges[i] then main.edges[i]:SetAlpha(1) end
+                    end
+                end
+                local dark = SB.Find(button, 3)
+                if dark and dark.edges then
+                    for i = 1, 4 do
+                        if dark.edges[i] then dark.edges[i]:SetAlpha(1) end
+                    end
+                end
+            end
+        end)
+    end
+
     return host
 end
 
@@ -188,8 +276,20 @@ local function StylePandemic(button, style)
     local g = uuidb and uuidb.general or {}
     local on = g.nameplatepandemic ~= false
     local host = pandemicHosts[button]
+    if not on then
+        if host then
+            host:Hide()
+            if button._uberInPandemic then
+                button._uberInPandemic = nil
+                local okShown, shown = pcall(button.IsShown, button)
+                if okShown and shown and StyleButton then
+                    StyleButton(button)
+                end
+            end
+        end
+        return
+    end
     if not host then
-        if not on then return end
         host = GetPandemicHost(button)
     end
     if on and not host.registered and button.AddPandemicRegion then
@@ -208,7 +308,7 @@ local function StylePandemic(button, style)
     })
 end
 
-local function StyleButton(button)
+StyleButton = function(button)
     local g = uuidb and uuidb.general or {}
     local style = button.isBuff and (g.aurastyle_nameplatebuffs or "both") or (g.aurastyle_nameplatedebuffs or "zoom")
     local showDispel = g.nameplatebuffs_showdispel ~= false
@@ -222,6 +322,28 @@ local function StyleButton(button)
     })
     pcall(StylePandemic, button, style)
     pcall(ApplyDurationText, button)
+    -- Every aura update restyles the button, which re-shows the dispel border;
+    -- keep it hidden while the pandemic highlight is up.
+    if button._uberInPandemic then pcall(HideDebuffBorders, button) end
+end
+
+-- Buttons whose engine-colored square strips haven't registered yet.
+local function NeedsRegistration(button)
+    local SB = UberUI.squareborders
+    if not SB then return false end
+    local sb = SB.Find(button, button.isBuff and 2 or 1)
+    return not (sb and sb.engineRegistered)
+end
+
+local function RetryRegistrations(b)
+    for _, key in ipairs(CONTAINER_KEYS) do
+        local c = b[key]
+        if c and c.allButtons then
+            for button in pairs(c.allButtons) do
+                if NeedsRegistration(button) then pcall(StyleButton, button) end
+            end
+        end
+    end
 end
 
 local function RestyleBundle(b)
@@ -517,6 +639,12 @@ local function Attach(unit)
     EnsureAurasFrameHooks(af)
     SetBlizzardListsFaded(af, true)
     Bind(b, unit)
+    -- Retry dispel-strip registrations the engine refused earlier (it
+    -- refuses while aura data is secret); until then square mode shows a
+    -- dark border.
+    C_Timer.After(0, function()
+        if b.unit == unit then RetryRegistrations(b) end
+    end)
 end
 
 local function ReleaseAll()

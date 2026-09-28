@@ -54,15 +54,19 @@ function opt.BuildCooldownManager(page)
 
     local cdmPandemicInit = opt.AddDropdown(page, {
         variable = "CooldownPandemicStyle", name = "Cooldown Manager Pandemic Highlight",
-        tooltip = "What an icon shows while its aura is in the pandemic window (refreshing it now keeps the remaining time -- the game decides).\n\nBlizzard: Blizzard's own rounded animation.\n\nBorder: the icon's border in the highlight color, square with Square icons.\n\nProc Glow / Marching Ants: Blizzard's animated glows, tinted.",
+        tooltip = "Essential, Utility and Tracked Buffs icons (Tracked Bars have their own setting below). What an icon shows while its aura is in the pandemic window (refreshing it now keeps the remaining time -- the game decides).\n\nBlizzard: Blizzard's own rounded animation.\n\nBorder: the icon's border in the highlight color, square with Square icons.\n\nProc Glow / Marching Ants: Blizzard's animated glows, tinted.\n\nNone: no pandemic highlight at all (Blizzard's is hidden too).",
         default = "blizzard",
-        values = { { "blizzard", "Blizzard" }, { "border", "Border" }, { "glow", "Proc Glow" }, { "ants", "Marching Ants" } },
+        values = { { "blizzard", "Blizzard" }, { "border", "Border" }, { "glow", "Proc Glow" }, { "ants", "Marching Ants" }, { "none", "None" } },
         get = function() return uuidb.cooldown.pandemicstyle or "blizzard" end,
         set = function(value) uuidb.cooldown.pandemicstyle = value end,
         onChange = RefreshCooldownManager,
     });
 
-    local function CustomPandemic() return (uuidb.cooldown.pandemicstyle or "blizzard") ~= "blizzard" end
+    -- One of our own highlights (not Blizzard's, not None).
+    local function CustomPandemic()
+        local style = uuidb.cooldown.pandemicstyle or "blizzard"
+        return style ~= "blizzard" and style ~= "none"
+    end
 
     local cdmPandemicClassInit = opt.AddCheckbox(page, {
         variable = "CooldownPandemicClassColor", name = "Pandemic Highlight: Use Class Color",
@@ -75,38 +79,46 @@ function opt.BuildCooldownManager(page)
     opt.DependsOn(opt.AddColorSwatch(page, {
         variable = "CooldownPandemicColor", name = "Cooldown Manager Pandemic Color",
         tooltip = "Color of the Cooldown Manager pandemic highlight (Border, Proc Glow and Marching Ants), unless Use Class Color is on.",
-        db = "cooldown", field = "pandemiccolor", default = "ffff2626",
+        db = "cooldown", field = "pandemiccolor", default = "ffff3030",
         get = function()
             local v = uuidb.cooldown.pandemiccolor
-            return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff2626"
+            return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff3030"
         end,
         onChange = RefreshCooldownManager,
     }), cdmPandemicClassInit, function() return CustomPandemic() and not uuidb.cooldown.pandemicclasscolor end);
 
     opt.Header(page, "Cooldown Manager Countdown Text");
 
-    opt.AddColorSwatch(page, {
+    local countdownInit = opt.AddCheckbox(page, {
+        variable = "CooldownDurationColors", name = "Color Countdown Text",
+        tooltip = "Color the countdown numbers on Cooldown Manager icons and bars with the colors below. Off keeps Blizzard's own countdown text.",
+        db = "cooldown", field = "durationcolors", default = false,
+        onChange = RefreshCooldownManager,
+    });
+    local function CountdownOn() return uuidb.cooldown.durationcolors == true end
+
+    opt.DependsOn(opt.AddColorSwatch(page, {
         variable = "CooldownDurationColor", name = "Cooldown Duration Color",
         tooltip = "Color of the countdown number on Cooldown Manager icons and bars.",
         db = "cooldown", field = "durationcolor", default = "ffffffff",
         onChange = RefreshCooldownManager,
-    });
+    }), countdownInit, CountdownOn);
 
-    opt.AddColorSwatch(page, {
+    opt.DependsOn(opt.AddColorSwatch(page, {
         variable = "CooldownDurationExpiringColor", name = "Expiring Duration Color",
         tooltip = "Color of the countdown number once an aura or cooldown has less time left than the Expiring Duration Threshold below.",
         db = "cooldown", field = "durationexpiringcolor", default = "ffff3333",
         onChange = RefreshCooldownManager,
-    });
+    }), countdownInit, CountdownOn);
 
-    opt.AddSlider(page, {
+    opt.DependsOn(opt.AddSlider(page, {
         variable = "CooldownDurationThreshold", name = "Expiring Duration Threshold",
         tooltip = "Seconds left at which a Cooldown Manager countdown switches to the Expiring Duration Color.",
         db = "cooldown", field = "durationthreshold", default = 5,
         min = 1, max = 10, step = 1,
         format = function(value) return string.format("%d s", value) end,
         onChange = RefreshCooldownManager,
-    });
+    }), countdownInit, CountdownOn);
 
     opt.Header(page, "Cooldown Manager Bars");
 
@@ -118,6 +130,78 @@ function opt.BuildCooldownManager(page)
         ddTooltip = "Set your desired status bar texture for Cooldown Viewer bars\n\n|cffff0000Warning: Some textures may not work correctly due to tiling issues.|r",
         cbOnChange = RefreshCooldownManager,
         ddOnChange = RefreshCooldownManager,
+    });
+
+    opt.AddCheckbox(page, {
+        variable = "CooldownDarkenBars", name = "Darken Tracked Bars",
+        tooltip = "Darken the background and border art around Tracked Bars. Square bars replace that art with their own dark border.",
+        db = "cooldown", field = "darkenbars", default = true,
+        onChange = RefreshCooldownManager,
+    });
+
+    opt.AddDropdown(page, {
+        variable = "CooldownBarShape", name = "Tracked Bars Shape",
+        tooltip = "Rounded is Blizzard's Tracked Bars look. Square draws a flat border of exact pixel thickness around each bar (the Cooldown Manager Border Thickness), in the darkness color, over a flat dark background.\n\nSquare bars need a flat texture: Blizzard's stock bar texture is rounded, so Square uses \"Blizzard_Flat\" unless you pick another bar texture.",
+        default = "rounded",
+        values = { { "rounded", "Rounded" }, { "square", "Square" } },
+        get = function() return uuidb.cooldown.squarebars and "square" or "rounded" end,
+        set = function(value) uuidb.cooldown.squarebars = (value == "square") end,
+        onChange = RefreshCooldownManager,
+    });
+
+    local barPandemicInit = opt.AddDropdown(page, {
+        variable = "CooldownBarPandemicStyle", name = "Tracked Bars Pandemic Highlight",
+        tooltip = "What a Tracked Bar shows while its aura is in the pandemic window.\n\nBlizzard: Blizzard's own bar animation.\n\nBorder: a border in the highlight color.\n\nBar Glow: Blizzard's bar glow, tinted.\n\nMarching Ants: Blizzard's animated border, tinted.\n\nBar Fill Color: the bar itself fills in the highlight color.\n\nNone: no pandemic highlight at all (Blizzard's is hidden too).",
+        default = "blizzard",
+        values = { { "blizzard", "Blizzard" }, { "border", "Border" }, { "glow", "Bar Glow" },
+                   { "ants", "Marching Ants" }, { "fill", "Bar Fill Color" }, { "none", "None" } },
+        get = function() return uuidb.cooldown.barpandemicstyle or "blizzard" end,
+        set = function(value) uuidb.cooldown.barpandemicstyle = value end,
+        onChange = RefreshCooldownManager,
+    });
+    local function BarPandemicStyle() return uuidb.cooldown.barpandemicstyle or "blizzard" end
+    local function BarPandemicColored()
+        local style = BarPandemicStyle()
+        return style ~= "blizzard" and style ~= "none"
+    end
+
+    local barPandemicClassInit = opt.AddCheckbox(page, {
+        variable = "CooldownBarPandemicClassColor", name = "Tracked Bars Pandemic: Use Class Color",
+        tooltip = "Color the Tracked Bars pandemic highlight in your character's class color instead of the color below.",
+        db = "cooldown", field = "barpandemicclasscolor", default = false,
+        onChange = RefreshCooldownManager,
+    });
+    opt.DependsOn(barPandemicClassInit, barPandemicInit, BarPandemicColored);
+
+    opt.DependsOn(opt.AddColorSwatch(page, {
+        variable = "CooldownBarPandemicColor", name = "Tracked Bars Pandemic Color",
+        tooltip = "Color of the Tracked Bars pandemic highlight, unless Use Class Color is on.",
+        db = "cooldown", field = "barpandemiccolor", default = "ffff3030",
+        get = function()
+            local v = uuidb.cooldown.barpandemiccolor
+            return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff3030"
+        end,
+        onChange = RefreshCooldownManager,
+    }), barPandemicClassInit, function() return BarPandemicColored() and not uuidb.cooldown.barpandemicclasscolor end);
+
+    opt.DependsOn(opt.AddDropdown(page, {
+        variable = "CooldownBarPandemicTarget", name = "Tracked Bars Pandemic Highlight On",
+        tooltip = "Where the Border, Bar Glow or Marching Ants highlight goes: around the bar (Blizzard's placement) or around the bar's icon.",
+        default = "bar",
+        values = { { "bar", "Bar" }, { "icon", "Icon" } },
+        get = function() return uuidb.cooldown.barpandemic or "bar" end,
+        set = function(value) uuidb.cooldown.barpandemic = value end,
+        onChange = RefreshCooldownManager,
+    }), barPandemicInit, function()
+        local style = BarPandemicStyle()
+        return style == "border" or style == "glow" or style == "ants"
+    end);
+
+    opt.AddCheckbox(page, {
+        variable = "CooldownBarIconToBar", name = "Scale Tracked Bar Icon to Bar Height",
+        tooltip = "Shrink each Tracked Bar's spell icon to the height of its bar, so icon and bar line up.",
+        db = "cooldown", field = "baricontobar", default = false,
+        onChange = RefreshCooldownManager,
     });
 
     opt.Header(page, "Cooldown Manager Layout");
@@ -144,6 +228,6 @@ function opt.BuildCooldownManager(page)
 
     AddAlign("CooldownEssentialAlign", "Essential Cooldowns Alignment", "essential_align", "blizzard", "icons");
     AddAlign("CooldownUtilityAlign", "Utility Cooldowns Alignment", "utility_align", "blizzard", "icons");
-    AddAlign("CooldownBuffIconAlign", "Tracked Buffs Alignment", "bufficon_align", "pack", "icons");
-    AddAlign("CooldownBuffBarAlign", "Tracked Bars Alignment", "buffbar_align", "pack", "bars");
+    AddAlign("CooldownBuffIconAlign", "Tracked Buffs Alignment", "bufficon_align", "blizzard", "icons");
+    AddAlign("CooldownBuffBarAlign", "Tracked Bars Alignment", "buffbar_align", "blizzard", "bars");
 end

@@ -1,20 +1,12 @@
 -- Square pixel-depth aura borders (docs/square-borders.md), shared by every
--- aura location: Player (buffsandauras.lua), Target/Focus/Boss/Compact
--- (aurakit.lua), Party (partyframes.lua) and Arena (arenaframes.lua).
---
--- Four solid edge strips, a whole number of physical pixels thick, inset over
--- the icon's edge (default) or just outside it. Modeled on EllesmereUI's
--- PP.CreateBorder. Border objects live in a weak-keyed table, never as fields
--- on the owner, so this is safe to hang off Blizzard's own aura buttons.
---
--- Each location has its own on/off, thickness and inset settings. Player's
--- keep their original names so existing saved settings carry over.
+-- aura location. Four solid edge strips a whole number of physical pixels
+-- thick, inset over the icon's edge or just outside it. Kept in a weak table,
+-- never as fields on the owner. Each location has its own on/off, thickness
+-- and inset settings (Player's keep their original names).
 
 local squareborders = {}
 
-local function IsSecret(v)
-    return issecretvalue and issecretvalue(v)
-end
+local IsSecret = UberUI.util.IsSecret
 
 ---------------------------------------------------------------------------
 -- Settings
@@ -56,9 +48,7 @@ end
 -- Geometry
 ---------------------------------------------------------------------------
 
--- N physical pixels -> UI units in `region`'s coordinate space. Always a
--- whole number of pixels, never less than 1, so a thin border can't land
--- between pixels and blur or round away.
+-- N physical pixels -> UI units in `region`'s space: whole pixels, at least 1.
 function squareborders.PixelsToUIUnits(region, px)
     local factor = (PixelUtil and PixelUtil.GetPixelToUIUnitFactor and PixelUtil.GetPixelToUIUnitFactor()) or 1
     local ok, scale = pcall(region.GetEffectiveScale, region)
@@ -69,16 +59,14 @@ end
 local function NewStrip(host)
     local t = host:CreateTexture(nil, "OVERLAY")
     t:SetColorTexture(1, 1, 1, 1)
-    -- No pixel-grid snapping: a 1px strip must never round to 0 and vanish
-    -- on one side at fractional scales/positions. Our own textures, so this
-    -- is taint-safe.
+    -- Unsnapped so a 1px strip never rounds to 0 at fractional positions.
     if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false) end
     if t.SetTexelSnappingBias then t:SetTexelSnappingBias(0) end
     return t
 end
 
--- A border object is a frame with .edges = { top, bottom, left, right }.
--- Starts hidden; callers Show() it once it's laid out and colored.
+-- A border: a frame with .edges = { top, bottom, left, right }, hidden until
+-- the caller lays it out and shows it.
 function squareborders.CreateBorder(parent)
     local sb = CreateFrame("Frame", nil, parent)
     sb:EnableMouse(false)
@@ -87,8 +75,7 @@ function squareborders.CreateBorder(parent)
     return sb
 end
 
--- Per-owner border (weak-keyed by owner, `slot` for owners needing more than
--- one), created on first use.
+-- Per-owner border (`slot` for owners needing several), created on first use.
 local borders = setmetatable({}, { __mode = "k" })
 
 function squareborders.Get(owner, slot)
@@ -118,10 +105,9 @@ function squareborders.Hide(owner, slot)
     if sb then sb:Hide() end
 end
 
--- Positions `sb` around `region` (the icon): inset puts the strips on top of
--- the region's outer edge, outset puts them just outside it.
+-- Inset puts the strips over the region's edge, outset just outside it.
 function squareborders.Layout(sb, region, px, inset)
-    local t = squareborders.PixelsToUIUnits(sb, px)
+    local t = squareborders.PixelsToUIUnits(region or sb, px)
     local o = inset and 0 or t
     sb:ClearAllPoints()
     sb:SetPoint("TOPLEFT", region, "TOPLEFT", -o, o)
@@ -151,9 +137,8 @@ function squareborders.LayoutFor(sb, region, loc)
     return squareborders.Layout(sb, region, squareborders.Thickness(loc), squareborders.IsInset(loc))
 end
 
--- Dispel-colored borders (debuff dispel type, purgeable/stealable buffs) are
--- drawn 1px thicker than the plain dark border so the color reads at small
--- sizes -- EllesmereUI's convention (1px border, 2px dispel ring).
+-- Dispel-colored borders are 1px thicker than the dark border so the color
+-- reads at small sizes.
 function squareborders.DispelThickness(loc)
     return squareborders.Thickness(loc) + 1
 end
@@ -162,8 +147,6 @@ function squareborders.LayoutDispelFor(sb, region, loc)
     return squareborders.Layout(sb, region, squareborders.DispelThickness(loc), squareborders.IsInset(loc))
 end
 
--- Keeps the border above the owner's own art (icon, cooldown swipe, native
--- border textures).
 function squareborders.RaiseAbove(sb, frame, bonus)
     local ok, level = pcall(frame.GetFrameLevel, frame)
     if ok and type(level) == "number" and not IsSecret(level) then
@@ -175,6 +158,15 @@ end
 -- Color
 ---------------------------------------------------------------------------
 
+-- Base colors to match Blizzard's native frame art (Forever copper:
+-- 0.60/0.45/0.35; neutral silver: 0.5).
+local BORDER_BASE_COPPER = { r = 0.60, g = 0.45, b = 0.35 }
+local BORDER_BASE_SILVER = { r = 0.50, g = 0.50, b = 0.50 }
+
+function squareborders.GetBorderBase()
+    return UberUI.util.IsForeverClient() and BORDER_BASE_COPPER or BORDER_BASE_SILVER
+end
+
 function squareborders.SetColor(sb, r, g, b, a)
     for i = 1, 4 do
         sb.edges[i]:SetVertexColor(r, g, b, a)
@@ -183,15 +175,13 @@ end
 
 function squareborders.SetDarkColor(sb)
     local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
-    squareborders.SetColor(sb, dc.r, dc.g, dc.b, dc.a)
+    local base = squareborders.GetBorderBase()
+    squareborders.SetColor(sb, dc.r * base.r, dc.g * base.g, dc.b * base.b, dc.a)
 end
 
--- Step curve for C_UnitAuras.GetAuraDispelTypeColor, keyed by the engine's
--- dispel-type IDs (0 none, 1 Magic, 2 Curse, 3 Disease, 4 Poison, 9 Enrage,
--- 11 Bleed), valued with Blizzard's own AuraUtil border colors. Anything
--- Blizzard has no color for (Enrage, unknown IDs) falls on a "None" point.
--- This is the secret-safe path: the returned color may be secret, but
--- SetVertexColor accepts it (same as Blizzard_CustomAuraButton does).
+-- Step curve for C_UnitAuras.GetAuraDispelTypeColor over the engine's
+-- dispel-type IDs, valued with Blizzard's AuraUtil border colors. The result
+-- may be secret, but SetVertexColor accepts it.
 local dispelColorCurve
 function squareborders.GetDispelColorCurve()
     if dispelColorCurve ~= nil then return dispelColorCurve or nil end
@@ -213,12 +203,9 @@ function squareborders.GetDispelColorCurve()
     return dispelColorCurve or nil
 end
 
--- Blizzard's dispel-type color for a debuff, as r, g, b, a (possibly secret
--- values -- only ever pass them straight to SetVertexColor). Prefers the
--- engine curve when a usable (non-secret) aura instance ID is known, since
--- that works whether or not the dispel type itself is secret; otherwise uses
--- dispelName directly when it's readable; otherwise Blizzard's "None" color.
--- Used for both the square strips and the tinted rounded ring.
+-- Blizzard's dispel color as r, g, b, a (possibly secret: only pass to
+-- SetVertexColor). Engine curve when the aura instance ID is readable, else
+-- dispelName when readable, else Blizzard's "None" color.
 function squareborders.GetDispelColor(dispelName, unit, auraInstanceID)
     if unit and auraInstanceID and not IsSecret(auraInstanceID) and not IsSecret(unit) then
         local curve = squareborders.GetDispelColorCurve()
@@ -230,7 +217,6 @@ function squareborders.GetDispelColor(dispelName, unit, auraInstanceID)
         end
     end
     if AuraUtil and AuraUtil.GetAuraBorderColor then
-        -- IsSecret first: boolean-testing a secret value errors in addon code.
         local key = "None"
         if not IsSecret(dispelName) and type(dispelName) == "string" and dispelName ~= "" then
             key = dispelName
@@ -251,12 +237,9 @@ end
 -- Engine-colored strips for CustomAuraContainer buttons (aurakit.lua)
 ---------------------------------------------------------------------------
 
--- Registers each edge strip with the button's AddDispelTypeTexture, so the
--- ENGINE decides visibility and color from the real (otherwise secret) aura
--- data. AddDispelTypeTexture keeps a list, so several textures per button are
--- fine. It's denied outright while aura data is secret (loading screens), so
--- this retries every style pass until all four strips are in; each strip is
--- only ever registered once. Returns true once fully registered.
+-- Registers each strip with AddDispelTypeTexture so the engine decides
+-- visibility and color from the secret aura data. Refused while aura data is
+-- secret, so callers retry every style pass. True once all four are in.
 function squareborders.RegisterEngineStrips(button, sb, options)
     if sb.engineRegistered then return true end
     if type(button.AddDispelTypeTexture) ~= "function" then return false end
@@ -270,8 +253,7 @@ function squareborders.RegisterEngineStrips(button, sb, options)
     return true
 end
 
--- Debuffs: PreserveAsset keeps our solid strip texture and has the engine
--- apply AuraUtil.SetAuraBorderColor with the real dispel type.
+-- Debuffs: PreserveAsset keeps our strip and the engine colors it.
 function squareborders.DebuffEngineOptions()
     local styles = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle
     if not (styles and styles.PreserveAsset) then return nil end
@@ -283,9 +265,7 @@ function squareborders.DebuffEngineOptions()
     }
 end
 
--- Buffs: the square version of the "Show Dispels" stealable border -- white
--- strips (CustomAsset forces vertex color to white) that the engine only
--- shows on buffs that are actually stealable.
+-- Buffs: white strips (CustomAsset) the engine only shows on stealable buffs.
 local WHITE_ASSET = { asset = "Interface\\Buttons\\WHITE8X8" }
 local WHITE_DISPEL_ASSET_MAP = {
     Magic = WHITE_ASSET, Curse = WHITE_ASSET, Poison = WHITE_ASSET,

@@ -5,14 +5,7 @@ local addon, ns = ...
 
 local aurakit = {}
 
-local function IsSecret(v)
-    return (issecretvalue and issecretvalue(v))
-end
-
-local function SafeBool(v)
-    if v == nil or IsSecret(v) then return false end
-    return (v == true)
-end
+local IsSecret, SafeBool = UberUI.util.IsSecret, UberUI.util.SafeBool
 
 local function SafeIsForbidden(frame)
     if not frame or IsSecret(frame) then return true end
@@ -142,10 +135,9 @@ function aurakit.TryRegisterDispelBorder(button)
     if type(button.AddDispelTypeTexture) ~= "function" then return end
     if not (Enum and Enum.CustomAuraButtonDispelTypeTextureStyle) then return end
 
-    -- Square-border strips are registered up front too (debuffs: engine
-    -- dispel-colored, slot 1; buffs: engine stealable-gated, slot 2), so
-    -- switching to square later needs no aura update to get real colors.
-    -- The tinted rounded ring is for "Dispel Color" (see InitAuraButton).
+    -- Square strips are registered up front too (debuffs: dispel-colored,
+    -- slot 1; buffs: stealable-gated, slot 2) so switching to square needs no
+    -- aura update to get real colors.
     if not button.isBuff and button.roundDispelTexPending and not button.roundDispelTex then
         local preserve = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset
         if preserve then
@@ -379,7 +371,9 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
                 end
             end
 
-            if isBuff then
+            if button._uberInPandemic then
+                ApplyNoBorder()
+            elseif isBuff then
                 if darkBorderEnabled then
                     ApplyDarkBorder()
                 else
@@ -414,12 +408,22 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
             local ring = GetStealableRing(button)
             if not ring then return end
             local showStealable = UberUI.general:PlayerCanOffensiveDispel() and opts.showDispel
-            -- Square borders use their own white strips once registered.
-            -- Decided from settings: the strips' IsShown is secret here.
-            local steal = SBk and SBk.Find(button, 2)
-            local stripsUsed = squareOn and steal and steal.engineRegistered
-            ring:SetShown((showStealable and ring.registered and not stripsUsed) and true or false)
+            -- Square borders never show the rounded ring (their own white
+            -- strips once registered). Decided from settings: the strips'
+            -- IsShown is secret here.
+            ring:SetShown((showStealable and ring.registered and not squareOn) and true or false)
         end)
+    end
+end
+
+-- Square mode hides every rounded border host (separate frames on the
+-- button). Blizzard's aura code only Show()s the textures inside them, never
+-- the hosts, so hidden hosts stay hidden.
+local ROUND_HOSTS = { "borderHost", "dispelBorderHost", "roundDispelHost", "stealableHost" }
+local function HideRoundHosts(button)
+    for _, key in ipairs(ROUND_HOSTS) do
+        local host = button[key]
+        if host then pcall(host.Hide, host) end
     end
 end
 
@@ -427,32 +431,31 @@ end
 -- choices. Slots: 1 = buff dark border / debuff engine dispel strips,
 -- 2 = buff engine stealable strips, 3 = debuff dark border (the engine
 -- re-tints slot 1, so it can't be darkened). Until the engine strips are
--- registered the round border stays as the fallback.
+-- registered, debuffs get the dark border (never the rounded art).
 function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
     local SB = UberUI.squareborders
     if not SB or not button.icon then return end
     pcall(function()
         local loc = opts and opts.squareLoc
         local useSquare = loc and style ~= "none" and SB.IsEnabled(loc)
+        if useSquare then HideRoundHosts(button) end
         local isBuff = button.isBuff
         local main, steal, dark = SB.Find(button, 1), SB.Find(button, 2), SB.Find(button, 3)
         local showMain, showSteal, showDark = false, false, false
 
-        if useSquare then
+        if button._uberInPandemic then
+            useSquare = false
+        elseif useSquare then
             if isBuff then
                 local showStealable = UberUI.general:PlayerCanOffensiveDispel() and opts.showDispel
-                if showStealable and not (steal and steal.engineRegistered) then
-                    useSquare = false -- keep the round stealable border until registered
-                else
-                    showSteal = showStealable and true or false
-                    showMain = darkBorderEnabled
-                end
-            elseif darkBorderEnabled then
+                showSteal = (showStealable and steal and steal.engineRegistered) and true or false
+                showMain = darkBorderEnabled
+            elseif darkBorderEnabled or not (main and main.engineRegistered) then
+                -- Dark until the engine dispel strips register: square mode
+                -- never falls back to the rounded dispel art.
                 showDark = true
-            elseif main and main.engineRegistered then
-                showMain = true
             else
-                useSquare = false
+                showMain = true
             end
         end
 
@@ -596,9 +599,8 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
         button.dispelBorderTexPending = dispelBorderTex
     end
 
-    -- Rounded ring rendered like pandemic border: pure white ColorTexture masked
-    -- by ui-debuff-border-default-noicon, tinted with the real dispel color
-    -- (PreserveAsset). Framed above borderHost (+2) so the colored border is on top.
+    -- Rounded dispel ring: a white ColorTexture masked by the rounded border
+    -- art, tinted by the engine (PreserveAsset), drawn above borderHost.
     if not isBuff and not button.roundDispelHost then
         local roundDispelHost = CreateFrame("Frame", nil, button)
         roundDispelHost:ClearAllPoints()
@@ -1196,7 +1198,7 @@ end
 -- host's children only; the caller decides when host is shown.
 -- opts: { kind = "border"|"glow"|"ants", r, g, b,
 --         square, loc, icon (square strips), ringFrom, ringTo, ringX (ring),
---         center, size, glowScale (glows) }
+--         center, size, sizeH (height, default size), glowScale (glows) }
 local HIGHLIGHT_GLOWS = {
     -- FlipBook sheets (6x5, 30 frames); pad = art padding past the icon.
     glow = { atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook", pad = 1.4 },
@@ -1213,11 +1215,15 @@ function aurakit.StyleHighlight(host, opts)
     -- so it can't be tinted).
     local wantRing = kind == "border" and not opts.square
     if wantRing and not host.uuRing and opts.ringFrom then
-        local ring = host:CreateTexture(nil, "OVERLAY")
+        local ring = host:CreateTexture(nil, "OVERLAY", nil, 3)
         ring:SetColorTexture(1, 1, 1, 1)
+        ring:SetTexelSnappingBias(0)
+        ring:SetSnapToPixelGrid(false)
         local mask = host:CreateMaskTexture()
         mask:SetAtlas(HIGHLIGHT_RING_ATLAS)
         mask:SetAllPoints(ring)
+        mask:SetTexelSnappingBias(0)
+        mask:SetSnapToPixelGrid(false)
         ring:AddMaskTexture(mask)
         host.uuRing = ring
     end
@@ -1232,7 +1238,10 @@ function aurakit.StyleHighlight(host, opts)
     end
 
     local wantSquare = kind == "border" and opts.square and SB and opts.icon
-    if wantSquare and not host.uuSquare then host.uuSquare = SB.CreateBorder(host) end
+    if wantSquare and not host.uuSquare then
+        host.uuSquare = SB.CreateBorder(host)
+        host.uuSquare:SetFrameLevel(host:GetFrameLevel() + 2)
+    end
     if host.uuSquare then
         if wantSquare then
             SB.LayoutDispelFor(host.uuSquare, opts.icon, opts.loc)
@@ -1259,14 +1268,16 @@ function aurakit.StyleHighlight(host, opts)
     end
     if host.uuGlow then
         if glowDef then
-            local size = (opts.size or 24) * glowDef.pad * (opts.glowScale or 1)
+            local scale = glowDef.pad * (opts.glowScale or 1)
+            local size = (opts.size or 24) * scale
+            local sizeH = opts.sizeH and (opts.sizeH * scale) or size
             host.uuGlow:ClearAllPoints()
             host.uuGlow:SetPoint("CENTER", opts.center or host, "CENTER")
             if host.uuGlowAtlas ~= glowDef.atlas then
                 host.uuGlow:SetAtlas(glowDef.atlas)
                 host.uuGlowAtlas = glowDef.atlas
             end
-            host.uuGlow:SetSize(size, size)
+            host.uuGlow:SetSize(size, sizeH)
             host.uuGlow:SetDesaturated(true)
             host.uuGlow:SetVertexColor(r, g, b, 1)
             host.uuGlow:Show()

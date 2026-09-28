@@ -2,7 +2,6 @@ local addon, ns = ...
 local damageMeter = UberUI:CreateFrame("frame")
 
 function damageMeter:StyleWindow(window)
-    -- Color the header immediately
     local header = window.Header
     local dc = uuidb.general.darkencolor
     if header then
@@ -61,7 +60,6 @@ function damageMeter:StyleEntry(frame)
 end
 
 function damageMeter:TextureEntries(window)
-    -- Loop through all the entries in the scrollbox
     for _, frame in window:EnumerateEntryFrames() do
         self:StyleEntry(frame)
     end
@@ -76,7 +74,6 @@ function damageMeter:HookDamageMeter(damageMeterWindow)
 end
 
 function damageMeter:HookAllDamageMeters()
-    -- Loop through all possible damage meter windows and hook them.
     for i = 1, 10 do
         local windowName = "DamageMeterSessionWindow" .. i
         local damageMeterWindow = _G[windowName]
@@ -108,7 +105,6 @@ function damageMeter:HookAllDamageMeters()
 end
 
 function damageMeter:ForceTexture()
-    -- Loop through all possible damage meter windows
     for i = 1, 10 do
         local windowName = "DamageMeterSessionWindow" .. i
         local damageMeterWindow = _G[windowName]
@@ -124,12 +120,11 @@ function damageMeter:ForceTexture()
     end
 end
 
--- We'll wait until the player has entered the world to make sure all the default UI is loaded.
+-- Hook once the default UI is loaded.
 damageMeter:RegisterEvent("PLAYER_ENTERING_WORLD")
 damageMeter:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_ENTERING_WORLD" then
         self:HookAllDamageMeters()
-        -- We can stop listening for this event now
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     end
 end)

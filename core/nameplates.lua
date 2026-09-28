@@ -91,6 +91,14 @@ end
 -- live on a layer that ignores the plate's scale (whole-pixel thickness at
 -- any scale), and every texture meeting a strip has pixel snapping off like
 -- the strips -- mixed snapped/unsnapped edges round apart into hairline gaps.
+local IsForeverClient = UberUI.util.IsForeverClient
+
+-- Square border base color (Forever copper, retail silver), multiplied by
+-- the darkness color.
+local function GetSquareBorderBase()
+    return UberUI.squareborders.GetBorderBase()
+end
+
 local SQUARE_BG_ALPHA = 0.6
 local squareParts = setmetatable({}, { __mode = "k" }) -- healthBar -> { bg, edges, layer }
 
@@ -174,9 +182,13 @@ local function UpdateSquareBorder(healthBar, on)
     right:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMRIGHT", 0, 0)
     right:SetWidth(t)
 
-    local dc = uuidb.general.darkencolor
+    local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    local base = GetSquareBorderBase()
+    local cr = base.r * dc.r
+    local cg = base.g * dc.g
+    local cb = base.b * dc.b
     for _, e in ipairs(parts.edges) do
-        e:SetVertexColor(dc.r, dc.g, dc.b, 1)
+        e:SetVertexColor(cr, cg, cb, 1)
         e:Show()
     end
     parts.bg:SetVertexColor(0, 0, 0, SQUARE_BG_ALPHA)
@@ -213,11 +225,7 @@ local function BorderPx()
     return tonumber(uuidb.general.nameplatesquareborder_thickness) or 1
 end
 
-local function SafeShown(region)
-    local ok, shown = pcall(region.IsShown, region)
-    if not ok or (issecretvalue and issecretvalue(shown)) then return false end
-    return shown and true or false
-end
+local SafeShown = UberUI.util.SafeShown
 
 -- Once per part.
 local reportedError = {}
@@ -313,10 +321,14 @@ local function UpdateLevelBox(unitFrame, on)
         ReportError("level box", err)
         return
     end
-    local dc = uuidb.general.darkencolor
+    local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    local base = GetSquareBorderBase()
+    local cr = base.r * dc.r
+    local cg = base.g * dc.g
+    local cb = base.b * dc.b
     parts.bg:SetVertexColor(0, 0, 0, SQUARE_BG_ALPHA)
     for _, key in ipairs({ "top", "bottom", "right", "left" }) do
-        parts[key]:SetVertexColor(dc.r, dc.g, dc.b, 1)
+        parts[key]:SetVertexColor(cr, cg, cb, 1)
     end
     for _, tex in pairs(parts) do tex:Show() end
 end
@@ -431,10 +443,6 @@ end
 -- until they clear. Only anchors pointing at CastBarsContainer shift, so the
 -- bar's parts move together; Blizzard's anchors are re-captured after each
 -- UpdateAnchors and restored when square mode is off.
-local function IsForeverClient()
-    return WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
-end
-
 local function GetNameplateCastBar(unitFrame)
     local container = unitFrame and unitFrame.CastBarsContainer
     return container and container.castBar

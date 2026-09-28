@@ -39,9 +39,7 @@ local PvPBadgeElementKeys = {
 -- off re-shows only these, and only if Blizzard would still show them.
 local hiddenByHideHonor = {}
 
-local function IsSecret(val)
-    return issecretvalue and issecretvalue(val)
-end
+local IsSecret = UberUI.util.IsSecret
 
 -- Blizzard's own badge show conditions (game rule, frame showPVP, FFA or
 -- faction-flagged). Unknown/secret -> false.
@@ -196,10 +194,7 @@ hideHonorWatcher:SetScript("OnEvent", function()
     general:RefreshHideHonor()
 end)
 
-local function SafeBool(val)
-    if val == nil or IsSecret(val) then return false end
-    return val and true or false
-end
+local SafeBool = UberUI.util.SafeBool
 
 function general:SetHealthColor(healthBar, unit, db)
     if healthBar == nil or not db then return end
@@ -233,7 +228,7 @@ function general:SetHealthColor(healthBar, unit, db)
 
     if isPlayer then
         local _, class = UnitClass(unit)
-        local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class])
+        local classColor = UberUI.util.ClassColor(class)
         if classColor then
             if (db.classcolorfriendly and db.classcolorenemy) or
                (db.classcolorenemy and isEnemy) or

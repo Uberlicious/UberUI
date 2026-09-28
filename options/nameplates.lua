@@ -130,12 +130,12 @@ function opt.BuildNameplates(page)
     opt.DependsOn(opt.AddColorSwatch(page, {
         variable = "nameplatePandemicColorHex", name = "Pandemic Highlight Color",
         tooltip = "Color of the pandemic highlight (border or glow).",
-        db = "general", field = "nameplatepandemiccolor", default = "ffff2626",
+        db = "general", field = "nameplatepandemiccolor", default = "ffff3030",
         -- An early build stored preset names here; anything that isn't a
         -- hex color reads as the default.
         get = function()
             local v = uuidb.general.nameplatepandemiccolor
-            return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff2626"
+            return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff3030"
         end,
         onChange = RefreshNameplateAuraStyle,
     }), pandemicInit, PandemicOn);

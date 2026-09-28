@@ -9,12 +9,8 @@ local FRAMES = {
 }
 swingtimers.FRAMES = FRAMES
 
-local function HexColor(hex, fallback)
-    if type(hex) == "string" and hex:match("^%x%x%x%x%x%x%x%x$") then
-        local ok, c = pcall(CreateColorFromHexString, hex)
-        if ok and c then return c end
-    end
-    return fallback and HexColor(fallback) or nil
+local function HexColor(hex, fallbackHex)
+    return UberUI.util.HexColor(hex) or UberUI.util.HexColor(fallbackHex)
 end
 
 local function GetSwingTexture()
@@ -25,7 +21,12 @@ local function GetSwingTexture()
     return type(tex) == "string" and tex or nil
 end
 
--- Square border around swing timer bars.
+-- Square border around swing timer bars, in a base color matching
+-- Blizzard's frame art (silver; copper kept for testing), multiplied by the
+-- darkness color when Darken Swing Timers is on.
+local BORDER_BASE_COPPER = { r = 0.60, g = 0.45, b = 0.35 }
+local BORDER_BASE_SILVER = { r = 0.50, g = 0.50, b = 0.50 }
+local SQUARE_BORDER_BASE = BORDER_BASE_SILVER
 local ART_ATLAS = { Border = "ui-swingtimerbar-frame", Background = "ui-swingtimerbar-background" }
 local artCleared = setmetatable({}, { __mode = "k" }) -- texture -> true
 local SQUARE_BG_ALPHA = 0.6
@@ -52,6 +53,8 @@ local function UpdateSquareBorder(frame, square, darken, dc)
             if t and artCleared[t] then
                 artCleared[t] = nil
                 t:SetAtlas(atlas)
+                t:SetAlpha(1)
+                t:Show()
             end
         end
         return false
@@ -69,6 +72,8 @@ local function UpdateSquareBorder(frame, square, darken, dc)
         if t and not artCleared[t] then
             artCleared[t] = true
             t:SetTexture(nil)
+            t:SetAlpha(0)
+            t:Hide()
         end
     end
     local px = tonumber(uuidb.general.swingtimersquareborder_thickness) or 1
@@ -92,40 +97,128 @@ local function UpdateSquareBorder(frame, square, darken, dc)
     parts.right:SetPoint("TOPLEFT", bar, "TOPRIGHT", 0, 0)
     parts.right:SetPoint("BOTTOMLEFT", bar, "BOTTOMRIGHT", 0, 0)
     parts.right:SetWidth(w)
-    local r, g, b = 0, 0, 0
-    if darken and dc then r, g, b = dc.r, dc.g, dc.b end
+    local cr, cg, cb = SQUARE_BORDER_BASE.r, SQUARE_BORDER_BASE.g, SQUARE_BORDER_BASE.b
+    if darken and dc then
+        cr = cr * dc.r
+        cg = cg * dc.g
+        cb = cb * dc.b
+    end
     for _, key in ipairs({ "top", "bottom", "left", "right" }) do
-        parts[key]:SetVertexColor(r, g, b, 1)
+        parts[key]:SetVertexColor(cr, cg, cb, 1)
     end
     parts.bg:SetVertexColor(0, 0, 0, SQUARE_BG_ALPHA)
     for _, t in pairs(parts) do t:Show() end
     return true
 end
 
+local hookedFrames = setmetatable({}, { __mode = "k" })
+local function HookFrame(frame)
+    if not frame or hookedFrames[frame] then return end
+    hookedFrames[frame] = true
+    if frame.HookScript then
+        frame:HookScript("OnShow", function()
+            swingtimers:Apply()
+        end)
+    end
+end
+
+local mixinHooked = false
+local function HookMixin()
+    if mixinHooked then return end
+    if SwingTimerMixin then
+        mixinHooked = true
+        if SwingTimerMixin.InitializeBarPresentation then
+            hooksecurefunc(SwingTimerMixin, "InitializeBarPresentation", function()
+                swingtimers:Apply()
+            end)
+        end
+        if SwingTimerMixin.ApplyRangePresentation then
+            hooksecurefunc(SwingTimerMixin, "ApplyRangePresentation", function(self)
+                local g = uuidb and uuidb.general
+                if not g then return end
+                if g.swingtimersquareborder then
+                    local border = self.Border or (self.GetBorder and self:GetBorder())
+                    if border then
+                        border:SetTexture(nil)
+                        border:SetAlpha(0)
+                        border:Hide()
+                    end
+                    local bg = self.Background or (self.GetBackground and self:GetBackground())
+                    if bg then
+                        bg:SetTexture(nil)
+                        bg:SetAlpha(0)
+                        bg:Hide()
+                    end
+                else
+                    local dc = g.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+                    local darken = g.darkenswingtimers ~= false
+                    local cr, cg, cb = 1, 1, 1
+                    if darken and dc then cr, cg, cb = dc.r, dc.g, dc.b end
+
+                    local border = self.Border or (self.GetBorder and self:GetBorder())
+                    if border and border.SetVertexColor then
+                        border:SetVertexColor(cr, cg, cb, 1)
+                    end
+                    local bg = self.Background or (self.GetBackground and self:GetBackground())
+                    if bg and bg.SetVertexColor then
+                        bg:SetVertexColor(cr, cg, cb, 1)
+                    end
+                end
+            end)
+        end
+    end
+end
+
 function swingtimers:Apply()
     local g = uuidb and uuidb.general
     if not g then return end
-    local dc = g.darkencolor
+    local dc = g.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
     local darken = g.darkenswingtimers ~= false
     local tex = GetSwingTexture()
+
+    HookMixin()
 
     for _, def in ipairs(FRAMES) do
         local frame = _G[def.name]
         if frame and not frame:IsForbidden() then
-            if frame.Border then
-                if darken and dc then
-                    frame.Border:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-                else
-                    frame.Border:SetVertexColor(1, 1, 1, 1)
-                end
-            end
-            -- After the border color above: square mode zeroes its alpha.
+            HookFrame(frame)
+
             UpdateSquareBorder(frame, g.swingtimersquareborder == true, darken, dc)
 
+            if not g.swingtimersquareborder then
+                local border = frame.Border or (frame.GetBorder and frame:GetBorder())
+                if not border and frame.GetRegions then
+                    for _, region in ipairs({ frame:GetRegions() }) do
+                        if region:IsObjectType("Texture") and region:GetAtlas() == "ui-swingtimerbar-frame" then
+                            border = region
+                            break
+                        end
+                    end
+                end
+                local cr, cg, cb = 1, 1, 1
+                if darken and dc then cr, cg, cb = dc.r, dc.g, dc.b end
+
+                if border and border.SetVertexColor then
+                    border:SetVertexColor(cr, cg, cb, 1)
+                end
+
+                local bg = frame.Background or (frame.GetBackground and frame:GetBackground())
+                if not bg and frame.GetRegions then
+                    for _, region in ipairs({ frame:GetRegions() }) do
+                        if region:IsObjectType("Texture") and region:GetAtlas() == "ui-swingtimerbar-background" then
+                            bg = region
+                            break
+                        end
+                    end
+                end
+                if bg and bg.SetVertexColor then
+                    bg:SetVertexColor(cr, cg, cb, 1)
+                end
+            end
+
             local bar = frame.StatusBar
-            -- "Swing Timer Label Shadow": the dark gradient behind the
-            -- MAIN HAND / OFF HAND / RANGED label. Blizzard never touches it
-            -- after load, so show/hide sticks.
+            -- Label shadow behind MAIN HAND / OFF HAND / RANGED; Blizzard
+            -- never touches it after load.
             local shadow = bar and bar.TypeLabelShadow
             if shadow then shadow:SetShown(g.swingtimerlabelshadow ~= false) end
 
@@ -149,11 +242,23 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ADDON_LOADED")
 events:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" and name ~= "Blizzard_SwingTimer" and name ~= addon then return end
+    HookMixin()
     if not (uuidb and uuidb.general) then return end
     swingtimers:Apply()
+    if event == "PLAYER_ENTERING_WORLD" then
+        C_Timer.After(0.5, function()
+            HookMixin()
+            swingtimers:Apply()
+        end)
+        C_Timer.After(2, function()
+            HookMixin()
+            swingtimers:Apply()
+        end)
+    end
 end)
 
 UberUI.swingtimers = swingtimers

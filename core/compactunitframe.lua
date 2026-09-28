@@ -19,7 +19,6 @@ end)
 cuf.default = function(self)
     if not self or not self.healthBar or self:IsForbidden() then return end
 
-    -- Only apply to raid and party frames
     local frameName = self:GetName()
     if not frameName or not (frameName:find("CompactRaid") or frameName:find("CompactParty") or frameName:find("CompactArena")) then
         return
@@ -53,7 +52,6 @@ cuf.default = function(self)
         end
     end
 
-    -- Secondary texture logic
     local secondaryTextureToApply
     if uuidb.general.secondarybartextures and uuidb.general.secondarybartexture ~= "Blizzard" then
         secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
@@ -141,8 +139,7 @@ function cuf:HideRaidFrameTitles()
 end
 
 function cuf:UpdateAllAuras()
-    -- CompactUnitFrame auras are locked in Blizzard's forbidden secure environment
-    -- to protect secret health values from taint.
+    -- Compact auras are drawn by Blizzard's forbidden secure environment.
 end
 
 cuf.ForceZoom = cuf.UpdateAllAuras

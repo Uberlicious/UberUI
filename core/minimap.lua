@@ -9,8 +9,7 @@ minimap:SetScript("OnEvent", function(self, event)
         return
     end
     self:Color()
-    -- Some addons create their minimap button a few seconds after login
-    -- without going through LibDBIcon; catch those once.
+    -- Catch buttons some addons create late without LibDBIcon.
     if not lateRescanDone then
         lateRescanDone = true
         C_Timer.After(5, function() self.DarkenAddonButtons() end)
@@ -42,7 +41,6 @@ function minimap.Color()
                 elseif type(tex) == "string" and string.find(string.lower(tex), "border") then
                     isBorder = true
                 elseif region:GetDrawLayer() == "BORDER" or region:GetDrawLayer() == "OVERLAY" then
-                    -- If no name matches, assume the border/overlay layer contains the ring
                     isBorder = true
                 end
 
@@ -113,12 +111,11 @@ function minimap.DarkenAddonButtons()
         end
         return
     end
-    -- Also picks up the option being turned on live, without a reload.
     RegisterLibDBIconCallback()
     local dc = uuidb.general.darkencolor
 
-    -- Buttons sitting on the minimap (LibDBIcon parents to Minimap; some
-    -- older addons use MinimapBackdrop).
+    -- Buttons on the minimap (LibDBIcon parents to Minimap; older addons
+    -- use MinimapBackdrop).
     for _, parent in ipairs({ Minimap, MinimapBackdrop }) do
         if parent and parent.GetChildren then
             for _, child in ipairs({ parent:GetChildren() }) do
@@ -127,8 +124,7 @@ function minimap.DarkenAddonButtons()
         end
     end
 
-    -- LibDBIcon's own registry also covers buttons another addon has moved
-    -- off the minimap.
+    -- LibDBIcon's registry also covers buttons moved off the minimap.
     local ldbi = GetLibDBIcon()
     if ldbi and type(ldbi.objects) == "table" then
         for _, button in pairs(ldbi.objects) do

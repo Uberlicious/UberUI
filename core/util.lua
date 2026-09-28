@@ -1,0 +1,37 @@
+-- Small helpers shared across modules.
+local util = {}
+
+function util.IsSecret(v)
+    return issecretvalue and issecretvalue(v)
+end
+
+-- false for nil or secret values.
+function util.SafeBool(v)
+    if v == nil or util.IsSecret(v) then return false end
+    return v == true
+end
+
+-- IsShown, false when the call fails or the result is secret.
+function util.SafeShown(region)
+    local ok, shown = pcall(region.IsShown, region)
+    if not ok or util.IsSecret(shown) then return false end
+    return shown and true or false
+end
+
+function util.IsForeverClient()
+    return WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
+end
+
+function util.ClassColor(class)
+    return class and ((C_ClassColor and C_ClassColor.GetClassColor(class))
+        or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class])
+end
+
+-- "AARRGGBB" -> color object, or nil when malformed.
+function util.HexColor(hex)
+    if type(hex) ~= "string" or not hex:match("^%x%x%x%x%x%x%x%x$") then return nil end
+    local ok, c = pcall(CreateColorFromHexString, hex)
+    return ok and c or nil
+end
+
+UberUI.util = util

@@ -11,7 +11,7 @@ end)
 function actionbars:Color()
     local dc = uuidb.general.darkencolor;
 
-    --bartender4 styling
+    -- Bartender4
     if bartender4 then
         for i = 1, 120 do
             if (_G["BT4Button" .. i]) then

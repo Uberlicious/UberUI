@@ -5,7 +5,6 @@
 -- INIT
 -----------------------------
 
---get the addon namespace
 local addon, ns = ...
 UberUI = {}
 uuidb = {}
@@ -16,7 +15,6 @@ local classcolor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class
 -- DEFAULTS
 -----------------------------
 
---generate a holder for the config data
 UberUI = CreateFrame("Frame")
 UberUI:RegisterEvent("VARIABLES_LOADED")
 UberUI:RegisterEvent("ADDON_LOADED")
@@ -108,7 +106,7 @@ local defaults = {
         squareauraborders_inset      = true,
         playertempenchantcolor       = true,
         -- Other aura locations: squareauraborders_<loc>[_thickness|_inset]
-        -- (see core/squareborders.lua; Player keeps the original keys above).
+        -- (squareborders.lua).
         squareauraborders_target           = false,
         squareauraborders_target_thickness = 1,
         squareauraborders_target_inset     = true,
@@ -157,7 +155,7 @@ local defaults = {
         nameplatebuffs_showdispel    = true,
         nameplatepandemic            = true,
         nameplatepandemicstyle       = "border",
-        nameplatepandemiccolor       = "ffff2626",
+        nameplatepandemiccolor       = "ffff3030",
         nameplatedurationcolor          = "ffffffff",
         nameplatedurationexpiringcolor  = "ffff3333",
         nameplatedurationthreshold      = 5,
@@ -178,18 +176,26 @@ local defaults = {
     cooldown = {
         bartexture            = "Blizzard",
         bartextures           = false,
+        squarebars            = false,
+        barpandemic           = "bar",
+        barpandemicstyle      = "blizzard",
+        barpandemiccolor      = "ffff3030",
+        barpandemicclasscolor = false,
+        darkenbars            = true,
+        baricontobar          = false,
         borders               = true,
         pandemicstyle         = "blizzard",
-        pandemiccolor         = "ffff2626",
+        pandemiccolor         = "ffff3030",
         pandemicclasscolor    = false,
+        durationcolors        = false,
         durationcolor         = "ffffffff",
         durationexpiringcolor = "ffff3333",
         durationthreshold     = 5,
         -- "blizzard" (Blizzard's own layout), "pack" or "center"
         essential_align       = "blizzard",
         utility_align         = "blizzard",
-        bufficon_align        = "pack",
-        buffbar_align         = "pack",
+        bufficon_align        = "blizzard",
+        buffbar_align         = "blizzard",
     },
     playerframes = {
         classcolor = true,
@@ -303,6 +309,45 @@ function UberUI:Init()
             cd[p .. "_collapse"], cd[p .. "_centered"] = nil, nil
         end
         cd.debuffborder = nil
+        -- Tracked Bars got their own pandemic style: start from the shared one.
+        if cd.barpandemicstyle == nil and cd.pandemicstyle ~= nil then
+            cd.barpandemicstyle = cd.pandemicstyle
+        end
+        -- Pandemic colors default to Blizzard's pandemic red (255, 48, 48);
+        -- the new bar color/class color start from their defaults.
+        if (cd._pandemic_version or 0) < 1 then
+            if cd.pandemiccolor == "ffff2626" then cd.pandemiccolor = nil end
+            cd.barpandemiccolor, cd.barpandemicclasscolor = nil, nil
+            cd._pandemic_version = 1
+        end
+        -- Countdown coloring became opt-in: on for anyone who'd changed a color.
+        if cd.durationcolors == nil then
+            local normal = type(cd.durationcolor) == "string" and cd.durationcolor:lower()
+            local expiring = type(cd.durationexpiringcolor) == "string" and cd.durationexpiringcolor:lower()
+            if (normal and normal ~= "ffffffff") or (expiring and expiring ~= "ffff3333" and expiring ~= "ffffffff") then
+                cd.durationcolors = true
+            end
+        end
+        if cd._defaults_version == nil or cd._defaults_version < 2 then
+            if cd.bufficon_align == "pack" then cd.bufficon_align = "blizzard" end
+            if cd.buffbar_align == "pack" then cd.buffbar_align = "blizzard" end
+            cd._defaults_version = 2
+        end
+    end
+
+    local g = UberuiDB.general
+    if type(g) == "table" and g.nameplatepandemiccolor == "ffff2626" then
+        g.nameplatepandemiccolor = nil
+    end
+    if type(g) == "table" then
+        if g._defaults_version == nil or g._defaults_version < 2 then
+            g.swingtimersquareborder = false
+            g.nameplatesquareborder = false
+            g.squareauraborders_nameplate = false
+            g.SwingTimerBorderShape = nil
+            g.NameplateHealthBorderShape = nil
+            g._defaults_version = 2
+        end
     end
 
     mergeDefaults(defaults, UberuiDB)

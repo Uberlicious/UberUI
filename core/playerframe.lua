@@ -1,19 +1,17 @@
 local addon, ns = ...
 
--- Cache frequently accessed globals for performance
 local UnitPowerType = UnitPowerType
 local UnitClass = UnitClass
 local PowerBarColor = PowerBarColor
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 
--- Helper function for applying darken color
 local function ApplyDarkenColor(region)
     local dc = uuidb.general.darkencolor
     region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
 end
 
 local localizedClass, englishClass = UnitClass("player")
-local classcolor = englishClass and ((C_ClassColor and C_ClassColor.GetClassColor(englishClass)) or (GetClassColorObj and GetClassColorObj(englishClass)) or RAID_CLASS_COLORS[englishClass])
+local classcolor = UberUI.util.ClassColor(englishClass)
 local class = localizedClass
 local pvphook = false;
 
@@ -72,8 +70,7 @@ function playerframes:Color()
             if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvPBackgroundCircle then
                 ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvPBackgroundCircle)
             end
-            -- WoW Forever names this field with a lowercase "Pvp" (unlike
-            -- Target/Focus's "PvP"), so it never matched the check above.
+            -- Forever spells it "Pvp" (lowercase v) on the player frame.
             if PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvpBackgroundCircle then
                 ApplyDarkenColor(PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.PvpBackgroundCircle)
             end
@@ -140,8 +137,7 @@ local function GetPlayerBarTexture()
     end
 end
 
--- How far the mana cost prediction tint is pushed from the power color
--- toward white (0 = same as the bar, 1 = white).
+-- How far the mana cost prediction tint moves toward white (0 = bar color).
 local MANA_COST_PREDICTION_LIGHTEN = 0.35
 
 -- Lighten cost prediction so it stands out on custom bar textures.
@@ -326,6 +322,5 @@ function playerframes:ColorMonkChi()
         end
     end
 end
-
 
 UberUI.playerframes = playerframes

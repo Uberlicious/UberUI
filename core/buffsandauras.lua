@@ -5,14 +5,7 @@ if not buffsandauras.borderFrames then
     buffsandauras.borderFrames = setmetatable({}, {__mode = "k"})
 end
 
-local function IsSecret(v)
-    return (issecretvalue and issecretvalue(v))
-end
-
-local function SafeBool(v)
-    if v == nil or IsSecret(v) then return false end
-    return (v == true)
-end
+local IsSecret, SafeBool = UberUI.util.IsSecret, UberUI.util.SafeBool
 
 local function SafeIsShown(frame)
     if not frame or IsSecret(frame) then return false end
@@ -95,8 +88,7 @@ end
 -- Blizzard temp enchant purple border color.
 local TEMP_ENCHANT_BORDER_COLOR = { 0.50, 0.22, 0.72 }
 
--- Player debuff buttons carry buttonInfo.index (and sometimes
--- auraInstanceID), not the aura itself -- resolve the instance ID from that.
+-- Player debuff buttons carry buttonInfo.index, not the aura itself.
 local function GetPlayerDebuffInstanceID(button)
     local info = button.buttonInfo
     if not info or IsSecret(info) then return nil end
@@ -105,11 +97,8 @@ local function GetPlayerDebuffInstanceID(button)
     if id and not IsSecret(id) then return id, unit end
     local index = info.index
     if not index or IsSecret(index) or not C_UnitAuras then return nil end
-    -- In combat, GetAuraDataByIndex below is refused for addon code (aura
-    -- data is secret while restricted), which left player debuffs on the
-    -- "None" color. GetUnitAuraInstanceIDs isn't secret-when-restricted, and
-    -- lists HARMFUL auras in the same slot order DebuffFrame's
-    -- AuraUtil.ForEachAura walk numbered buttonInfo.index by.
+    -- GetAuraDataByIndex is refused in combat; GetUnitAuraInstanceIDs isn't,
+    -- and lists HARMFUL auras in the same order as buttonInfo.index.
     if C_UnitAuras.GetUnitAuraInstanceIDs then
         local okIDs, ids = pcall(C_UnitAuras.GetUnitAuraInstanceIDs, unit, "HARMFUL")
         if okIDs and type(ids) == "table" and not IsSecret(ids) then
@@ -264,7 +253,6 @@ function buffsandauras:StyleAuraButton(button)
         return
     end
 
-    -- Skip custom container buttons (Target/Focus frames) that handle their own borders
     if button.borderHost or button.container or SafeBool(button.isAuraAnchor) then
         return
     end
@@ -305,12 +293,9 @@ function buffsandauras:StyleAuraButton(button)
 
     local isPlayer, isDebuff, isTempEnchant = GetAuraInfo(button)
 
-    -- Determine debuff type. In combat these fields (e.g. buttonInfo.
-    -- debuffType = auraData.dispelName) are secret, and boolean-testing or
-    -- comparing a secret value throws in addon code -- which aborted this
-    -- whole function mid-combat and left player debuffs uncolored. IsSecret
-    -- comes first everywhere; a secret dtype is kept as-is and only ever
-    -- handed to squareborders.GetDispelColor, which is secret-safe.
+    -- In combat these fields (e.g. debuffType) are secret: IsSecret comes
+    -- first everywhere, and a secret dtype only goes to the secret-safe
+    -- squareborders.GetDispelColor.
     local function Known(v) return IsSecret(v) or v ~= nil end
     local dtype = button.debuffType
     if not Known(dtype) and not IsSecret(button.auraData) and button.auraData then
@@ -348,25 +333,16 @@ function buffsandauras:StyleAuraButton(button)
         end
     end
 
-    -- Square borders also override Zoom Only on Player debuffs and weapon
-    -- enchants: Blizzard's rounded border becomes a square one in Blizzard's
-    -- own (undarkened) color -- dispel color for debuffs, enchant purple for
-    -- temp enchants. Buffs have no Blizzard border in Zoom Only, so they stay
-    -- borderless there.
-    -- "Player Weapon Enchant Border Color" (on by default): weapon enchants
-    -- keep Blizzard's enchant purple whatever the Buff Border choice.
+    -- Square borders replace Blizzard's rounded border in Zoom Only too, in
+    -- Blizzard's own color (dispel color, enchant purple); buffs stay
+    -- borderless there. Weapon enchants keep purple when that option is on.
     local enchantColor = isTempEnchant and not (uuidb and uuidb.general and uuidb.general.playertempenchantcolor == false)
     local squareZoomOverride = style == "zoom" and isPlayer and (isDebuff or enchantColor) and SquareBordersEnabled()
-    -- Rounded + Debuff Border "Dispel Color" (zoom style) falls through to
-    -- the no-custom-border path below, which re-shows Blizzard's own
-    -- DebuffBorder. Blizzard sets its per-type art from its own code, so it's
-    -- full brightness and right in combat. (Tinting our desaturated ring
-    -- instead came out dark -- the ring art is painted red, ~24% bright once
-    -- desaturated -- and lost the color in combat.)
+    -- Rounded + "Dispel Color" re-shows Blizzard's own DebuffBorder (full
+    -- brightness, correct in combat); tinting our red-art ring came out dark.
     local borderEnabled = (style == "both" or style == "border") or squareZoomOverride
     local zoomEnabled = (style == "both" or style == "zoom")
 
-    -- Handle icon zoom
     if zoomEnabled then
         iconTexture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     else
@@ -432,7 +408,6 @@ function buffsandauras:StyleAuraButton(button)
             end
             showCustomBorder = true
         else
-            -- Buff
             if borderObj and not IsSecret(borderObj) then
                 borderObj:ClearAllPoints()
                 borderObj:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
@@ -458,10 +433,7 @@ function buffsandauras:StyleAuraButton(button)
             borderFrame:Hide()
             squareBorder = GetSquareBorder(button)
             squareBorder:SetFrameLevel(borderFrame:GetFrameLevel())
-            -- Dispel Color debuff borders are 1px thicker than Dark ones
-            -- (squareborders.DispelThickness).
-            -- Weapon enchants in enchant purple (option on), drawn at the
-            -- colored-border thickness like dispel colors.
+            -- Dispel colors and enchant purple use the thicker colored border.
             local px = SquareBorderThickness()
             if (isDebuff and not (style == "both" or style == "border")) or enchantColor then
                 px = SB.DispelThickness(SQUARE_LOC)
@@ -473,20 +445,22 @@ function buffsandauras:StyleAuraButton(button)
                 EnsureSquareBorderLayoutHooks()
                 OffsetDurationText(button, iconTexture, PixelsToUIUnits(button, px))
             end
-            -- Debuff Border "Dark" (both/border style) stays dark; "Dispel
-            -- Color" (zoom style) gets Blizzard's dispel color.
             if isDebuff and not (style == "both" or style == "border") then
                 ApplyDebuffDispelColor(squareBorder, button, dtype)
             elseif enchantColor then
                 SetSquareBorderColor(squareBorder, TEMP_ENCHANT_BORDER_COLOR[1], TEMP_ENCHANT_BORDER_COLOR[2],
                     TEMP_ENCHANT_BORDER_COLOR[3], 1)
             else
-                SetSquareBorderColor(squareBorder, r, g, b, a)
+                if isStealable then
+                    SetSquareBorderColor(squareBorder, 1, 1, 1, 1)
+                else
+                    SB.SetDarkColor(squareBorder)
+                end
             end
             squareBorder:Show()
         elseif showCustomBorder and enchantColor and teBorder and not IsSecret(teBorder) then
-            -- Rounded: Blizzard's own purple enchant border instead of our
-            -- dark ring (tinting the ring's red art purple comes out dark).
+            -- Rounded: Blizzard's own purple enchant border (tinting our
+            -- red-art ring purple comes out dark).
             if squareBorder then squareBorder:Hide() end
             OffsetDurationText(button, iconTexture, 0)
             borderFrame:Hide()
@@ -533,8 +507,7 @@ function buffsandauras:StyleAuraButton(button)
         end
 
         if isTempEnchant and not enchantColor and teBorder and not IsSecret(teBorder) then
-            -- Weapon Enchant Border Color off: no purple border at all, like
-            -- a plain buff (Blizzard draws none on buffs).
+            -- Enchant border color off: no border, like a plain buff.
             teBorder:SetAlpha(0)
         elseif isTempEnchant and teBorder and not IsSecret(teBorder) then
             teBorder:ClearAllPoints()
@@ -551,7 +524,6 @@ function buffsandauras:StyleAuraButton(button)
         end
     end
 
-    -- Hook OnHide safely to prevent crashes on buttons with secret aspects
     if not button.uberUIHookedHide and button.HookScript then
         button.uberUIHookedHide = true
         pcall(button.HookScript, button, "OnHide", function(self)
@@ -564,8 +536,8 @@ function buffsandauras:StyleAuraButton(button)
 end
 
 function buffsandauras:Refresh()
-    -- Player debuffs move into our own container while Player auras use
-    -- square borders (core/playerdebuffs.lua); it handles combat itself.
+    -- Player debuffs move into our own container in square mode
+    -- (playerdebuffs.lua).
     if UberUI.playerdebuffs then UberUI.playerdebuffs:Update() end
     if InCombatLockdown() then return end
 
@@ -672,7 +644,6 @@ function buffsandauras:ColorAuras(force)
         if okName and not IsSecret(name) and type(name) == "string" then
             fName = name
         end
-        -- Ignore all custom UberUI aura containers and Blizzard aura containers
         if fName:find("UberUI") or fName:find("AuraContainer") or fName:find("TargetAuras") or fName:find("FocusAuras") then return end
 
         local okKids, kids = pcall(function() return { frame:GetChildren() } end)
@@ -896,7 +867,7 @@ local ticker = C_Timer.NewTicker(1, function()
     end
 end)
 
--- Catch any elusive buffs when the user hovers over them for a tooltip
+-- Catch buffs missed by the hooks when hovered.
 hooksecurefunc(GameTooltip, "SetUnitBuff", function(self, unit)
     local owner = self:GetOwner()
     if owner and not IsSecret(owner) and UberUI.buffsandauras then

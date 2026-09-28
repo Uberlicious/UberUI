@@ -1,10 +1,8 @@
 local addon, ns = ...
 
--- Cache frequently accessed globals for performance
 local UnitPowerType = UnitPowerType
 local PowerBarColor = PowerBarColor
 
--- Helper function for applying darken color
 local function ApplyDarkenColor(region)
     local dc = uuidb.general.darkencolor
     region:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
@@ -61,7 +59,6 @@ focusframes:SetScript("OnEvent", function(self, event, unit)
     end
 end)
 
--- Cached subframe lookups.
 local function GetFocusFrameMain()
     return FocusFrame and FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentMain
 end
@@ -225,9 +222,7 @@ local function IsEnemyFocus()
     return not UnitIsFriend("player", "focus")
 end
 
--- Thin per-frame wrapper: resolves this frame's uuidb style/showDispel
--- settings, then hands off to the shared aurakit.ApplyAuraButtonStyle (see
--- core/aurakit.lua, shared with targetframe.lua).
+-- Resolves this frame's style settings for aurakit.ApplyAuraButtonStyle.
 function focusframes:UpdateAuraButtonStyle(button)
     if not button then return end
     local isBuff = button.isBuff
@@ -374,13 +369,8 @@ function focusframes:SetupCustomAuraContainer()
     blizzAuras:SetAlpha(0)
     blizzAuras:EnableMouse(false)
 
-    -- Blizzard's own FocusFrame re-shows its native aura container more
-    -- aggressively than TargetFrame's -- keep it invisible whenever our own
-    -- style is active. Alpha only, never Hide(): like Target, the container
-    -- must stay shown and laid out, because Blizzard's cast bar positions
-    -- itself from it (TargetSpellBarMixin:AdjustPosition anchors under it
-    -- when GetNumVisibleFlowLayoutLines() > 0). Hiding it left the Focus cast
-    -- bar in its default spot, under our aura rows.
+    -- Blizzard re-shows its native aura container often: keep it invisible by
+    -- alpha, never Hide(), since its cast bar positions itself from it.
     blizzAuras:EnableMouse(false)
     if not self.blizzHooked then
         self.blizzHooked = true
@@ -463,9 +453,7 @@ function focusframes:SetupCustomAuraContainer()
             aurakit.ShowAuraContainers(focusframes, false)
         end)
     end
-    -- Target-of-target appearing/disappearing changes the aura row width
-    -- (aurakit.ApplyToTRowWidth) without any aura changing, so re-run the
-    -- positioning then too.
+    -- ToT show/hide changes the aura row width.
     if not self.totFrameHooked and FocusFrame.totFrame then
         self.totFrameHooked = true
         local function RefreshToTWidth() focusframes:UpdateAuraPositions() end
@@ -495,7 +483,6 @@ function focusframes:ApplyToTPlacement()
     if self.customDebuffs and self.customBuffs then self:UpdateAuraPositions() end
 end
 
--- Initialize immediately if FocusFrame is already present
 focusframes:SetupCustomAuraContainer()
 
 if FocusFrame and FocusFrame.UpdateAuras then

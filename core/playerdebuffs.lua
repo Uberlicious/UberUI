@@ -1,5 +1,5 @@
--- Player debuffs container for square borders (mirrors DebuffFrame layout).
--- Keeps dispel colors accurate in combat via the engine's PreserveAsset pipeline.
+-- Player debuffs in our own container while Player auras use square borders
+-- (mirrors DebuffFrame's layout); keeps dispel colors correct in combat.
 
 local aurakit = UberUI.aurakit
 local SB = UberUI.squareborders
@@ -46,7 +46,7 @@ end
 -- Buttons
 -------------------------------------------------------------------------------
 
--- Curve for duration text coloring (white under warning threshold, yellow otherwise).
+-- Duration text color curve (warning color under the threshold).
 local durationColorCurve
 local function GetDurationColorCurve()
     if durationColorCurve ~= nil then return durationColorCurve or nil end
@@ -90,8 +90,7 @@ end
 
 function playerdebuffs:StyleButton(button)
     if not button then return end
-    -- With square borders on, aurakit lets the icon fill the 30x30 button,
-    -- same as Blizzard's player debuff icon.
+    -- Square borders: icon fills the 30x30 button, like Blizzard's.
     aurakit.ApplyAuraButtonStyle(button, { style = DebuffStyle(), squareLoc = SQUARE_LOC })
     LayoutDuration(button)
 end
@@ -114,8 +113,8 @@ local function InitButton(button)
         button.count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
     end
 
-    -- Duration text in its own holder so the buffDurations CVar can hide it
-    -- (the engine owns the fontstring's alpha).
+    -- Own holder so the buffDurations CVar can hide it (the engine owns the
+    -- fontstring's alpha).
     local holder = CreateFrame("Frame", nil, button)
     holder:SetAllPoints(button)
     holder:SetFrameLevel(button.textHolder and button.textHolder:GetFrameLevel() or (button:GetFrameLevel() + 5))
@@ -165,8 +164,7 @@ local function ApplyLayout()
     layoutKey = key
     layout.horizontal, layout.right, layout.top = horizontal, right, top
 
-    -- Same corner Blizzard anchors its own container to (BaseAuraFrameMixin:
-    -- UpdateAuraContainerAnchor) and grows from.
+    -- Blizzard's own anchor corner (UpdateAuraContainerAnchor).
     local point
     if top then
         point = right and "BOTTOMLEFT" or "BOTTOMRIGHT"
@@ -240,7 +238,6 @@ local function Build()
         return
     end
 
-    -- Our own frame, so these hooks are always safe.
     local function refresh()
         aurakit.RefreshGroupButtons(container, { GROUP_KEY }, StyleFn)
     end
@@ -251,9 +248,8 @@ local function Build()
     layoutKey = nil
 end
 
--- Hides Blizzard's own debuff buttons and private aura anchors while ours are
--- showing, and puts them back when we stop. Only ever touches them once
--- we've actually taken over.
+-- Hides Blizzard's debuff buttons and private aura anchors while ours show,
+-- and restores them when we stop.
 local function SetBlizzardShown(shown)
     local ac = DebuffFrame.AuraContainer
     if shown then
@@ -279,9 +275,8 @@ local QueueSync
 local function EnsureHooks()
     if hooksInstalled then return end
     hooksInstalled = true
-    -- Runs after every Blizzard debuff update and every Edit Mode setting
-    -- change; also where Blizzard re-shows its private aura anchors after
-    -- Edit Mode, and where a PlayerFrame.unit (vehicle) change shows up.
+    -- Runs after every Blizzard debuff update and Edit Mode change (where
+    -- private aura anchors get re-shown and vehicle unit changes appear).
     hooksecurefunc(DebuffFrame.AuraContainer, "UpdateGridLayout", function() QueueSync() end)
     if DebuffFrame.SetIsEditing then
         hooksecurefunc(DebuffFrame, "SetIsEditing", function() QueueSync() end)
@@ -295,8 +290,7 @@ function playerdebuffs:Sync()
 
     if active and not container then
         if InCombatLockdown() then
-            -- Container creation stays out of combat; Blizzard's debuffs keep
-            -- showing until then.
+            -- Created out of combat only; Blizzard's debuffs show until then.
             pendingBuild = true
             return
         end
@@ -329,8 +323,7 @@ QueueSync = function()
     end)
 end
 
--- Called from buffsandauras:Refresh() on every Player aura / darkness
--- setting change: re-evaluate on/off and restyle.
+-- Called on every Player aura / darkness setting change.
 function playerdebuffs:Update()
     self:Sync()
     RestyleAll()

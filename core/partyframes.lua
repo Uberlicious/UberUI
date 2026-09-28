@@ -62,7 +62,7 @@ function partyframes:HealthBarColor()
             local idx = p.unit or p:GetAttribute("unit") or (p.GetID and p:GetID() and "party"..p:GetID());
             if (idx and UnitIsConnected(idx)) then
                 local _, class = UnitClass(idx)
-                local classColor = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or (GetClassColorObj and GetClassColorObj(class)) or RAID_CLASS_COLORS[class]);
+                local classColor = UberUI.util.ClassColor(class);
                 if (classColor ~= nil) then
                     healthBar:SetStatusBarDesaturated(true);
                     healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, classColor.a);
@@ -120,7 +120,6 @@ function partyframes:StyleAuraButton(button, isBuff)
         UberUI.general:ApplyIconZoom(button.Icon, zoomEnabled)
     end
 
-    -- Square borders
     local SB = UberUI.squareborders
     local square = SB and button.Icon and style ~= "none" and SB.IsEnabled("party")
     if square and (not isBuff or darkBorderEnabled) then
@@ -154,19 +153,18 @@ function partyframes:StyleAuraButton(button, isBuff)
     elseif isBuff then
         button.DebuffBorder:Hide()
     else
-        -- Restore dispel color.
         button.DebuffBorder:SetDesaturated(false)
         local dispelName
         local instID = button.auraInstanceID
-        local isSecretID = issecretvalue and issecretvalue(instID)
+        local isSecretID = UberUI.util.IsSecret(instID)
         if button.unit and instID and not isSecretID and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
             local aura
             pcall(function()
                 aura = C_UnitAuras.GetAuraDataByAuraInstanceID(button.unit, instID)
             end)
-            if aura and not (issecretvalue and issecretvalue(aura)) then
+            if aura and not UberUI.util.IsSecret(aura) then
                 dispelName = aura.dispelName
-                if issecretvalue and issecretvalue(dispelName) then
+                if UberUI.util.IsSecret(dispelName) then
                     dispelName = nil
                 end
             end
@@ -176,10 +174,8 @@ function partyframes:StyleAuraButton(button, isBuff)
     end
 end
 
--- Restyles every currently-active button across every pool (on-frame,
--- pet, and tooltip) immediately -- used when the style dropdown changes,
--- since the Setup hook alone only re-styles buttons the next time their
--- aura content actually changes.
+-- Restyles every active button (on-frame, pet, tooltip) now; the Setup hook
+-- only restyles when a button's aura changes.
 function partyframes:RefreshAuraStyle()
     for _, p in pairs(self:IteratePartyFrames()) do
         if p.AuraFramePool then
@@ -211,8 +207,7 @@ function partyframes:ForceZoom()
     self:RefreshAuraStyle()
 end
 
--- Tooltip border darkening -- unrelated to aura style, just the addon's
--- usual darken-color treatment applied to the tooltip's own frame art.
+-- Tooltip frame darkening.
 function partyframes:ColorBuffTooltip()
     if not PartyMemberBuffTooltip or not PartyMemberBuffTooltip.NineSlice then return end
     local dc = uuidb.general.darkencolor
@@ -240,7 +235,5 @@ if PartyMemberBuffTooltip then
         UberUI.partyframes:ColorBuffTooltip()
     end)
 end
-
-
 
 UberUI.partyframes = partyframes

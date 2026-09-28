@@ -101,7 +101,7 @@ function opt.BuildOtherUI(page)
 
         local swingShapeInit = opt.AddDropdown(page, {
             variable = "SwingTimerBorderShape", name = "Swing Timer Border",
-            tooltip = "Rounded is Blizzard's swing timer frame. Square draws a flat border of exact pixel thickness around each bar, in the darkness color (or black with Darken Swing Timers off).",
+            tooltip = "Rounded is Blizzard's swing timer frame. Square draws a flat border of exact pixel thickness around each bar, dark when Darken Swing Timers is on (or silver with Darken Swing Timers off).",
             default = "rounded",
             values = { { "rounded", "Rounded" }, { "square", "Square" } },
             get = function() return (uuidb.general and uuidb.general.swingtimersquareborder) and "square" or "rounded" end,
