@@ -119,4 +119,62 @@ function opt.BuildCooldownManager(page)
         cbOnChange = RefreshCooldownManager,
         ddOnChange = RefreshCooldownManager,
     });
+
+    opt.Header(page, "Cooldown Manager Layout");
+
+    -- Essential Cooldowns
+    opt.AddCheckbox(page, {
+        variable = "CooldownEssentialCollapse", name = "Essential Cooldowns: Collapse Inactive",
+        tooltip = "Pack active Essential Cooldowns together, removing empty spaces between them.",
+        db = "cooldown", field = "essential_collapse", default = false,
+        onChange = RefreshCooldownManager,
+    });
+    opt.AddCheckbox(page, {
+        variable = "CooldownEssentialCentered", name = "Essential Cooldowns: Center Icons",
+        tooltip = "Center active Essential Cooldown icons horizontally within the container instead of aligning to the Edit Mode edge.",
+        db = "cooldown", field = "essential_centered", default = false,
+        onChange = RefreshCooldownManager,
+    });
+
+    -- Utility Cooldowns
+    opt.AddCheckbox(page, {
+        variable = "CooldownUtilityCollapse", name = "Utility Cooldowns: Collapse Inactive",
+        tooltip = "Pack active Utility Cooldowns together, removing empty spaces between them.",
+        db = "cooldown", field = "utility_collapse", default = false,
+        onChange = RefreshCooldownManager,
+    });
+    opt.AddCheckbox(page, {
+        variable = "CooldownUtilityCentered", name = "Utility Cooldowns: Center Icons",
+        tooltip = "Center active Utility Cooldown icons horizontally within the container instead of aligning to the Edit Mode edge.",
+        db = "cooldown", field = "utility_centered", default = false,
+        onChange = RefreshCooldownManager,
+    });
+
+    -- Tracked Buffs
+    opt.AddCheckbox(page, {
+        variable = "CooldownBuffIconCollapse", name = "Tracked Buffs: Collapse Inactive",
+        tooltip = "Pack active Tracked Buff icons together, removing empty spaces when auras fall off.",
+        db = "cooldown", field = "bufficon_collapse", default = true,
+        onChange = RefreshCooldownManager,
+    });
+    opt.AddCheckbox(page, {
+        variable = "CooldownBuffIconCentered", name = "Tracked Buffs: Center Icons",
+        tooltip = "Center active Tracked Buff icons horizontally within the container instead of aligning to the Edit Mode edge.",
+        db = "cooldown", field = "bufficon_centered", default = false,
+        onChange = RefreshCooldownManager,
+    });
+
+    -- Tracked Buff Bars
+    opt.AddCheckbox(page, {
+        variable = "CooldownBuffBarCollapse", name = "Tracked Bars: Collapse Inactive",
+        tooltip = "Pack active Tracked Buff Bars together, removing empty spaces when auras fall off.",
+        db = "cooldown", field = "buffbar_collapse", default = true,
+        onChange = RefreshCooldownManager,
+    });
+    opt.AddCheckbox(page, {
+        variable = "CooldownBuffBarCentered", name = "Tracked Bars: Center Bars",
+        tooltip = "Center active Tracked Buff Bars within the container.",
+        db = "cooldown", field = "buffbar_centered", default = false,
+        onChange = RefreshCooldownManager,
+    });
 end

@@ -600,6 +600,22 @@ local function EnsureDebuffHook(f)
         f._uberDebuffHooked = true
         f:HookScript("OnShow", function(self)
             C_Timer.After(0, function() pcall(UpdateSquareDebuffColor, self) end)
+            local p = self._uberViewer or (self.GetParent and self:GetParent())
+            if p then
+                local collapse, centered = GetViewerLayoutSettings(p)
+                if collapse or centered then
+                    QueueStyle()
+                end
+            end
+        end)
+        f:HookScript("OnHide", function(self)
+            local p = self._uberViewer or (self.GetParent and self:GetParent())
+            if p then
+                local collapse, centered = GetViewerLayoutSettings(p)
+                if collapse or centered then
+                    QueueStyle()
+                end
+            end
         end)
     end
 end
@@ -955,6 +971,139 @@ function cdManager:StyleIcons()
     end)
 end
 
+local function IsEditModeActive()
+    return EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive and EditModeManagerFrame:IsEditModeActive()
+end
+
+local function GetViewerLayoutSettings(viewer)
+    local name = viewer and viewer.GetName and viewer:GetName()
+    local c = uuidb and uuidb.cooldown or {}
+    if name == "EssentialCooldownViewer" then
+        return c.essential_collapse == true, c.essential_centered == true
+    elseif name == "UtilityCooldownViewer" then
+        return c.utility_collapse == true, c.utility_centered == true
+    elseif name == "BuffIconCooldownViewer" then
+        return c.bufficon_collapse ~= false, c.bufficon_centered == true
+    elseif name == "BuffBarCooldownViewer" then
+        return c.buffbar_collapse ~= false, c.buffbar_centered == true
+    end
+    return false, false
+end
+
+local function ApplyCustomViewerLayout(viewer)
+    if not viewer or IsEditModeActive() then return end
+    local collapse, centered = GetViewerLayoutSettings(viewer)
+    if not collapse and not centered then return end
+
+    local items = {}
+    if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then
+        for f in viewer.itemFramePool:EnumerateActive() do
+            if f and (f.Icon or f.Bar) then
+                local shown = f:IsShown()
+                if (not collapse) or shown then
+                    items[#items + 1] = f
+                end
+            end
+        end
+    end
+    if #items == 0 then
+        for _, f in ipairs({ viewer:GetChildren() }) do
+            if f and (f.Icon or f.Bar) then
+                local shown = f:IsShown()
+                if (not collapse) or shown then
+                    items[#items + 1] = f
+                end
+            end
+        end
+    end
+
+    if #items == 0 then return end
+
+    table.sort(items, function(a, b)
+        local ia = a.layoutIndex or 0
+        local ib = b.layoutIndex or 0
+        if ia ~= ib then return ia < ib end
+        return tostring(a) < tostring(b)
+    end)
+
+    local sample = items[1]
+    local w = sample:GetWidth() or 36
+    local h = sample:GetHeight() or 36
+    if not w or w <= 0 then w = 36 end
+    if not h or h <= 0 then h = 36 end
+
+    local isHoriz = (viewer.IsHorizontal and viewer:IsHorizontal()) ~= false
+    local stride = (viewer.GetStride and viewer:GetStride()) or 8
+    if not stride or stride <= 0 then stride = 8 end
+    local pad = (viewer.GetPadding and viewer:GetPadding()) or 0
+    if pad < 0 then pad = 0 end
+
+    local toRight = true
+    if viewer.addIconsToRight ~= nil then
+        toRight = viewer.addIconsToRight
+    elseif viewer.GetAddIconsToRight then
+        local ok, v = pcall(viewer.GetAddIconsToRight, viewer)
+        if ok and v ~= nil then toRight = v end
+    end
+
+    local toTop = false
+    if viewer.addIconsToTop ~= nil then
+        toTop = viewer.addIconsToTop
+    elseif viewer.GetAddIconsToTop then
+        local ok, v = pcall(viewer.GetAddIconsToTop, viewer)
+        if ok and v ~= nil then toTop = v end
+    end
+
+    local anchorPoint = (toTop and "BOTTOM" or "TOP") .. (toRight and "LEFT" or "RIGHT")
+    local xDir = toRight and 1 or -1
+    local yDir = toTop and 1 or -1
+
+    local numItems = #items
+    if isHoriz then
+        local numRows = math.ceil(numItems / stride)
+        local totalH = numRows * h + (numRows - 1) * pad
+        for r = 1, numRows do
+            local startIdx = (r - 1) * stride + 1
+            local endIdx = math.min(r * stride, numItems)
+            local rowCount = endIdx - startIdx + 1
+            local rowW = rowCount * w + (rowCount - 1) * pad
+            local startX = -((rowW - w) / 2)
+            local rowY = ((totalH - h) / 2) - (r - 1) * (h + pad)
+
+            for col = 1, rowCount do
+                local item = items[startIdx + col - 1]
+                item:ClearAllPoints()
+                if centered then
+                    item:SetPoint("CENTER", viewer, "CENTER", startX + (col - 1) * (w + pad), rowY)
+                else
+                    item:SetPoint(anchorPoint, viewer, anchorPoint, xDir * (col - 1) * (w + pad), yDir * (r - 1) * (h + pad))
+                end
+            end
+        end
+    else
+        local numCols = math.ceil(numItems / stride)
+        local totalW = numCols * w + (numCols - 1) * pad
+        for col = 1, numCols do
+            local startIdx = (col - 1) * stride + 1
+            local endIdx = math.min(col * stride, numItems)
+            local colCount = endIdx - startIdx + 1
+            local colH = colCount * h + (colCount - 1) * pad
+            local startY = ((colH - h) / 2)
+            local colX = -((totalW - w) / 2) + (col - 1) * (w + pad)
+
+            for row = 1, colCount do
+                local item = items[startIdx + row - 1]
+                item:ClearAllPoints()
+                if centered then
+                    item:SetPoint("CENTER", viewer, "CENTER", colX, startY - (row - 1) * (h + pad))
+                else
+                    item:SetPoint(anchorPoint, viewer, anchorPoint, xDir * (col - 1) * (w + pad), yDir * (row - 1) * (h + pad))
+                end
+            end
+        end
+    end
+end
+
 -- New item frames appear when a viewer lays out (spec change, Edit Mode
 -- count/size change, settings changes): style them once it's done.
 local layoutHooked = false
@@ -967,6 +1116,10 @@ local function QueueStyle()
         cdManager:Texture()
         cdManager:Color()
         cdManager:StyleIcons()
+        for _, name in ipairs(VIEWERS) do
+            local v = _G[name]
+            if v then pcall(ApplyCustomViewerLayout, v) end
+        end
     end)
 end
 
@@ -1017,6 +1170,22 @@ local function RegisterCooldownCallbacks()
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
         QueueStyle()
     end, cdManager)
+
+    if EventRegistry.RegisterCallback then
+        pcall(function()
+            EventRegistry:RegisterCallback("EditMode.Exit", function()
+                QueueStyle()
+            end, cdManager)
+        end)
+    end
+
+    if EditModeManagerFrame and EditModeManagerFrame.HookScript then
+        pcall(function()
+            EditModeManagerFrame:HookScript("OnHide", function()
+                QueueStyle()
+            end)
+        end)
+    end
 
     cdManager._callbackRegistered = true
 end
@@ -1074,6 +1243,10 @@ function cdManager:Refresh()
     self:Texture()
     self:Color()
     self:StyleIcons()
+    for _, name in ipairs(VIEWERS) do
+        local v = _G[name]
+        if v then pcall(ApplyCustomViewerLayout, v) end
+    end
     ForEachItemFrame(function(f)
         f._uberDurationState = nil
         f._uberInPandemic = nil
