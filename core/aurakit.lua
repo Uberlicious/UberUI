@@ -224,16 +224,23 @@ local function GetStealableRing(button)
     if not host then
         if not button.borderHost then return nil end
         host = CreateFrame("Frame", nil, button)
+        host:ClearAllPoints()
         host:SetAllPoints(button.borderHost)
-        host:SetFrameLevel(button.borderHost:GetFrameLevel() + 1)
+        host:SetFrameLevel(button.borderHost:GetFrameLevel() + 2)
         host:EnableMouse(false)
         host:Hide()
-        local tex = host:CreateTexture(nil, "OVERLAY")
+        local tex = host:CreateTexture(nil, "OVERLAY", nil, 2)
+        tex:ClearAllPoints()
         tex:SetAllPoints(host)
         tex:SetColorTexture(1, 1, 1, 1)
+        tex:SetTexelSnappingBias(0)
+        tex:SetSnapToPixelGrid(false)
         local mask = host:CreateMaskTexture()
+        mask:ClearAllPoints()
         mask:SetAtlas(RING_ATLAS)
         mask:SetAllPoints(host)
+        mask:SetTexelSnappingBias(0)
+        mask:SetSnapToPixelGrid(false)
         tex:AddMaskTexture(mask)
         host.tex = tex
         ringHosts[button] = host
@@ -311,6 +318,23 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
                 button.borderTex:SetAllPoints(button.borderHost)
             end
 
+            local hostLevel = button.borderHost:GetFrameLevel()
+            if button.roundDispelHost then
+                button.roundDispelHost:ClearAllPoints()
+                button.roundDispelHost:SetAllPoints(button.borderHost)
+                button.roundDispelHost:SetFrameLevel(hostLevel + 2)
+            end
+            if button.dispelBorderHost then
+                button.dispelBorderHost:ClearAllPoints()
+                button.dispelBorderHost:SetAllPoints(button.borderHost)
+                button.dispelBorderHost:SetFrameLevel(hostLevel + 1)
+            end
+            if button.stealableHost then
+                button.stealableHost:ClearAllPoints()
+                button.stealableHost:SetAllPoints(button.borderHost)
+                button.stealableHost:SetFrameLevel(hostLevel + 2)
+            end
+
             -- Debuff dispel colors can't be computed (dispelName is secret),
             -- so the engine colors the registered textures and we only
             -- show/hide their hosts.
@@ -338,15 +362,15 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
             -- Debuffs only; buffs use button.stealable below.
             local function ApplyDispelColoredBorder()
                 button.borderHost:Show()
-                if button.borderTex then button.borderTex:Hide() end
-                -- Prefer Blizzard's per-type art (dispelBorderTex): our tinted
-                -- ring is red art desaturated, so dispel tints on it come out dark.
-                if button.dispelBorderTex or (button.dispelBorderHost and not button.roundDispelTex) then
-                    if button.roundDispelHost then button.roundDispelHost:Hide() end
-                    button.dispelBorderHost:Show()
-                elseif button.roundDispelTex then
+                -- Prefer the pandemic-style masked ColorTexture (roundDispelHost)
+                -- which renders at hostLevel + 2, on top of any dark border.
+                if button.roundDispelHost then
                     button.roundDispelHost:Show()
                     if button.dispelBorderHost then button.dispelBorderHost:Hide() end
+                    if button.borderTex then button.borderTex:Hide() end
+                elseif button.dispelBorderTex or (button.dispelBorderHost and not button.roundDispelTex) then
+                    button.dispelBorderHost:Show()
+                    if button.borderTex then button.borderTex:Hide() end
                 elseif button.borderTex then
                     button.borderTex:Show()
                     button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
@@ -446,11 +470,12 @@ function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
             main = main or SB.Get(button, 1)
             if isBuff then
                 SB.LayoutFor(main, button.icon, loc)
+                if level then main:SetFrameLevel(level) end
+                SB.SetDarkColor(main)
             else
                 SB.LayoutDispelFor(main, button.icon, loc)
+                if level then main:SetFrameLevel(level + 1) end
             end
-            if level then main:SetFrameLevel(level) end
-            if isBuff then SB.SetDarkColor(main) end -- debuff strips are engine-colored
             main:Show()
         elseif main then
             main:Hide()
@@ -468,7 +493,7 @@ function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
 
         if showSteal then
             SB.LayoutDispelFor(steal, button.icon, loc)
-            if level then steal:SetFrameLevel(level + 1) end
+            if level then steal:SetFrameLevel(level + 2) end
             steal:Show()
         elseif steal then
             steal:Hide()
@@ -553,12 +578,15 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
 
     -- Engine-colored border for debuffs (see TryRegisterDispelBorder).
     if not isBuff and not button.dispelBorderHost then
-        local dispelBorderHost = CreateFrame("Frame", nil, borderHost)
+        local dispelBorderHost = CreateFrame("Frame", nil, button)
+        dispelBorderHost:ClearAllPoints()
         dispelBorderHost:SetAllPoints(borderHost)
+        dispelBorderHost:SetFrameLevel(borderHost:GetFrameLevel() + 1)
         dispelBorderHost:EnableMouse(false)
         dispelBorderHost:Hide()
 
-        local dispelBorderTex = dispelBorderHost:CreateTexture(nil, "OVERLAY")
+        local dispelBorderTex = dispelBorderHost:CreateTexture(nil, "OVERLAY", nil, 1)
+        dispelBorderTex:ClearAllPoints()
         dispelBorderTex:SetAllPoints(dispelBorderHost)
         dispelBorderTex:SetAtlas("ui-debuff-border-default-noicon")
         dispelBorderTex:SetTexelSnappingBias(0)
@@ -568,35 +596,49 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
         button.dispelBorderTexPending = dispelBorderTex
     end
 
-    -- Rounded ring tinted by the engine with the real dispel color
-    -- (PreserveAsset), what "Dispel Color" shows; dispelBorderHost above is the
-    -- fallback until this registers.
+    -- Rounded ring rendered like pandemic border: pure white ColorTexture masked
+    -- by ui-debuff-border-default-noicon, tinted with the real dispel color
+    -- (PreserveAsset). Framed above borderHost (+2) so the colored border is on top.
     if not isBuff and not button.roundDispelHost then
-        local roundDispelHost = CreateFrame("Frame", nil, borderHost)
+        local roundDispelHost = CreateFrame("Frame", nil, button)
+        roundDispelHost:ClearAllPoints()
         roundDispelHost:SetAllPoints(borderHost)
+        roundDispelHost:SetFrameLevel(borderHost:GetFrameLevel() + 2)
         roundDispelHost:EnableMouse(false)
         roundDispelHost:Hide()
 
-        local roundDispelTex = roundDispelHost:CreateTexture(nil, "OVERLAY")
+        local roundDispelTex = roundDispelHost:CreateTexture(nil, "OVERLAY", nil, 2)
+        roundDispelTex:ClearAllPoints()
         roundDispelTex:SetAllPoints(roundDispelHost)
-        roundDispelTex:SetAtlas("ui-debuff-border-default-noicon")
-        roundDispelTex:SetDesaturated(true)
+        roundDispelTex:SetColorTexture(1, 1, 1, 1)
         roundDispelTex:SetTexelSnappingBias(0)
         roundDispelTex:SetSnapToPixelGrid(false)
 
+        local mask = roundDispelHost:CreateMaskTexture()
+        mask:ClearAllPoints()
+        mask:SetAtlas("ui-debuff-border-default-noicon")
+        mask:SetAllPoints(roundDispelHost)
+        mask:SetTexelSnappingBias(0)
+        mask:SetSnapToPixelGrid(false)
+        roundDispelTex:AddMaskTexture(mask)
+
         button.roundDispelHost = roundDispelHost
         button.roundDispelTexPending = roundDispelTex
+        roundDispelHost.mask = mask
     end
 
     -- Buffs: Blizzard's StealableBorder texture over the normal border, in our
     -- own host so "Show Dispels" can show/hide it.
     if isBuff and not button.stealableHost then
-        local stealableHost = CreateFrame("Frame", nil, borderHost)
+        local stealableHost = CreateFrame("Frame", nil, button)
+        stealableHost:ClearAllPoints()
         stealableHost:SetAllPoints(borderHost)
+        stealableHost:SetFrameLevel(borderHost:GetFrameLevel() + 2)
         stealableHost:EnableMouse(false)
         stealableHost:Hide()
 
-        local stealable = stealableHost:CreateTexture(nil, "OVERLAY")
+        local stealable = stealableHost:CreateTexture(nil, "OVERLAY", nil, 2)
+        stealable:ClearAllPoints()
         stealable:SetAllPoints(stealableHost)
         stealable:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Stealable")
         stealable:SetBlendMode("ADD")

@@ -176,7 +176,7 @@ local function GetPandemicHost(button)
     host = CreateFrame("Frame", nil, button)
     host:SetAllPoints(button)
     local base = button.borderHost and button.borderHost:GetFrameLevel() or button:GetFrameLevel()
-    host:SetFrameLevel(base + 2) -- over the dispel border, under the text
+    host:SetFrameLevel(base + 3) -- over the dispel border, under the text
     host:EnableMouse(false)
     host:Hide()
     pandemicHosts[button] = host
