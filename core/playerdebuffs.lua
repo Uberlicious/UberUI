@@ -1,43 +1,5 @@
-local addon, ns = ...
-
--- Player debuffs in our own aurakit container, used ONLY while Player auras
--- use square borders (and Player debuffs aren't handed back to Blizzard).
--- Buffs and weapon enchants stay on Blizzard's BuffFrame as before.
---
--- Why: Blizzard's DebuffFrame buttons are styled from outside, and in combat
--- every route to a player debuff's dispel type is closed to addon code, so
--- square Player debuff borders fell back to the "None" red in combat. Inside
--- a CustomAuraContainer the ENGINE colors the square strips (aurakit's
--- PreserveAsset registration), so they're right in combat too -- same as
--- Target/Focus. See docs/square-borders.md.
---
--- Mirrors Blizzard's DebuffFrame (Blizzard_BuffFrame/BuffFrame.lua, same on
--- retail 12.1 and Forever 1.60.1):
---   * every HARMFUL aura on PlayerFrame.unit (vehicle-aware), no filtering,
---     in application order (AuraInstanceIDOnly ~= Blizzard's slot order), up
---     to DEBUFF_MAX_DISPLAY plus the 6 private aura slots -- private (boss)
---     auras come through the container itself, so Blizzard's private aura
---     anchors are hidden along with its buttons;
---   * Edit Mode settings, read from DebuffFrame.AuraContainer after every
---     UpdateGridLayout: orientation, icon wrap/direction, icon limit (per
---     row), icon size (container scale), icon padding. Visibility and
---     opacity apply to DebuffFrame itself, which is our parent, so they
---     carry over on their own; so does the frame's Edit Mode position;
---   * 30x30 icons in Blizzard's 30x40 (horizontal) / 60x30 (vertical) cells,
---     duration text in the gap beside the icon with Blizzard's white-under-
---     BUFF_DURATION_WARNING_TIME / yellow coloring and the "buffDurations"
---     CVar, stack count bottom-right in NumberFontNormal, no cooldown swipe.
--- Not mirrored: the low-time flash (BUFF_WARNING_TIME), Edit Mode's "Show
--- Dispel Type" symbol (square borders have no slot for it -- colors are the
--- same either way), and Forever's gamepad navigation of DebuffFrame buttons.
--- The deadly-debuff center alert is a separate frame and keeps working.
---
--- While Edit Mode is open, Blizzard's own container is shown instead so its
--- preview icons work.
---
--- Hooks on Blizzard frames are installed only once the feature is actually
--- in use (CLAUDE.md), and every write they trigger is deferred a frame to
--- stay out of Blizzard's update chain.
+-- Player debuffs container for square borders (mirrors DebuffFrame layout).
+-- Keeps dispel colors accurate in combat via the engine's PreserveAsset pipeline.
 
 local aurakit = UberUI.aurakit
 local SB = UberUI.squareborders
@@ -46,8 +8,8 @@ local playerdebuffs = {}
 local SQUARE_LOC = "player"
 local GROUP_KEY = "debuffs"
 local ICON_SIZE = 30
-local CELL_EXTRA_HORIZONTAL = 40 - ICON_SIZE -- 30x40 cell: text below/above
-local CELL_EXTRA_VERTICAL = 60 - ICON_SIZE   -- 60x30 cell: text beside
+local CELL_EXTRA_HORIZONTAL = 40 - ICON_SIZE
+local CELL_EXTRA_VERTICAL = 60 - ICON_SIZE
 local PRIVATE_AURA_SLOTS = 6
 
 local container
@@ -84,9 +46,7 @@ end
 -- Buttons
 -------------------------------------------------------------------------------
 
--- Blizzard's AuraButtonMixin:UpdateDuration colors: white under
--- BUFF_DURATION_WARNING_TIME, yellow otherwise. A step curve on remaining
--- time lets the engine apply it, since the duration itself is secret.
+-- Curve for duration text coloring (white under warning threshold, yellow otherwise).
 local durationColorCurve
 local function GetDurationColorCurve()
     if durationColorCurve ~= nil then return durationColorCurve or nil end
@@ -101,9 +61,7 @@ local function GetDurationColorCurve()
     return durationColorCurve or nil
 end
 
--- Duration text sits in the cell's gap past the icon, on the side Blizzard
--- puts it (AuraContainerMixin:UpdateGridLayout), pushed out by an outset
--- square border's thickness like buffsandauras.lua does for Blizzard's own.
+-- Duration text placement beside icon, offset for outset borders.
 local function LayoutDuration(button)
     local text = button.uuDuration
     if not text or not button.icon then return end

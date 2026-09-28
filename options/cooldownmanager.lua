@@ -26,7 +26,7 @@ function opt.BuildCooldownManager(page)
 
     local cdmShapeInit = opt.AddDropdown(page, {
         variable = "CooldownIconShape", name = "Cooldown Manager Icon Shape",
-        tooltip = "Rounded is Blizzard's Cooldown Manager icon. Square shows the icons square (zoomed slightly to crop the icon's built-in edge) with a flat border of exact pixel thickness in the darkness color, when Cooldown Manager Icon Borders is on. Applies to Essential, Utility and tracked buff icons, and the icons on tracked buff bars.",
+        tooltip = "Rounded is Blizzard's Cooldown Manager icon. Square shows the icons square (zoomed slightly to crop the icon's built-in edge) with a flat border of exact pixel thickness in the darkness color, when Cooldown Manager Icon Borders is on. Applies to Essential, Utility and tracked buff icons, and the icons on tracked buff bars.\n\nNote: every border is dark -- tracked debuffs (e.g. your damage over time effects) no longer get dispel-type colored borders.",
         default = "rounded",
         values = { { "rounded", "Rounded" }, { "square", "Square" } },
         get = function() return CdmSquare() and "square" or "rounded" end,
@@ -52,16 +52,6 @@ function opt.BuildCooldownManager(page)
         onChange = RefreshCooldownManager,
     }), cdmShapeInit, CdmSquare);
 
-    opt.AddDropdown(page, {
-        variable = "CooldownDebuffBorder", name = "Cooldown Manager Debuff Border",
-        tooltip = "Border on harmful auras you track in the Tracked Buffs section (e.g. your damage over time effects). Dispel Color is Blizzard's look: the aura's dispel-type color, red when it has none. Dark gives them the same border as every other icon.",
-        default = "dispel",
-        values = { { "dispel", "Dispel Color" }, { "dark", "Dark" } },
-        get = function() return uuidb.cooldown.debuffborder or "dispel" end,
-        set = function(value) uuidb.cooldown.debuffborder = value end,
-        onChange = RefreshCooldownManager,
-    });
-
     local cdmPandemicInit = opt.AddDropdown(page, {
         variable = "CooldownPandemicStyle", name = "Cooldown Manager Pandemic Highlight",
         tooltip = "What an icon shows while its aura is in the pandemic window (refreshing it now keeps the remaining time -- the game decides).\n\nBlizzard: Blizzard's own rounded animation.\n\nBorder: the icon's border in the highlight color, square with Square icons.\n\nProc Glow / Marching Ants: Blizzard's animated glows, tinted.",
@@ -72,16 +62,26 @@ function opt.BuildCooldownManager(page)
         onChange = RefreshCooldownManager,
     });
 
+    local function CustomPandemic() return (uuidb.cooldown.pandemicstyle or "blizzard") ~= "blizzard" end
+
+    local cdmPandemicClassInit = opt.AddCheckbox(page, {
+        variable = "CooldownPandemicClassColor", name = "Pandemic Highlight: Use Class Color",
+        tooltip = "Color the pandemic highlight (Border, Proc Glow and Marching Ants) in your character's class color instead of the color below.",
+        db = "cooldown", field = "pandemicclasscolor", default = false,
+        onChange = RefreshCooldownManager,
+    });
+    opt.DependsOn(cdmPandemicClassInit, cdmPandemicInit, CustomPandemic);
+
     opt.DependsOn(opt.AddColorSwatch(page, {
         variable = "CooldownPandemicColor", name = "Cooldown Manager Pandemic Color",
-        tooltip = "Color of the Cooldown Manager pandemic highlight (Border, Proc Glow and Marching Ants).",
+        tooltip = "Color of the Cooldown Manager pandemic highlight (Border, Proc Glow and Marching Ants), unless Use Class Color is on.",
         db = "cooldown", field = "pandemiccolor", default = "ffff2626",
         get = function()
             local v = uuidb.cooldown.pandemiccolor
             return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff2626"
         end,
         onChange = RefreshCooldownManager,
-    }), cdmPandemicInit, function() return (uuidb.cooldown.pandemicstyle or "blizzard") ~= "blizzard" end);
+    }), cdmPandemicClassInit, function() return CustomPandemic() and not uuidb.cooldown.pandemicclasscolor end);
 
     opt.Header(page, "Cooldown Manager Countdown Text");
 
@@ -122,59 +122,28 @@ function opt.BuildCooldownManager(page)
 
     opt.Header(page, "Cooldown Manager Layout");
 
-    -- Essential Cooldowns
-    opt.AddCheckbox(page, {
-        variable = "CooldownEssentialCollapse", name = "Essential Cooldowns: Collapse Inactive",
-        tooltip = "Pack active Essential Cooldowns together, removing empty spaces between them.",
-        db = "cooldown", field = "essential_collapse", default = false,
-        onChange = RefreshCooldownManager,
-    });
-    opt.AddCheckbox(page, {
-        variable = "CooldownEssentialCentered", name = "Essential Cooldowns: Center Icons",
-        tooltip = "Center active Essential Cooldown icons horizontally within the container instead of aligning to the Edit Mode edge.",
-        db = "cooldown", field = "essential_centered", default = false,
-        onChange = RefreshCooldownManager,
-    });
+    -- One alignment choice per viewer. Which items show at all (inactive
+    -- buffs) stays Blizzard's Edit Mode "Hide When Inactive" setting.
+    local ALIGN_VALUES = {
+        { "blizzard", "Blizzard Default" },
+        { "pack", "Packed" },
+        { "center", "Centered" },
+    }
+    local ALIGN_TOOLTIP = "Blizzard Default leaves the layout alone. Packed and Centered pack the shown %s together with no gaps -- from the Edit Mode edge (following its direction setting), or centered in the container. Whether inactive %s show at all is Blizzard's Edit Mode \"Hide When Inactive\" setting. With Icon Padding at 0 and square icons, neighboring icons share one border line.\n\nSwitching back to Blizzard Default takes effect on the next reload or Edit Mode change."
+    local function AddAlign(variable, name, field, default, noun)
+        opt.AddDropdown(page, {
+            variable = variable, name = name,
+            tooltip = string.format(ALIGN_TOOLTIP, noun, noun),
+            default = default,
+            values = ALIGN_VALUES,
+            get = function() return uuidb.cooldown[field] or default end,
+            set = function(value) uuidb.cooldown[field] = value end,
+            onChange = RefreshCooldownManager,
+        });
+    end
 
-    -- Utility Cooldowns
-    opt.AddCheckbox(page, {
-        variable = "CooldownUtilityCollapse", name = "Utility Cooldowns: Collapse Inactive",
-        tooltip = "Pack active Utility Cooldowns together, removing empty spaces between them.",
-        db = "cooldown", field = "utility_collapse", default = false,
-        onChange = RefreshCooldownManager,
-    });
-    opt.AddCheckbox(page, {
-        variable = "CooldownUtilityCentered", name = "Utility Cooldowns: Center Icons",
-        tooltip = "Center active Utility Cooldown icons horizontally within the container instead of aligning to the Edit Mode edge.",
-        db = "cooldown", field = "utility_centered", default = false,
-        onChange = RefreshCooldownManager,
-    });
-
-    -- Tracked Buffs
-    opt.AddCheckbox(page, {
-        variable = "CooldownBuffIconCollapse", name = "Tracked Buffs: Collapse Inactive",
-        tooltip = "Pack active Tracked Buff icons together, removing empty spaces when auras fall off.",
-        db = "cooldown", field = "bufficon_collapse", default = true,
-        onChange = RefreshCooldownManager,
-    });
-    opt.AddCheckbox(page, {
-        variable = "CooldownBuffIconCentered", name = "Tracked Buffs: Center Icons",
-        tooltip = "Center active Tracked Buff icons horizontally within the container instead of aligning to the Edit Mode edge.",
-        db = "cooldown", field = "bufficon_centered", default = false,
-        onChange = RefreshCooldownManager,
-    });
-
-    -- Tracked Buff Bars
-    opt.AddCheckbox(page, {
-        variable = "CooldownBuffBarCollapse", name = "Tracked Bars: Collapse Inactive",
-        tooltip = "Pack active Tracked Buff Bars together, removing empty spaces when auras fall off.",
-        db = "cooldown", field = "buffbar_collapse", default = true,
-        onChange = RefreshCooldownManager,
-    });
-    opt.AddCheckbox(page, {
-        variable = "CooldownBuffBarCentered", name = "Tracked Bars: Center Bars",
-        tooltip = "Center active Tracked Buff Bars within the container.",
-        db = "cooldown", field = "buffbar_centered", default = false,
-        onChange = RefreshCooldownManager,
-    });
+    AddAlign("CooldownEssentialAlign", "Essential Cooldowns Alignment", "essential_align", "blizzard", "icons");
+    AddAlign("CooldownUtilityAlign", "Utility Cooldowns Alignment", "utility_align", "blizzard", "icons");
+    AddAlign("CooldownBuffIconAlign", "Tracked Buffs Alignment", "bufficon_align", "pack", "icons");
+    AddAlign("CooldownBuffBarAlign", "Tracked Bars Alignment", "buffbar_align", "pack", "bars");
 end

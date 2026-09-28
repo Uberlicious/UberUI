@@ -43,7 +43,7 @@ end
 
 function squareborders.Thickness(loc)
     local g = uuidb and uuidb.general
-    local px = g and tonumber(g[Keys(loc)[2]]) or 2
+    local px = g and tonumber(g[Keys(loc)[2]]) or 1
     return math.max(1, math.min(8, math.floor(px + 0.5)))
 end
 

@@ -1,21 +1,6 @@
-local addon, ns = ...
-
--- Blizzard's swing timers (Blizzard_SwingTimer: main hand, off hand, ranged).
--- WoW Forever only -- retail 12.1 has no native swing timer.
---
--- Each bar (SwingTimerFrameTemplate) has a Border and a Background texture on
--- the frame and a StatusBar whose fill Blizzard sets once, in OnLoad
--- (SwingTimerMixin:InitializeBarPresentation), from a per-hand colored atlas
--- (frame.barTexture). Blizzard only ever changes the Border's ALPHA afterwards
--- (out-of-range dimming), so a vertex color and a fill texture set here
--- stick; no hooks are needed.
---
--- Custom bar textures are greyscale, so each hand gets its own fill color
--- (options color swatches). The fill texture object is retextured in place
--- -- not SetStatusBarTexture -- because Blizzard anchored the swing pip to it.
-
+-- Swing timers (WoW Forever).
 local swingtimers = {}
-local retextured = setmetatable({}, { __mode = "k" }) -- fill texture -> true
+local retextured = setmetatable({}, { __mode = "k" })
 
 local FRAMES = {
     { name = "SwingTimerMainHandFrame", colorField = "swingtimermainhandcolor", default = "ffffc21a" },
@@ -32,9 +17,6 @@ local function HexColor(hex, fallback)
     return fallback and HexColor(fallback) or nil
 end
 
--- The custom texture in effect for swing timers, or nil for Blizzard's own.
--- Only the swing timers' own setting: they're timers, not health/power bars,
--- so the All Bars texture deliberately doesn't apply to them.
 local function GetSwingTexture()
     local g = uuidb and uuidb.general
     if not (g and uuidb.statusbars) then return nil end
@@ -43,15 +25,7 @@ local function GetSwingTexture()
     return type(tex) == "string" and tex or nil
 end
 
--- Square border ("Swing Timer Border: Square"): four solid strips a whole
--- number of physical pixels thick around the bar, in the darkness color, over
--- a dark background of our own. Blizzard's rounded frame and background art
--- are cleared (texture set to nil) rather than faded: Blizzard sets their
--- alpha for out-of-range dimming (ApplyRangePresentation), and on a texture
--- the vertex color's alpha is the same value, so any fade got undone. It
--- never re-sets the art itself (only the XML does), so clearing sticks;
--- Rounded puts the atlases back. Our pieces are textures on the StatusBar,
--- whose alpha Blizzard dims along with its own, so dimming still applies.
+-- Square border around swing timer bars.
 local ART_ATLAS = { Border = "ui-swingtimerbar-frame", Background = "ui-swingtimerbar-background" }
 local artCleared = setmetatable({}, { __mode = "k" }) -- texture -> true
 local SQUARE_BG_ALPHA = 0.6

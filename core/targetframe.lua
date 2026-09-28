@@ -28,13 +28,7 @@ targetframes:RegisterUnitEvent("UNIT_MAXPOWER", "target")
 targetframes:RegisterUnitEvent("UNIT_AURA", "target")
 targetframes:RegisterEvent("GROUP_ROSTER_UPDATE")
 targetframes:RegisterEvent("PARTY_LEADER_CHANGED")
--- The engine's PLAYER/!PLAYER caster classification (see
--- aurakit.HasAmbiguousMineMatch) goes ambiguous or clears back up a few
--- seconds after a zone transition, not instantly at the event -- these
--- three events cover both crossing a zone boundary and moving between
--- indoor/outdoor areas within one, and UpdateAuras() itself is re-run a
--- few times with delay below to actually catch the transition whichever
--- direction it goes.
+-- Cross-zone transitions can cause brief classification delay; re-check after delay.
 targetframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 targetframes:RegisterEvent("ZONE_CHANGED")
 targetframes:RegisterEvent("ZONE_CHANGED_INDOORS")
@@ -63,15 +57,11 @@ targetframes:SetScript("OnEvent", function(self, event, unit)
         C_Timer.After(3, function() targetframes:UpdateAuras() end)
         C_Timer.After(5, function() targetframes:UpdateAuras() end)
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Force a correctness pass once combat lockdown lifts, in case any
-        -- styling was skipped or failed while we were in combat.
         targetframes:UpdateAuras()
     end
 end)
 
--- Shared lookups for the frequently-nested Blizzard target frame paths --
--- avoids repeating the same chain in Color/HealthBarColor/
--- HealthManaBarTexture/UpdateAuras/SetupCustomAuraContainer/PvPIcon.
+-- Cached subframe lookups.
 local function GetTargetFrameMain()
     return TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
 end
@@ -134,14 +124,7 @@ function targetframes:Color()
     self:ColorComboPoints()
 end
 
--- WoW Forever 1.60.1 (like every classic-family client back through Cata --
--- see blizzard_source/Blizzard_UnitFrame/ComboFrame.xml/.lua) renders combo
--- points through the shared native ComboFrame: a standalone global anchored
--- to TargetFrame, not the retail-only PlayerFrame-anchored
--- RogueComboPointBarFrame/DruidComboPointBarFrame pair. Each of its 9
--- ComboPoint children only names its Highlight/Shine overlay layers -- the
--- always-visible base diamond (the "border" users see per pip) has no
--- parentKey, so it's picked up via GetRegions() by elimination.
+-- WoW Forever combo points on ComboFrame (base diamond region).
 function targetframes:ColorComboPoints()
     if not (ComboFrame and ComboFrame.ComboPoints) then return end
     for _, cp in ipairs(ComboFrame.ComboPoints) do
@@ -253,10 +236,7 @@ local function IsEnemyTarget()
     return not UnitIsFriend("player", "target")
 end
 
--- Thin per-frame wrapper: resolves this frame's uuidb style/showDispel
--- settings, then hands off to the shared aurakit.ApplyAuraButtonStyle for
--- the actual border/icon/stealable-overlay logic (shared with focusframe.lua
--- via core/aurakit.lua).
+-- Target aura button styling.
 function targetframes:UpdateAuraButtonStyle(button)
     if not button then return end
     local isBuff = button.isBuff
@@ -266,7 +246,6 @@ function targetframes:UpdateAuraButtonStyle(button)
         (uuidb.general.aurastyle_targetdebuffs or "zoom")
     end
     local showDispel = uuidb and uuidb.general and uuidb.general.targetbuffs_showdispel
-    -- stealableRing: thin rounded white purgeable border instead of Blizzard's glow.
     aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "target", stealableRing = true })
 end
 
@@ -274,16 +253,13 @@ local TOP_X = 25
 local TOP_Y = 26
 local TOP_ON_TOP_X = 5
 local LARGE_AURA_SIZE = 21
-local SMALL_AURA_SIZE = 17 -- Blizzard's TargetFrameAuraContainerDefaults: 21 / 17
-local AURA_SPACING = 3 -- Blizzard's FlowLayoutElementSpacing
-local CONTAINER_GAP = 3 -- Blizzard: groupLineSpacing = FlowLayoutLineSpacing (3)
+local SMALL_AURA_SIZE = 17
+local AURA_SPACING = 3
+local CONTAINER_GAP = 3
 
 local isUpdatingAuras = false
 
--- Which container sits directly under the health/mana bar ("primary") vs
--- trails behind it ("secondary") swaps with target hostility: debuffs
--- primary on an enemy, buffs primary on a friendly (including self). See
--- aurakit.UpdatePairedPositions for the shared anchor math.
+-- Primary/secondary container anchor placement based on hostility.
 function targetframes:UpdateAuraPositions()
     aurakit.UpdatePairedPositions({
         frameObj = self,
@@ -297,8 +273,7 @@ function targetframes:UpdateAuraPositions()
     })
 end
 
--- Border on the cast bar's spell icon (Cast Bar Icon Border option), in
--- this frame's aura border look (aurakit.StyleCastBarIcon).
+-- Cast bar icon border in this frame's aura border look.
 function targetframes:StyleCastBarIcon()
     local bar = TargetFrame.spellbar or TargetFrameSpellBar
     if not bar then return end
@@ -351,16 +326,8 @@ function targetframes:UpdateAuras()
     aurakit.ShowAuraContainers(self, true)
     self:UpdateAuraPositions()
 
-    -- Group identity/container are permanent (see SetupCustomAuraContainer);
-    -- hostility is handled entirely in UpdateAuraPositions above. All that's
-    -- left is "none" style hiding, keyed to each group's fixed type.
     local debuffCount = (styleDebuffs ~= "none") and 16 or 0
     local buffCount = (styleBuffs ~= "none") and 32 or 0
-    -- "mine" gets forced to 0 specifically when the engine's PLAYER/!PLAYER
-    -- caster classification is currently ambiguous for this unit (see
-    -- aurakit.HasAmbiguousMineMatch -- confirmed tied to the unit being in
-    -- a different zone from the local player). "other" is left untouched,
-    -- so the aura stays visible there instead of duplicating OR vanishing.
     local debuffMineCount = aurakit.GetSafeMineMaxFrameCount("target", true, debuffCount)
     local buffMineCount = aurakit.GetSafeMineMaxFrameCount("target", false, buffCount)
     pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_mine", debuffMineCount)
@@ -371,7 +338,6 @@ function targetframes:UpdateAuras()
     pcall(self.customDebuffs.UpdateAllAuras, self.customDebuffs)
     pcall(self.customBuffs.UpdateAllAuras, self.customBuffs)
 
-    -- Force a final button style pass.
     aurakit.RefreshContainerButtons(self.customDebuffs, "debuffs_mine", "debuffs_other", function(btn) targetframes:UpdateAuraButtonStyle(btn) end)
     aurakit.RefreshContainerButtons(self.customBuffs, "buffs_mine", "buffs_other", function(btn) targetframes:UpdateAuraButtonStyle(btn) end)
 
@@ -484,9 +450,7 @@ function targetframes:SetupCustomAuraContainer()
             aurakit.ShowAuraContainers(targetframes, false)
         end)
     end
-    -- Target-of-target appearing/disappearing changes the aura row width
-    -- (aurakit.ApplyToTRowWidth) without any aura changing, so re-run the
-    -- positioning then too.
+    -- ToT show/hide updates aura row width.
     if not self.totFrameHooked and TargetFrame.totFrame then
         self.totFrameHooked = true
         local function RefreshToTWidth() targetframes:UpdateAuraPositions() end
@@ -497,9 +461,7 @@ function targetframes:SetupCustomAuraContainer()
     self:ApplyToTPlacement()
 end
 
--- "Target of Target" setting: Narrow Auras (Blizzard's behavior) or Move
--- ToT Aside (aurakit.SetToTPlacement). Safe to call repeatedly; does
--- nothing to the ToT frame unless Move ToT Aside is (or was) chosen.
+-- Target of Target placement option.
 function targetframes:ApplyToTPlacement()
     local aside = uuidb and uuidb.targetframes and uuidb.targetframes.totplacement == "aside"
     aurakit.SetToTPlacement(TargetFrame, aside)

@@ -1,47 +1,26 @@
 local addon, ns = ...
 
--- Nameplate auras in our own aurakit containers (docs/nameplate-auras.md).
--- Off by default ("Uber UI Nameplate Auras" on the Nameplates page).
+-- Nameplate auras in our own aurakit containers (docs/nameplate-auras.md),
+-- off by default. Nameplate aura data is secret in combat, so instead of
+-- styling Blizzard's buttons the engine classifies, filters and colors auras
+-- in CustomAuraContainers.
 --
--- Why containers and not Blizzard's buttons: nameplate aura data is secret
--- under combat/encounter/PvP restrictions, so styling Blizzard's own
--- NamePlateAuraItem buttons means reading fields that crash when touched.
--- A CustomAuraContainer lets the engine classify and filter the auras and
--- color the dispel borders itself.
+-- Containers are slow to build (~12 ms), so a pool of prebuilt "bundles"
+-- (holder + debuff/buff/crowd-control containers) is built behind loading
+-- screens and attached to plates as they appear (~0.1 ms). The pool never
+-- shrinks (frames can't be freed).
 --
--- Nameplates come and go constantly and a container costs ~12 ms to build
--- (the engine pre-creates buttons in batches of 10), far too slow to build
--- per plate. So, like EllesmereUI: a pool of prebuilt "bundles" (a holder +
--- debuff/buff/crowd-control containers), built behind the loading screen --
--- 16 at login, topped up to 25 entering a party/raid instance, one more on
--- demand when a plate finds the pool empty (even in combat: a one-off hitch,
--- never missing auras). Frames can't be freed, so the pool never shrinks.
--- Attaching a bundle to a plate is ~0.1 ms.
+-- Filters mirror Blizzard_NamePlateAuras.lua: debuffs (yours on enemies,
+-- max 12), buffs (enemies: important or dispellable; friends: yours; max 2
+-- each), crowd control (max 2 each). Shown categories follow Blizzard's
+-- nameplate CVars. The loss-of-control icon stays Blizzard's.
 --
--- Mirrors Blizzard_NamePlateAuras.lua (retail 12.1 and Forever 1.60.1):
---   debuffs  HARMFUL|INCLUDE_NAME_PLATE_ONLY, not crowd control, only
---            nameplateShowPersonal auras (unless the show-all-personal CVar),
---            yours only on enemies; max 12, rows of Blizzard's stride
---   buffs    enemies: important or dispellable (Blizzard: stealable -- the
---            engine's DISPELLABLE token works while aura data is secret, an
---            isStealable compare doesn't); friends: yours only; max 2 each
---   cc       crowd control, or nameplateShowAll; max 2 each
--- Which categories show per unit type comes from Blizzard's own nameplate
--- CVars, the same ones its options panel writes. The loss-of-control icon
--- (enemy/friendly players) stays Blizzard's: it reads C_LossOfControl,
--- which containers can't.
---
--- Placement: each container sits exactly where Blizzard's own list frame
--- does, and the holder is parented to the plate's AurasFrame, so Blizzard's
--- show/hide (simplified plates, name-only, widgets-only), fade and scale all
--- carry over. Blizzard's three list frames are faded to 0 while a bundle is
--- attached and put back when it leaves.
---
--- Rules followed (CLAUDE.md): nothing is created or hooked unless the
--- feature is on; per-plate hooks go on Blizzard's AurasFrame instances only
--- when a bundle first attaches to them; every write triggered from a
--- nameplate event or hook is deferred a frame. Every frame that anchors to a
--- nameplate is born with DisableUntrustedLayoutScriptsTemplate.
+-- Each container sits where Blizzard's list frame does, in a holder parented
+-- to the plate's AurasFrame, so Blizzard's show/hide, fade and scale carry
+-- over; Blizzard's lists are faded out while a bundle is attached. Hooks and
+-- creation only happen while the feature is on, nameplate-triggered writes
+-- are deferred, and frames anchored to a plate use
+-- DisableUntrustedLayoutScriptsTemplate.
 
 local aurakit = UberUI.aurakit
 local nameplateauras = {}
@@ -49,9 +28,7 @@ local nameplateauras = {}
 local SQUARE_LOC = "nameplate"
 local ICON_SIZE = 22
 local SPACING = 3                         -- 22 + 3 = Blizzard's 25px pitch
--- Extra gap between the health bar and our containers (buffs left, CC right,
--- debuffs above): our borders sit outside the icon (rounded art ~3px), so at
--- Blizzard's own spacing they ran onto the health bar.
+-- Extra gap from the health bar: our borders draw outside the icon.
 local SIDE_GAP = 3
 local DEBUFF_MAX = 12
 local BUFF_MAX, CC_MAX = 2, 2
@@ -103,16 +80,11 @@ end
 -- Styling
 -------------------------------------------------------------------------------
 
--- Duration text, Blizzard's nameplate look (NamePlateAuraItemMixin:SetAura):
--- the Cooldown's own countdown font, whole seconds, centered. The duration
--- is secret, so formatting and color go to the engine: a formatter rounding
--- up to whole seconds, and a step color curve on the REMAINING duration --
--- the expiring color from 0 to the threshold, the normal color up to 60 s,
--- transparent above that (Blizzard shows no number on auras over a minute;
--- the binding takes a single curve, so this is by time remaining: a long
--- aura shows its number for its last minute). Colors are hex strings from
--- the options' color swatches. The curve is copied at registration, so a
--- settings change re-registers each button's text.
+-- Duration text in Blizzard's nameplate look. The duration is secret, so the
+-- engine formats it (whole seconds, rounded up) and colors it from a step
+-- curve on the remaining time: expiring color up to the threshold, normal up
+-- to 60 s, transparent above (Blizzard shows no number over a minute). The
+-- curve is copied at registration, so settings changes re-register.
 local function DurationSettings()
     local g = uuidb and uuidb.general or {}
     local threshold = tonumber(g.nameplatedurationthreshold) or 5
@@ -179,7 +151,6 @@ local function AddDurationText(button)
     if not button.SetDurationText or button.uuDuration then return end
     local parent = button.textHolder or button
     local text = parent:CreateFontString(nil, "OVERLAY")
-    -- The Cooldown's own countdown font, like Blizzard's icons use.
     local cdText = button.cooldown and button.cooldown.GetCountdownFontString and button.cooldown:GetCountdownFontString()
     local font, size, flags
     if cdText then font, size, flags = cdText:GetFont() end
@@ -193,15 +164,9 @@ local function AddDurationText(button)
     ApplyDurationText(button)
 end
 
--- Pandemic highlight on debuffs: shown only while the aura can be refreshed
--- without losing time (its pandemic window). The engine decides that --
--- CustomAuraButton:AddPandemicRegion (retail 12.1 and Forever 1.60.1) shows
--- the region only between expiration - carried-over duration
--- (GetRefreshExtendedDuration - GetAuraBaseDuration) and expiration, so it
--- only ever lights on refreshable auras and works while aura data is
--- secret. The region's shown state is secret to us: we only ever style its
--- children. Styles: the aura's own border shape in a color, or one of
--- Blizzard's animated glows (a looping FlipBook, which runs in the engine).
+-- Pandemic highlight on debuffs: the engine shows the region
+-- (AddPandemicRegion) only inside the refresh window and while data is
+-- secret; its shown state is secret to us, so we only style its children.
 local PANDEMIC_DEFAULT_COLOR = "ffff2626"
 local pandemicHosts = setmetatable({}, { __mode = "k" }) -- button -> host frame
 
@@ -232,7 +197,6 @@ local function StylePandemic(button, style)
     end
 
     local SB = UberUI.squareborders
-    -- Hex string from the options' color swatch.
     local color = HexColor(g.nameplatepandemiccolor, nil) or HexColor(PANDEMIC_DEFAULT_COLOR)
     aurakit.StyleHighlight(host, {
         kind = on and (g.nameplatepandemicstyle or "border") or "none",
@@ -248,9 +212,8 @@ local function StyleButton(button)
     local g = uuidb and uuidb.general or {}
     local style = button.isBuff and (g.aurastyle_nameplatebuffs or "both") or (g.aurastyle_nameplatedebuffs or "zoom")
     local showDispel = g.nameplatebuffs_showdispel ~= false
-    -- stealableRing: a thin white border on purgeable buffs (rounded, or
-    -- square borders' white strips) instead of Blizzard's glow, which ran
-    -- over the health bar.
+    -- stealableRing: thin white border on purgeable buffs instead of
+    -- Blizzard's glow, which ran over the health bar.
     aurakit.ApplyAuraButtonStyle(button, {
         style = style,
         squareLoc = SQUARE_LOC,
@@ -297,8 +260,8 @@ local function AddGroup(c, key, filter, maxCount, isBuff, candidates, index)
 end
 
 local function BuildBundle()
-    -- The template gives the holder the aspect it needs to anchor into a
-    -- nameplate; it can only be given at creation.
+    -- The template (needed to anchor into a nameplate) can only be given at
+    -- creation.
     local ok, holder = pcall(CreateFrame, "Frame", nil, UIParent, "DisableUntrustedLayoutScriptsTemplate")
     if not ok or not holder then return nil end
     holder:SetSize(1, 1)
@@ -315,8 +278,8 @@ local function BuildBundle()
     local added = dispellableToken and AddGroup(b.buffs, "dispellable",
         "HELPFUL|INCLUDE_NAME_PLATE_ONLY|!IMPORTANT|DISPELLABLE", BUFF_MAX, true, nil, 2)
     if not added then
-        -- Client without the DISPELLABLE token: Blizzard's own isStealable
-        -- rule (empty while aura data is secret, e.g. instanced PvP).
+        -- No DISPELLABLE token on this client: Blizzard's isStealable rule
+        -- (empty while aura data is secret).
         dispellableToken = false
         AddGroup(b.buffs, "dispellable", "HELPFUL|INCLUDE_NAME_PLATE_ONLY|!IMPORTANT", BUFF_MAX, true,
             { isStealable = true }, 2)
@@ -327,8 +290,7 @@ local function BuildBundle()
     AddGroup(b.cc, "showall", "HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL", CC_MAX, false,
         { nameplateShowAll = true }, 2)
 
-    -- Growth: debuffs up and to the right from the health bar's top-left;
-    -- buffs leftward from beside the health bar; CC rightward.
+    -- Debuffs grow up/right from the bar's top-left; buffs left; CC right.
     pcall(b.debuffs.SetFlowLayoutAnchorPoint, b.debuffs, "BOTTOMLEFT")
     pcall(b.debuffs.SetFlowLayoutGrowthDirection, b.debuffs, 1, 1)
     pcall(b.buffs.SetFlowLayoutAnchorPoint, b.buffs, "BOTTOMRIGHT")
@@ -354,10 +316,9 @@ local function GrowPool(target)
     end
 end
 
--- Aura data is secret behind the loading screen, where the pool is built,
--- so the engine refuses aurakit's dispel-border registrations there. The
--- style pass retries them; run one per bundle, a bundle per frame, once the
--- world is up.
+-- Dispel-border registrations are refused behind the loading screen (where
+-- the pool is built), so bundles are restyled once the world is up, one per
+-- frame.
 local restyleQueue = {}
 local restyleRunning = false
 local function QueueRestyleAll()
@@ -416,15 +377,15 @@ end
 -- Attach / release
 -------------------------------------------------------------------------------
 
--- Per-unit filters, shown categories, scale and stride. Re-run whenever
--- Blizzard re-evaluates the plate (friend/enemy, player, CVars, aura scale).
+-- Per-unit filters, shown categories, scale and stride; re-run whenever
+-- Blizzard re-evaluates the plate.
 local function Bind(b, unit)
     local aurasFrame = b.aurasFrame
     if not aurasFrame then return end
     local isFriend = UnitIsFriend("player", unit)
 
-    -- Blizzard: debuffs on enemies must be yours; buffs on friends must be
-    -- yours, and friends get no important/dispellable split.
+    -- Debuffs on enemies must be yours; buffs on friends must be yours, with
+    -- no important/dispellable split.
     pcall(b.debuffs.SetAuraGroupFilterString, b.debuffs, "debuffs",
         isFriend and "HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL"
         or "HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL|PLAYER")
@@ -466,8 +427,7 @@ local function Layout(b)
         c:ClearAllPoints()
         c:SetPoint(point, list, point, x, y or 0)
     end
-    -- Debuffs lifted by the same gap: their borders draw outside the icon
-    -- and the bottom row ran onto the health bar.
+    -- Debuffs lifted too: their bottom row ran onto the health bar.
     pcall(place, b.debuffs, "BOTTOMLEFT", af.DebuffListFrame, 0, SIDE_GAP)
     pcall(place, b.buffs, "RIGHT", af.BuffListFrame, -SIDE_GAP)
     pcall(place, b.cc, "LEFT", af.CrowdControlListFrame, SIDE_GAP)
@@ -478,8 +438,8 @@ local QueueRebind
 local function EnsureAurasFrameHooks(aurasFrame)
     if hookedAuras[aurasFrame] then return end
     hookedAuras[aurasFrame] = true
-    -- UpdateShownState runs on unit/friend/player/simplified changes and
-    -- every aura-display CVar change; UpdateAuraScale on aura scale changes.
+    -- UpdateShownState: unit/friend/simplified/CVar changes;
+    -- UpdateAuraScale: aura scale changes.
     hooksecurefunc(aurasFrame, "UpdateShownState", function(self) QueueRebind(self) end)
     if aurasFrame.UpdateAuraScale then
         hooksecurefunc(aurasFrame, "UpdateAuraScale", function(self) QueueRebind(self) end)
@@ -514,8 +474,8 @@ local function Release(unit)
     b.inUse = nil
     if af then
         if attachedTo[af] == b then attachedTo[af] = nil end
-        -- Deferred (we may be inside Blizzard's removal chain), and skipped
-        -- if the plate already got a new bundle by then.
+        -- Deferred (possibly inside Blizzard's removal chain); skipped if the
+        -- plate already got a new bundle.
         C_Timer.After(0, function()
             if not attachedTo[af] and not af:IsForbidden() then SetBlizzardListsFaded(af, false) end
         end)
@@ -576,7 +536,6 @@ end
 -- Public
 -------------------------------------------------------------------------------
 
--- Options page: the on/off checkbox.
 function nameplateauras:Refresh()
     if Enabled() then
         local target = POOL_SIZE
@@ -589,7 +548,6 @@ function nameplateauras:Refresh()
     end
 end
 
--- Options page: aura style / border / purgeable-highlight changes.
 function nameplateauras:RefreshStyle()
     for _, b in ipairs(pool) do RestyleBundle(b) end
 end
@@ -602,9 +560,8 @@ events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 events:SetScript("OnEvent", function(_, event, arg1, arg2)
     if not Enabled() then return end
     if event == "NAME_PLATE_UNIT_ADDED" then
-        -- Deferred out of Blizzard's OnNamePlateAdded chain. A token can be
-        -- removed and re-added before this runs; the sequence number drops
-        -- the stale attach.
+        -- Deferred out of Blizzard's add chain; the sequence number drops a
+        -- stale attach if the token was removed and re-added meanwhile.
         local unit = arg1
         local n = (seq[unit] or 0) + 1
         seq[unit] = n
@@ -615,14 +572,12 @@ events:SetScript("OnEvent", function(_, event, arg1, arg2)
         seq[arg1] = (seq[arg1] or 0) + 1
         pcall(Release, arg1)
     elseif event == "PLAYER_LOGIN" then
-        -- Behind the loading screen (~12 ms a bundle).
         GrowPool(POOL_SIZE)
     elseif event == "PLAYER_ENTERING_WORLD" then
         local isLogin, isReload = arg1, arg2
         local _, instanceType = IsInInstance()
         if instanceType == "party" or instanceType == "raid" then
-            -- M+ and raid trash pulls are the biggest plate counts; top up
-            -- during the zoning screen.
+            -- Top up during the zoning screen (M+/raid pulls have the most plates).
             GrowPool(POOL_TARGET_INSTANCE)
         end
         if isLogin or isReload then QueueRestyleAll() end

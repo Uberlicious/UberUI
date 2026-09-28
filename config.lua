@@ -26,14 +26,7 @@ UberUI:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 ~= addon then
         return
     end
-    -- Re-run (not just once-and-lock) on every one of these: mergeDefaults
-    -- only fills in keys that are still nil, so repeat calls are harmless,
-    -- and this guards against SavedVariables becoming available later than
-    -- the first of these events fires (seen on Forever: writes on logout
-    -- succeed, but the saved values weren't showing up after a reload --
-    -- consistent with the global not being populated yet at ADDON_LOADED
-    -- time on this client, with the old single-fire Init() never
-    -- re-syncing once PLAYER_LOGIN/VARIABLES_LOADED actually had the data).
+    -- Re-run on each event so late-loading SavedVariables are merged properly.
     if event == "ADDON_LOADED" or event == "VARIABLES_LOADED" or event == "PLAYER_LOGIN" then
         self:Init()
     elseif event == "PLAYER_LOGOUT" then
@@ -111,31 +104,31 @@ local defaults = {
         aurastyle_playerbuffs        = "both",
         aurastyle_playerdebuffs      = "zoom",
         squareauraborders_player     = false,
-        squareauraborders_thickness  = 2,
+        squareauraborders_thickness  = 1,
         squareauraborders_inset      = true,
         playertempenchantcolor       = true,
         -- Other aura locations: squareauraborders_<loc>[_thickness|_inset]
         -- (see core/squareborders.lua; Player keeps the original keys above).
         squareauraborders_target           = false,
-        squareauraborders_target_thickness = 2,
+        squareauraborders_target_thickness = 1,
         squareauraborders_target_inset     = true,
         squareauraborders_focus            = false,
-        squareauraborders_focus_thickness  = 2,
+        squareauraborders_focus_thickness  = 1,
         squareauraborders_focus_inset      = true,
         squareauraborders_boss             = false,
-        squareauraborders_boss_thickness   = 2,
+        squareauraborders_boss_thickness   = 1,
         squareauraborders_boss_inset       = true,
         squareauraborders_party            = false,
-        squareauraborders_party_thickness  = 2,
+        squareauraborders_party_thickness  = 1,
         squareauraborders_party_inset      = true,
         squareauraborders_compact          = false,
-        squareauraborders_compact_thickness = 2,
+        squareauraborders_compact_thickness = 1,
         squareauraborders_compact_inset    = true,
         squareauraborders_arena            = false,
-        squareauraborders_arena_thickness  = 2,
+        squareauraborders_arena_thickness  = 1,
         squareauraborders_arena_inset      = true,
         squareauraborders_nameplate            = false,
-        squareauraborders_nameplate_thickness  = 2,
+        squareauraborders_nameplate_thickness  = 1,
         squareauraborders_nameplate_inset      = true,
         squareauraborders_cdm              = false,
         squareauraborders_cdm_thickness    = 1,
@@ -187,19 +180,16 @@ local defaults = {
         bartextures           = false,
         borders               = true,
         pandemicstyle         = "blizzard",
-        debuffborder          = "dispel",
         pandemiccolor         = "ffff2626",
+        pandemicclasscolor    = false,
         durationcolor         = "ffffffff",
         durationexpiringcolor = "ffff3333",
         durationthreshold     = 5,
-        essential_collapse    = false,
-        essential_centered    = false,
-        utility_collapse      = false,
-        utility_centered      = false,
-        bufficon_collapse     = true,
-        bufficon_centered     = false,
-        buffbar_collapse      = true,
-        buffbar_centered      = false,
+        -- "blizzard" (Blizzard's own layout), "pack" or "center"
+        essential_align       = "blizzard",
+        utility_align         = "blizzard",
+        bufficon_align        = "pack",
+        buffbar_align         = "pack",
     },
     playerframes = {
         classcolor = true,
@@ -223,9 +213,60 @@ local defaults = {
     },
     cuf = {
         hideRaidTitle = false,
-        sortMeOnTop = false,
     },
 }
+
+-- Copyable error popup.
+local reportedErrors, errorLog = {}, {}
+local errorFrame
+
+local function ShowErrors(text)
+    if not errorFrame then
+        errorFrame = CreateFrame("Frame", "UberUIErrorFrame", UIParent, "BackdropTemplate")
+        errorFrame:SetSize(640, 360)
+        errorFrame:SetPoint("CENTER")
+        errorFrame:SetFrameStrata("DIALOG")
+        errorFrame:SetMovable(true)
+        errorFrame:EnableMouse(true)
+        errorFrame:RegisterForDrag("LeftButton")
+        errorFrame:SetScript("OnDragStart", errorFrame.StartMoving)
+        errorFrame:SetScript("OnDragStop", errorFrame.StopMovingOrSizing)
+        errorFrame:SetBackdrop({
+            bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
+            edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 32,
+            insets = { left = 11, right = 12, top = 12, bottom = 11 },
+        })
+
+        local scroll = CreateFrame("ScrollFrame", nil, errorFrame, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", 20, -20)
+        scroll:SetPoint("BOTTOMRIGHT", -36, 40)
+        local edit = CreateFrame("EditBox", nil, scroll)
+        edit:SetMultiLine(true)
+        edit:SetFontObject(ChatFontNormal)
+        edit:SetWidth(570)
+        edit:SetAutoFocus(false)
+        edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        scroll:SetScrollChild(edit)
+        errorFrame.edit = edit
+
+        CreateFrame("Button", nil, errorFrame, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -5, -5)
+        local hint = errorFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        hint:SetPoint("BOTTOM", 0, 16)
+        hint:SetText("Click inside the box, Ctrl+A to select all, Ctrl+C to copy")
+    end
+    errorFrame.edit:SetText(text)
+    errorFrame:Show()
+end
+
+function UberUI:ReportError(where, err)
+    local msg = tostring(where) .. ": " .. tostring(err)
+    if reportedErrors[msg] then return end
+    reportedErrors[msg] = true
+    errorLog[#errorLog + 1] = date("%H:%M:%S") .. "  " .. msg
+    print("|cff33ff99Uber UI|r: " .. tostring(where) .. " failed -- details in the popup.")
+    ShowErrors("Uber UI errors -- please copy and report these:\n\n" .. table.concat(errorLog, "\n\n"))
+end
 
 function UberUI:GetDefaults()
     return defaults;
@@ -251,6 +292,19 @@ function UberUI:Init()
         end
     end
 
+    -- Migrate Cooldown Manager collapse/centered settings to align choice.
+    local cd = UberuiDB.cooldown
+    if type(cd) == "table" then
+        for _, p in ipairs({ "essential", "utility", "bufficon", "buffbar" }) do
+            local collapse, centered = cd[p .. "_collapse"], cd[p .. "_centered"]
+            if cd[p .. "_align"] == nil and (collapse ~= nil or centered ~= nil) then
+                cd[p .. "_align"] = (centered and "center") or (collapse and "pack") or "blizzard"
+            end
+            cd[p .. "_collapse"], cd[p .. "_centered"] = nil, nil
+        end
+        cd.debuffborder = nil
+    end
+
     mergeDefaults(defaults, UberuiDB)
     uuidb = UberuiDB
     self:AttachSharedMediaTextures()
@@ -260,12 +314,6 @@ end
 -- SHARED MEDIA (LibSharedMedia-3.0)
 -----------------------------
 
--- Every texture lookup in the addon is uuidb.statusbars[name]. Our own
--- textures live in that saved table; any other name falls through to
--- LibSharedMedia's "statusbar" list (textures other addons register), so
--- all of those work everywhere with no per-frame changes and nothing from
--- another addon is ever saved. Names are stored with spaces as underscores
--- (the dropdowns' convention), so both spellings are tried.
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
 local function FetchSharedTexture(_, name)
@@ -279,8 +327,7 @@ function UberUI:AttachSharedMediaTextures()
     end
 end
 
--- Our textures for other addons' pickers (names with spaces). A name another
--- addon already registered keeps its texture there.
+-- Register our textures with LibSharedMedia.
 if LSM then
     for name, path in pairs(defaults.statusbars) do
         if name ~= "Blizzard" then
@@ -289,10 +336,7 @@ if LSM then
     end
 end
 
--- A texture another addon registers after our frames were textured (their
--- load order is theirs) left a chosen shared texture unapplied until the next
--- refresh. When one of the textures picked in our settings shows up, re-apply
--- bar textures once (coalesced; next frame, outside the registering call).
+-- Re-apply bar textures if a selected LibSharedMedia texture is registered late.
 if LSM then
     local pending = false
     local watcher = {}
@@ -317,8 +361,7 @@ if LSM then
     end)
 end
 
--- The bar texture dropdowns: ours, then every LibSharedMedia texture that
--- isn't already one of ours, as display names (spaces). "Blizzard" first.
+-- Bar texture choices: built-in textures followed by external LibSharedMedia textures.
 function UberUI:GetBarTextureChoices()
     local seen, list = {}, {}
     local function add(display, path)

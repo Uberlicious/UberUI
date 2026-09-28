@@ -1,7 +1,4 @@
 local addon, ns = ...
-local misc = {}
-local isLoaded = false
-
 local misc = UberUI:CreateFrame("frame")
 misc:RegisterEvent("ADDON_LOADED")
 misc:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -12,10 +9,7 @@ misc:RegisterEvent("PLAYER_FOCUS_CHANGED")
 misc:RegisterEvent("PLAYER_TARGET_CHANGED")
 misc:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_ENTERING_WORLD" then
-        isLoaded = true
         misc:EndCaps()
-        -- We delay the call by a second to give the default UI time to create the bars
-        -- before we try to skin them. This helps solve the timing issue.
         C_Timer.After(1, function()
             misc:StatusTrackingBars()
             misc:BagSlots()
@@ -24,7 +18,6 @@ misc:SetScript("OnEvent", function(self, event, ...)
         misc:ObjectiveTrackerFrames()
     elseif event == "ADDON_LOADED" then
         misc:EndCaps()
-        -- We don't call StatusTrackingBars here anymore as it's almost always too early.
     end
 end)
 
@@ -60,12 +53,7 @@ function misc:EndCaps()
     end
 end
 
--- StatusTrackingBarTemplate's own nested StatusBar is named ".StatusBar" on
--- retail 12.1, but that's evidently not universal -- rather than hardcode
--- another guess, walk the bar itself, its common field names, and finally
--- its direct children looking for whichever one is actually a StatusBar
--- object (that's the only thing SetStatusBarTexture can ever legally live
--- on).
+-- Traverses a frame and children to find the nested StatusBar widget.
 local function FindStatusBarWidget(bar, depth)
     if not bar then return nil end
     if bar.GetObjectType and bar:GetObjectType() == "StatusBar" then
@@ -91,29 +79,8 @@ local function FindStatusBarWidget(bar, depth)
     return nil
 end
 
--- Confirmed against the live Blizzard_StatusTrackingBar source (Shared/
--- ExpBar.lua + Mainline/ExpBarOverrides.lua + Mainline/ReputationBarOverrides.lua,
--- which the "Family" toc line loads for BOTH mainline retail and Forever's
--- "camelot" game type): XP and reputation have no vertex-color tint at all.
--- ExpBarMixin:UpdateStatusBarTextures(isRested) and
--- ReputationStatusBarMixin:UpdateBarTextures(reactionLevel, overrideUseBlueBar)
--- both just swap in a different pre-colored ATLAS via self.StatusBar:SetBarTexture(...)
--- -- for XP, "rested" vs not; for reputation, one atlas per FACTION_BAR_COLORS
--- reaction level. Both mixins call this from their own :Update(), which
--- fires on essentially every XP/rep change -- so a one-shot texture swap
--- gets silently clobbered back to Blizzard's atlas the next time either
--- fires. Hooking the real function is what makes the flat texture (and a
--- matching tint) actually stick.
--- Sampled directly from the exported UIExperienceBarCamelot.BLP pixel data
--- (BLP2, uncompressed BGRA8888) at the atlas's real texture-coordinate
--- rectangle -- this client's native XP fill is actually a warm gold/amber,
--- not the blue of vanilla-era clients.
 local XP_BAR_COLOR = { r = 0.89, g = 0.76, b = 0.55 }
-local FACTION_REACTION_BLUE = { r = 0.10, g = 0.60, b = 0.95 } -- major faction/friendship "blue bar" case, not yet sampled
-
--- Disabled for now -- not working correctly, revisit later. Code below is
--- left in place (helpers, hooks, color sampling all already done) so this
--- is a one-line flip to re-enable rather than a redo.
+local FACTION_REACTION_BLUE = { r = 0.10, g = 0.60, b = 0.95 }
 local XP_REP_RETEXTURE_ENABLED = false
 
 local function ApplyBarSkin(statusBar, color)
@@ -230,14 +197,7 @@ function misc:ObjectiveTrackerFrames()
     end
 end
 
--- Finds a bag/keyring button's actual normal-texture region. Blizzard
--- names these three different ways depending on template/game type: an
--- auto-generated global ("<buttonName>NormalTexture", the classic
--- <NormalTexture> XML convention -- e.g. MainMenuBarBackpackButtonNormalTexture),
--- a parentKey field, or only reachable through the Button API's own
--- GetNormalTexture(). Tries all three so darkening doesn't silently no-op
--- if a beta client's template chain (Forever/"camelot" excludes some of
--- the templates other game types load) leaves one path broken.
+-- Finds a bag/keyring button's normal-texture region.
 local function FindBagNormalTexture(bag)
     if not bag then return nil end
     local okName, name = pcall(bag.GetName, bag)
@@ -254,11 +214,6 @@ local function FindBagNormalTexture(bag)
     return nil
 end
 
--- Bag border art lives on the NormalTexture. Retail uses the round
--- "bag-border" atlases and Forever the square
--- "ui-hud-actionbar-iconframe-bags" ones, but both set them through
--- BaseBagSlotButtonMixin:UpdateTextures on the same region, so one tint
--- covers both game types.
 local function TintBagSlotArt(bag, r, g, b, a)
     local nt = FindBagNormalTexture(bag)
     if nt then nt:SetVertexColor(r, g, b, a) end

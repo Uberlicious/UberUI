@@ -108,35 +108,7 @@ function partyframes:HealthManaBarTexture()
     end
 end
 
--- Party member aura styling. Unlike compact/raid frames (forbidden native
--- renderer) or target/focus (custom AuraContainer widgets), the classic
--- party frame's aura buttons are plain, addon-visible PartyAuraFrameTemplate
--- buttons -- see docs/compact-frame-auras.md for the compact-frame design
--- this deliberately does NOT need. Blizzard's own PartyAuraFrameMixin:Setup
--- is the single choke point every one of these buttons passes through: the
--- on-frame debuffs (AuraFrameContainer), pet debuffs (PetFrame.
--- AuraFrameContainer), and the on-hover PartyMemberBuffTooltip's buff/debuff
--- icons all call button:Setup(unit, aura, isBuff) -- confirmed identical
--- between retail 12.1 and WoW Forever 1.60.1 (Shared/PartyMemberFrame.lua).
--- Hooking it once covers all four, styled exactly when their content
--- actually changes -- no per-tick re-application needed.
---
--- Buffs never appear on the frame itself (MAX_PARTY_TOOLTIP_BUFFS==0 means
--- Setup is only ever called with isBuff=true for the hover tooltip); only up
--- to MAX_PARTY_DEBUFFS debuffs show directly on the frame, each already
--- carrying Blizzard's own real dispel-colored DebuffBorder (AuraUtil.
--- SetAuraBorderColor, done by Blizzard's own Setup before our hook runs).
---
--- "Dark Border" style reuses that same DebuffBorder widget (retinting it)
--- rather than drawing a separate custom texture. A first attempt drew our
--- own overlay using the "ui-debuff-border-default-noicon" atlas -- the same
--- one aurakit.lua uses for target/focus/compact -- but that atlas is tuned
--- for their much larger (20-40px) icons; at party's tiny 15x15 size its ring
--- proportions don't scale down cleanly and render oversized/misshapen.
--- DebuffBorder is already exactly sized and anchored for this button by
--- Blizzard, so retinting it sidesteps the problem entirely, for both buffs
--- and debuffs (Blizzard hides it on buff buttons by default, but nothing
--- stops us from showing/tinting it as a plain flat border there too).
+-- Party member aura styling (on-frame debuffs, pet debuffs, and hover tooltip).
 function partyframes:StyleAuraButton(button, isBuff)
     if not button or not button.DebuffBorder then return end
     local style = (isBuff and uuidb.general.aurastyle_partybuffs or uuidb.general.aurastyle_partydebuffs)
@@ -148,10 +120,7 @@ function partyframes:StyleAuraButton(button, isBuff)
         UberUI.general:ApplyIconZoom(button.Icon, zoomEnabled)
     end
 
-    -- Square borders (core/squareborders.lua): same rules as every other
-    -- location -- the Buff/Debuff Border choice picks the color (dark, or
-    -- Blizzard's look: dispel color on debuffs, no border on buffs); None
-    -- style is never overridden. Replaces DebuffBorder while on.
+    -- Square borders
     local SB = UberUI.squareborders
     local square = SB and button.Icon and style ~= "none" and SB.IsEnabled("party")
     if square and (not isBuff or darkBorderEnabled) then
@@ -183,22 +152,9 @@ function partyframes:StyleAuraButton(button, isBuff)
         button.DebuffBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         button.DebuffBorder:Show()
     elseif isBuff then
-        -- Native "no border on buffs" look.
         button.DebuffBorder:Hide()
     else
-        -- Restore Blizzard's real per-dispel-type color. We may have
-        -- overwritten it with the dark tint above on a previous style
-        -- change, so re-derive it from the aura instead of assuming the
-        -- widget still holds it.
-        --
-        -- GetAuraDataByAuraInstanceID doesn't just return a secret value
-        -- when the aura is secret while the CALLER is tainted (as ours is,
-        -- running inside a hooksecurefunc) -- it throws ("Auras cannot be
-        -- accessed when secret while tainted by 'Uber UI'"), confirmed live.
-        -- core/buffsandauras.lua already established the correct three-layer
-        -- guard for this exact API elsewhere in this addon (secret-check the
-        -- ID, pcall the call itself, secret-check the result) -- mirrored
-        -- here.
+        -- Restore dispel color.
         button.DebuffBorder:SetDesaturated(false)
         local dispelName
         local instID = button.auraInstanceID

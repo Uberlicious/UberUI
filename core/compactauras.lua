@@ -1,35 +1,15 @@
 local addon, ns = ...
 
--- Custom aura containers for compact party/raid frames (CompactPartyFrame
--- and CompactRaidFrame members), built on the same aurakit button styling
--- as target/focus.
+-- Custom aura containers for compact party/raid frames.
 --
--- Why the native auras are switched off with CVars rather than hidden: in
--- 12.1 the compact frames have no Lua aura buttons anymore. Buffs, debuffs,
--- dispel icons and the center Big Defensive are all rendered by the
--- forbidden Blizzard_PrivateAurasUI addon, which addon code can't touch.
--- The only supported way to stop them drawing is the player's own raid
--- frame options (raidFramesDisplayBuffs / raidFramesDisplayDebuffs /
--- raidFramesCenterBigDefensive). The original values are saved and put
--- back when a feature is set to "none". The dispel overlay and dispel type
--- icons are driven by separate options, so they stay native either way.
---
--- Which auras show: the containers run Blizzard's own compact-frame rules
--- (AuraUtil.ProcessAura) inside the container's secure code via
--- SetAuraProcessingPolicy(ProcessAura) + processedAuraType candidate
--- filters, and sort with Blizzard's UnitFrameDebuff/BigDefensive orders.
--- That's why these groups look nothing like target/focus's PLAYER/!PLAYER
--- split. Private (boss) auras are included automatically: custom aura
--- containers read the private aura source too.
---
--- Positions/sizes mirror PrivateAuraUnitFrameLayoutTemplates in
--- Blizzard_PrivateAurasUI.lua: buffs/debuffs are 11px * the Edit Mode
--- icon size % (not frame size), the Big Defensive is 22px * frame
--- component scale * its own Edit Mode %.
---
--- Taint: nothing here writes to Blizzard's frames or tables. All per-frame
--- state lives in the weak-keyed table below, and hooks only touch our own
--- containers.
+-- In 12.1 native compact auras are drawn by the forbidden
+-- Blizzard_PrivateAurasUI addon, so they're switched off with the player's
+-- raid frame CVars (saved, and restored when a feature is set to "none").
+-- The containers apply Blizzard's own rules (AuraUtil.ProcessAura via
+-- SetAuraProcessingPolicy + processedAuraType filters, Blizzard's sorts), and
+-- include private auras. Sizes/positions mirror
+-- PrivateAuraUnitFrameLayoutTemplates. Nothing here writes to Blizzard's
+-- frames; per-frame state is in weak tables.
 
 local aurakit = UberUI.aurakit
 local compactauras = {}
@@ -75,9 +55,8 @@ local function BigDefensiveEnabled()
     return uuidb and uuidb.general and uuidb.general.compactbigdefensive ~= false
 end
 
--- Needs 12.1: AuraContainer, the ProcessAura policy and the Edit Mode aura
--- size settings. Anything older keeps Blizzard's native compact auras and
--- we never touch the CVars.
+-- Needs 12.1 (AuraContainer, ProcessAura policy, Edit Mode aura sizes); older
+-- clients keep native auras and the CVars are never touched.
 local function IsSupported()
     if supported ~= nil then return supported end
     if not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
@@ -96,8 +75,7 @@ local function IsSupported()
     return supported
 end
 
--- Party/raid members only: arena frames are PvP frames with their own
--- rules, and nameplates share the CompactUnitFrame functions.
+-- Party/raid members only (not arena frames or nameplates).
 local function IsCompactGroupFrame(frame)
     if not frame or type(frame) ~= "table" or not frame.GetName then return false end
     if frame.IsForbidden and frame:IsForbidden() then return false end
@@ -128,9 +106,8 @@ local function SetNativeCVar(cvar, oursActive)
     end
 end
 
--- The CVar change fires CVAR_UPDATE, and Blizzard's compact frame profiles
--- re-run their setup from their own (untainted) event handler -- not
--- inside this call. Still kept out of combat.
+-- Blizzard re-runs its compact frame setup from its own CVAR_UPDATE handler.
+-- Kept out of combat.
 function compactauras:ApplyNativeCVars()
     if not IsSupported() or not (uuidb and uuidb.cuf) then return end
     if InCombatLockdown() then
@@ -182,8 +159,7 @@ end
 local LEFT, RIGHT = -1, 1
 local UP, DOWN = 1, -1
 
--- anchor point, x, y (y is filled in from bottomY when bottom-anchored),
--- growth directions, icons per row.
+-- Anchor, offsets, growth directions and icons per row.
 local function GetLayouts(metrics)
     local by = metrics.bottomY
     local types = Enum.RaidAuraOrganizationType
@@ -193,9 +169,7 @@ local function GetLayouts(metrics)
             debuffs = { point = "BOTTOMRIGHT", x = -AURA_EDGE_OFFSET, y = by, h = LEFT, v = UP, perRow = 3 },
         }
     end
-    -- Legacy and BuffsRightDebuffsLeft place buffs/debuffs identically;
-    -- they only differ in name/role icon and dispel icon placement, which
-    -- stay native.
+    -- Legacy and BuffsRightDebuffsLeft place auras identically.
     return {
         buffs = { point = "BOTTOMRIGHT", x = -AURA_EDGE_OFFSET, y = by, h = LEFT, v = UP, perRow = 3 },
         debuffs = { point = "BOTTOMLEFT", x = AURA_EDGE_OFFSET, y = by, h = RIGHT, v = UP, perRow = 3 },
@@ -203,7 +177,7 @@ local function GetLayouts(metrics)
 end
 
 local function LineSize(size, perRow)
-    -- +0.5 so rounding never pushes the last icon of a row onto the next.
+    -- +0.5 so rounding never pushes a row's last icon onto the next row.
     return perRow * size + (perRow - 1) * AURA_SPACING + 0.5
 end
 
@@ -260,11 +234,8 @@ local function BuffProcessOptions()
     }
 end
 
--- Debuffs: ProcessAura sorts harmful auras into "Debuff" (boss, role,
--- priority and regular debuffs) and "Dispel" (debuffs someone in the group
--- can dispel). Blizzard shows both in the same row, so this container has
--- one group for each. If the engine's aura data doesn't flag isRaid, every
--- debuff simply classifies as "Debuff" and lands in the first group.
+-- Debuffs: ProcessAura's "Debuff" and "Dispel" types, one group each, shown
+-- in the same row as Blizzard does.
 local function BuildDebuffs(frame, metrics)
     local changed = AuraUtil.AuraUpdateChangedType
     return aurakit.BuildGroupedAuraContainer({
@@ -291,8 +262,7 @@ local function BuildDebuffs(frame, metrics)
     })
 end
 
--- Buffs: ProcessAura's "Buff" = Blizzard's ShouldDisplayBuff (your own
--- castable, non-self-only buffs plus spells Blizzard flags for your spec).
+-- Buffs: ProcessAura's "Buff" (Blizzard's ShouldDisplayBuff).
 local function BuildBuffs(frame, metrics)
     return aurakit.BuildGroupedAuraContainer({
         parentFrame = frame,
@@ -311,16 +281,9 @@ local function BuildBuffs(frame, metrics)
     })
 end
 
--- Big Defensive: one centered icon, most important first (Blizzard's own
--- BigDefensive sort). Styled with the buff style.
---
--- The engine's BIG_DEFENSIVE flag also covers some permanent auras (e.g.
--- Paladin Devotion Aura), which Blizzard's comparator only ranks last
--- (expirationTime 0) rather than excluding -- so with no real defensive up,
--- the center icon showed Devotion Aura. maxDuration filters by the aura's full
--- duration inside the container's secure code (secret-safe) and implicitly
--- drops permanent auras. Real big defensives are all short cooldowns
--- (~6-15s), so 60s leaves plenty of margin.
+-- Big Defensive: one centered icon, Blizzard's BigDefensive sort, buff style.
+-- maxDuration (secret-safe) drops permanent auras the BIG_DEFENSIVE flag
+-- also covers (e.g. Devotion Aura); real ones are short (~6-15 s).
 local BIG_DEFENSIVE_MAX_DURATION = 60
 local function BuildBigDefensive(frame, metrics)
     return aurakit.BuildGroupedAuraContainer({
@@ -391,9 +354,8 @@ local function UpdateFrame(frame)
     end
 end
 
--- Creates whichever containers are enabled and don't exist yet. Container
--- creation is kept out of combat; frames first seen in combat are queued
--- and keep their (native) auras until PLAYER_REGEN_ENABLED.
+-- Creates missing enabled containers. Out of combat only; frames first seen
+-- in combat keep native auras until PLAYER_REGEN_ENABLED.
 local function EnsureFrame(frame)
     if not IsSupported() or not IsCompactGroupFrame(frame) then return end
 
@@ -491,8 +453,8 @@ local function InstallHooks()
             PointAtUnit(state.bigDefensive, unit)
         end)
     end
-    -- Re-run on Blizzard's own setup: Edit Mode size %, organization type,
-    -- frame size and power bar changes all come through here.
+    -- Blizzard's setup re-runs on Edit Mode size, organization, frame size and
+    -- power bar changes.
     if DefaultCompactUnitFrameSetup then
         hooksecurefunc("DefaultCompactUnitFrameSetup", function(frame)
             if frameState[frame] then UpdateFrame(frame) end
@@ -521,22 +483,5 @@ f:SetScript("OnEvent", function(self, event, arg1)
         end
     end
 end)
-
--- For /uuidebugcompact (uuidebug.lua).
-function compactauras:GetDebugInfo()
-    local info = {
-        supported = IsSupported(),
-        pendingCVars = pendingCVars,
-        frames = {},
-        pending = {},
-    }
-    for frame, state in pairs(frameState) do
-        info.frames[#info.frames + 1] = { frame = frame, state = state }
-    end
-    for frame in pairs(pendingBuild) do
-        info.pending[#info.pending + 1] = frame
-    end
-    return info
-end
 
 UberUI.compactauras = compactauras

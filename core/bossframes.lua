@@ -1,19 +1,4 @@
-local addon, ns = ...
-
--- Boss frames (Boss1TargetFrame..Boss5TargetFrame) inherit the FULL
--- TargetFrameTemplate (BossTargetFrameMixin adds a thin layer on top for the
--- portraitless small layout -- see Blizzard_UnitFrame/Mainline/TargetFrame.lua,
--- BossTargetFrameMixin:OnLoad), so this file mirrors targetframe.lua/
--- focusframe.lua's approach exactly, just looped over 5 statically-declared
--- frames (Boss1TargetFrame.."Boss5TargetFrame" are named XML children of
--- BossTargetFrameContainer, id=1..5 -- always present once Blizzard_UnitFrame
--- loads, not a pool, unlike nameplates -- so no attach/detach lifecycle is
--- needed here).
---
--- Confirmed via BossTargetFrameMixin:OnLoad: unit token is "boss"..id, and
--- self.TargetFrameContent.TargetFrameContentMain / .TargetFrameContentContextual
--- / self.TargetFrameContainer all exist exactly as on Target/Focus, just
--- resized/repositioned for the small portraitless layout.
+-- Boss frames (Boss1TargetFrame..Boss5TargetFrame) styling and aura containers.
 
 local UnitPowerType = UnitPowerType
 local PowerBarColor = PowerBarColor
@@ -35,10 +20,7 @@ local BOSS_CONTAINER_GAP = 2
 
 local bossframes = UberUI:CreateFrame("frame")
 
--- Per-slot state (customDebuffs/customBuffs/isUpdatingAuras/hook flags),
--- keyed 1..5 -- these live on OUR OWN table, never written onto the Blizzard
--- Boss{i}TargetFrame objects themselves (same taint-avoidance rule as every
--- other frame module in this addon).
+-- Per-slot state (1..5), stored on our table to avoid tainting Blizzard frames.
 local slots = {}
 for i = 1, MAX_BOSS_FRAMES do
     slots[i] = { unit = "boss" .. i, isUpdatingAuras = false }
@@ -197,9 +179,6 @@ local function IsEnemyBoss(unit)
     return not UnitIsFriend("player", unit)
 end
 
--- Thin per-frame wrapper: resolves the boss style/showDispel settings, then
--- hands off to the shared aurakit.ApplyAuraButtonStyle (see core/aurakit.lua,
--- shared with target/focus/party).
 function bossframes:UpdateAuraButtonStyle(button)
     if not button then return end
     local isBuff = button.isBuff
@@ -276,10 +255,6 @@ function bossframes:UpdateAuras(i)
 
     local debuffCount = (styleDebuffs ~= "none") and 16 or 0
     local buffCount = (styleBuffs ~= "none") and 32 or 0
-    -- "mine" gets forced to 0 specifically when the engine's PLAYER/!PLAYER
-    -- caster classification is currently ambiguous for this unit (see
-    -- aurakit.HasAmbiguousMineMatch). "other" is left untouched, so the aura
-    -- stays visible there instead of duplicating OR vanishing.
     local debuffMineCount = aurakit.GetSafeMineMaxFrameCount(slot.unit, true, debuffCount)
     local buffMineCount = aurakit.GetSafeMineMaxFrameCount(slot.unit, false, buffCount)
     pcall(slot.customDebuffs.SetAuraGroupMaxFrameCount, slot.customDebuffs, "debuffs_mine", debuffMineCount)

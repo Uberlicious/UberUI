@@ -32,9 +32,6 @@ playerframes:RegisterEvent("PLAYER_GAINS_VEHICLE_DATA")
 playerframes:RegisterEvent("PVP_MATCH_ACTIVE")
 playerframes:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 playerframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
--- Without this, a totem's border only gets darkened if some other
--- registered event happens to fire after it's summoned -- nothing here
--- previously reacted to totems actually being placed/cleared.
 playerframes:RegisterEvent("PLAYER_TOTEM_UPDATE")
 playerframes:SetScript("OnEvent", function(self, event)
     if InCombatLockdown() then
@@ -110,11 +107,6 @@ function playerframes:Color()
     elseif (class == "Rogue") then
         self:ColorComboPoints();
     elseif (class == "Druid") then
-        -- Retail Mainline: Feral's combo points render through the same
-        -- shared RogueComboPointBarFrame Rogues use. Not relevant on
-        -- Forever 1.60.1 -- that client (like every classic-family build)
-        -- shows combo points via the native ComboFrame anchored to
-        -- TargetFrame instead; see targetframes:ColorComboPoints().
         self:ColorComboPoints();
     elseif (class == "Warlock") then
         self:ColorSoulShards();
@@ -152,11 +144,7 @@ end
 -- toward white (0 = same as the bar, 1 = white).
 local MANA_COST_PREDICTION_LIGHTEN = 0.35
 
--- Blizzard tints the cost prediction segment once, at load, with
--- MANAPREDICTIONBLUE -- on a flat/custom texture that ends up nearly the same
--- blue as the mana bar under it. Tint it a lightened copy of the bar's own
--- power color instead so the spell cost stands out, and follows form/power
--- type changes.
+-- Lighten cost prediction so it stands out on custom bar textures.
 local function LightenManaCostPrediction(manaBar, unit)
     local prediction = manaBar and manaBar.ManaCostPredictionBar
     local fill = prediction and prediction.Fill
@@ -183,27 +171,7 @@ local function ApplyManaBarTexture(manaBar, unit, textureToApply)
     end
 end
 
--- Blizzard's UnitFrameManaBar_Update calls UnitFrameManaBar_UpdateType on
--- every mana bar update, which puts its own atlas back on the bar. Out of
--- combat our event handler above re-applies ours often enough to hide that,
--- but it skips everything in combat, so the bar showed Blizzard's texture
--- for the whole fight. Re-applying right after UpdateType fixes that in and
--- out of combat. Texture/color calls only -- no writes to Blizzard's
--- frame fields.
---
--- Only worth installing if a custom player bar texture is actually active --
--- hooksecurefunc can't be undone, so this is gated on GetPlayerBarTexture()
--- rather than installed unconditionally. Can't check that at file-load time
--- though: uuidb is still the empty placeholder table from config.lua here
--- (this addon's own ADDON_LOADED/PLAYER_LOGIN handler, which swaps in the
--- real SavedVariables and populates uuidb.general, hasn't run yet -- that's
--- what crashed with "attempt to index field 'general' (a nil value)" when
--- this checked it directly at the top level). Deferred into
--- EnsureManaBarCombatHook() instead, called from HealthManaBarTexture()
--- below, which only ever runs from playerframes' own OnEvent handler or an
--- options page toggle -- both always after uuidb is populated. The Player/All
--- Bar Textures tooltips already warn a reload is needed to properly attach,
--- which covers turning this on after load too.
+-- UnitFrameManaBar_UpdateType resets the bar atlas; re-apply custom texture.
 local manaBarCombatHookInstalled = false
 local function EnsureManaBarCombatHook()
     if manaBarCombatHookInstalled or not UnitFrameManaBar_UpdateType or not GetPlayerBarTexture() then return end

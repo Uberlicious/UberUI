@@ -7,10 +7,8 @@ local function SquareBorderOn()
     return uuidb and uuidb.general and uuidb.general.nameplatesquareborder == true
 end
 
--- The custom health bar texture in effect, or nil for Blizzard's own.
--- Square nameplates require a flat texture (the stock Blizzard nameplate
--- texture is rounded/pill-shaped and cannot work with square borders),
--- so Square mode defaults to "Blizzard_Flat" if no other custom texture is set.
+-- The custom health bar texture in effect, or nil for Blizzard's own. Square
+-- mode needs a flat texture, so it defaults to "Blizzard_Flat".
 local function GetNameplateBarTexture()
     if not (uuidb and uuidb.general and uuidb.statusbars) then return nil end
     local tex
@@ -24,12 +22,9 @@ local function GetNameplateBarTexture()
     return type(tex) == "string" and tex or nil
 end
 
--- Apply it the way Blizzard does (Blizzard_NamePlateUnitFrame.lua
--- UpdateAnchors: healthBar.barTexture:SetTexture / SetAtlas on the same
--- texture object) -- never SetStatusBarTexture, which Blizzard doesn't use
--- here and which left the bar drawing over the nameplate border after a
--- reload, in every style, on retail and Forever. The bar's original draw
--- layer is also put back, so the layering is always Blizzard's own.
+-- Applied the way Blizzard does (barTexture:SetTexture/SetAtlas), never
+-- SetStatusBarTexture, which drew the bar over the nameplate border. The
+-- original draw layer is restored.
 local function ApplyHealthBarTexture(healthBar, textureToApply)
     local bar = healthBar.barTexture or healthBar:GetStatusBarTexture()
     if bar then
@@ -49,33 +44,17 @@ local function ApplyHealthBarTexture(healthBar, textureToApply)
     end
 end
 
--- Blizzard's NamePlateUnitFrameMixin:UpdateAnchors puts its own atlas back
--- on the health bar every time it runs: nameplate added, option changes
--- (style, size, class colors, DISPLAY_SIZE_CHANGED -- all via
--- NamePlateDriverMixin:UpdateNamePlateOptions), and on retail every
--- nameplate resize (NamePlateBaseMixin:OnSizeChanged; Forever has no such
--- call). So our texture was being reverted constantly and only came back
--- when a plate was re-added. Re-apply after each UpdateAnchors: an instance
--- hook per unit frame (pooled frames already exist, so the mixin can't be
--- hooked), installed only once a custom texture is actually in use, and
--- deferred a frame + coalesced per frame (this file's nameplate taint rule).
+-- Blizzard's UpdateAnchors puts its own atlas back on the health bar (plate
+-- added, option changes, and on retail every plate resize), so ours is
+-- re-applied after it: an instance hook per unit frame (pooled frames already
+-- exist), only while something of ours is in use, deferred and coalesced.
 local anchorHooked = setmetatable({}, { __mode = "k" })
 local anchorPending = setmetatable({}, { __mode = "k" })
 
--- Blizzard's nameplate bar art (UI-HUD-CoolDownManager-Bar) has chamfered
--- corners and a dark edge painted into it, which is what makes the border
--- ring (healthBar.bgTexture, behind the fill) read as sitting in front of the
--- fill. A custom texture is square and bright right up to its edge, so it
--- looked drawn over the border. Give our fill that shape with a mask:
--- textures/nameplate_bar_mask.tga (hand-made from the 2x atlas region of
--- UICooldownManager2x.BLP) -- clear outside the edge, partial along it so the
--- dark border behind shows through, open inside. Stretched over the whole
--- health bar, the same rectangle Blizzard's bar art covers, so it stays put
--- as health changes. Only while a custom texture is in use; kept in weak
--- tables, never as fields on Blizzard's frame. Notes from getting here:
--- MaskTexture ignores SetTexCoord in-game (no padded canvases), and WoW
--- keeps an already-loaded texture file cached across /reload -- restart the
--- client after editing the file.
+-- Blizzard's bar art has chamfered corners and a dark edge, so the border
+-- ring behind reads as in front of the fill. A custom texture gets that shape
+-- from a mask stretched over the health bar. Notes: MaskTexture ignores
+-- SetTexCoord in-game, and texture files stay cached across /reload.
 local BAR_MASK_TEXTURE = "Interface\\AddOns\\Uber UI\\textures\\nameplate_bar_mask"
 local barMasks = setmetatable({}, { __mode = "k" }) -- healthBar -> mask
 local barMasked = setmetatable({}, { __mode = "k" }) -- healthBar -> fill texture it's on
@@ -103,17 +82,45 @@ local function UpdateBarMask(healthBar, show)
     end
 end
 
--- Square health bar border ("Nameplate Health Bar Border: Square"): four
--- solid strips a whole number of physical pixels thick just outside the
--- health bar, in the darkness color, over a dark background of our own for
--- the missing-health part. Blizzard's rounded border (bgTexture, which is
--- both the ring and that background) is faded to 0 meanwhile -- Blizzard
--- never touches its alpha, and selectedBorder still anchors to it -- and the
--- rounded fill mask is skipped so a custom texture stays square. Plain
--- textures on the health bar (a frame anchored into a nameplate would need
--- DisableUntrustedLayoutScriptsTemplate), kept in a weak table.
+-- Square health bar border: four strips just outside the bar, in the
+-- darkness color, over a dark background of our own for missing health.
+-- Blizzard's rounded bgTexture (ring + background) is faded to 0 (Blizzard
+-- never touches its alpha, and selectedBorder still anchors to it).
+--
+-- Pixel-perfect: plates sit at fractional pixels and rescale, so the strips
+-- live on a layer that ignores the plate's scale (whole-pixel thickness at
+-- any scale), and every texture meeting a strip has pixel snapping off like
+-- the strips -- mixed snapped/unsnapped edges round apart into hairline gaps.
 local SQUARE_BG_ALPHA = 0.6
-local squareParts = setmetatable({}, { __mode = "k" }) -- healthBar -> { bg, edges }
+local squareParts = setmetatable({}, { __mode = "k" }) -- healthBar -> { bg, edges, layer }
+
+local function Unsnap(region)
+    if region and region.SetSnapToPixelGrid then
+        pcall(region.SetSnapToPixelGrid, region, false)
+        pcall(region.SetTexelSnappingBias, region, 0)
+    end
+end
+
+-- A frame over `owner` fixed at scale 1, independent of the plate's. Frames
+-- anchored into a nameplate need DisableUntrustedLayoutScriptsTemplate in
+-- 12.x. nil if it can't be made (callers draw on `owner` instead).
+local scaleFreeLayers = setmetatable({}, { __mode = "k" }) -- owner -> frame or false
+local function ScaleFreeLayer(owner)
+    local layer = scaleFreeLayers[owner]
+    if layer == nil then
+        local ok, f = pcall(CreateFrame, "Frame", nil, owner, "DisableUntrustedLayoutScriptsTemplate")
+        if ok and f and f.SetIgnoreParentScale then
+            f:SetIgnoreParentScale(true)
+            f:SetScale(1)
+            f:SetAllPoints(owner)
+            layer = f
+        else
+            layer = false
+        end
+        scaleFreeLayers[owner] = layer
+    end
+    return layer or nil
+end
 
 local function UpdateSquareBorder(healthBar, on)
     local parts = squareParts[healthBar]
@@ -123,6 +130,8 @@ local function UpdateSquareBorder(healthBar, on)
             parts.bg:Hide()
             for _, e in ipairs(parts.edges) do e:Hide() end
             if bgTexture then bgTexture:SetAlpha(1) end
+            local fill = healthBar.GetStatusBarTexture and healthBar:GetStatusBarTexture()
+            if fill and fill.SetSnapToPixelGrid then pcall(fill.SetSnapToPixelGrid, fill, true) end
         end
         return
     end
@@ -131,19 +140,22 @@ local function UpdateSquareBorder(healthBar, on)
         parts.bg = healthBar:CreateTexture(nil, "BACKGROUND", nil, -1)
         parts.bg:SetColorTexture(0, 0, 0, 1)
         parts.bg:SetAllPoints(healthBar)
+        Unsnap(parts.bg)
+        parts.layer = ScaleFreeLayer(healthBar) or healthBar
         for i = 1, 4 do
-            local e = healthBar:CreateTexture(nil, "ARTWORK", nil, 7)
+            local e = parts.layer:CreateTexture(nil, "ARTWORK", nil, 7)
             e:SetColorTexture(1, 1, 1, 1)
-            if e.SetSnapToPixelGrid then e:SetSnapToPixelGrid(false) end
-            if e.SetTexelSnappingBias then e:SetTexelSnappingBias(0) end
+            Unsnap(e)
             parts.edges[i] = e
         end
         squareParts[healthBar] = parts
     end
+    -- SetStatusBarTexture makes a new fill texture with snapping back on.
+    Unsnap(healthBar.GetStatusBarTexture and healthBar:GetStatusBarTexture())
 
     local px = tonumber(uuidb.general.nameplatesquareborder_thickness) or 1
     local SB = UberUI.squareborders
-    local t = SB and SB.PixelsToUIUnits(healthBar, px) or px
+    local t = SB and SB.PixelsToUIUnits(parts.layer, px) or px
     local top, bottom, left, right = parts.edges[1], parts.edges[2], parts.edges[3], parts.edges[4]
     top:ClearAllPoints()
     top:SetPoint("BOTTOMLEFT", healthBar, "TOPLEFT", -t, 0)
@@ -172,23 +184,14 @@ local function UpdateSquareBorder(healthBar, on)
     if bgTexture then bgTexture:SetAlpha(0) end
 end
 
--- Square border, part 2: the level box (WoW Forever) and the selection
--- outline (both clients).
+-- Level box (Forever): the rounded level badge joined to the bar becomes a
+-- square box the bar's height, sharing the bar's right border; the badge art
+-- is faded out. Its textures live on the badge, so they show/hide with it.
 --
--- Level box: Forever shows the unit's level in PlayerLevelDiffFrame, a
--- rounded badge (Camelot art) joined to the right of the health bar. With the
--- square border it becomes a square box the height of the health bar, from
--- the bar's right border out to the badge's right edge, sharing the bar's
--- right border; the level text and skull stay on top. Its textures live on
--- the badge frame itself, so they show and hide with it; the badge art is
--- faded to 0 meanwhile.
---
--- Selection: Blizzard's rounded target/focus glows (healthBar.selectedBorder,
--- and Forever's badge's own) are faded to 0 and replaced by a square outline
--- around the whole area -- the bar, plus the level box while the badge is
--- shown -- in Blizzard's target/focus colors. Refreshed after Blizzard's own
--- UpdateSelectionBorder / CompactUnitFrame_UpdatePlayerLevelDiff (hooks
--- installed only once the square border is in use, deferred a frame).
+-- Selection: Blizzard's rounded target/focus glows are faded out and replaced
+-- by a square outline around the bar (plus the level box while shown), in
+-- Blizzard's colors. Refreshed after UpdateSelectionBorder /
+-- CompactUnitFrame_UpdatePlayerLevelDiff (hooked only in square mode).
 local levelParts = setmetatable({}, { __mode = "k" })   -- level badge -> { bg, top, bottom, right }
 local outlineParts = setmetatable({}, { __mode = "k" }) -- healthBar -> { top, bottom, left, right }
 local OUTLINE_PX = 2
@@ -216,18 +219,16 @@ local function SafeShown(region)
     return shown and true or false
 end
 
--- One chat line the first time a square-border part fails, so a problem on
--- some plates is visible instead of silently leaving Blizzard's art up.
-local reportedError = false
+-- Once per part.
+local reportedError = {}
 local function ReportError(where, err)
-    if reportedError then return end
-    reportedError = true
-    print("|cff33ff99Uber UI|r: square nameplate border (" .. where .. ") failed: " .. tostring(err))
+    if reportedError[where] then return end
+    reportedError[where] = true
+    UberUI:ReportError("square nameplate border (" .. where .. ")", err)
 end
 
--- Blizzard centers the level text (and skull) on its badge art and re-sets
--- that on every CompactUnitFrame_UpdatePlayerLevelDiff; ours is re-applied
--- after it (hook below), so both sit centered in our box.
+-- Blizzard re-centers the level text on its badge art on every level update;
+-- ours is re-applied after it.
 local function CenterLevelText(badge, anchor)
     local text, skull = badge.playerLevelDiffText, badge.highLevelTexture
     local icon = badge.playerLevelDiffIcon
@@ -237,9 +238,8 @@ local function CenterLevelText(badge, anchor)
     if skull then skull:SetPoint("CENTER", target, "CENTER", 0, 0) end
 end
 
--- How far short of Blizzard's badge width the level box stops, in UI units.
--- Small on purpose: more than a few units and the bar + box stop lining up
--- with the name centered over them.
+-- How far short of the badge's width the box stops (UI units). Kept small so
+-- bar + box stay centered under the name.
 local LEVEL_BOX_TRIM = 3
 
 local function UpdateLevelBox(unitFrame, on)
@@ -259,29 +259,37 @@ local function UpdateLevelBox(unitFrame, on)
         end
         return
     end
-    -- Blizzard's badge art goes first, so it's hidden even if anything
-    -- below fails.
+    -- Badge art first, so it's hidden even if anything below fails.
     if badge.playerLevelDiffIcon then badge.playerLevelDiffIcon:SetAlpha(0) end
     if badge.selectedBorder then badge.selectedBorder:SetAlpha(0) end
     if not parts then
+        -- Background on the badge (under its level text); strips on its
+        -- scale-free layer.
+        local layer = ScaleFreeLayer(badge) or badge
         parts = {
             bg = NewStrip(badge, "BACKGROUND", -8),
-            top = NewStrip(badge, "BACKGROUND", -7),
-            bottom = NewStrip(badge, "BACKGROUND", -7),
-            right = NewStrip(badge, "BACKGROUND", -7),
+            top = NewStrip(layer, "BACKGROUND", -7),
+            bottom = NewStrip(layer, "BACKGROUND", -7),
+            right = NewStrip(layer, "BACKGROUND", -7),
         }
         for _, tex in pairs(parts) do tex:Hide() end
         levelParts[badge] = parts
     end
-    local t = Px(healthBar, BorderPx())
+    if not parts.left then
+        parts.left = NewStrip(ScaleFreeLayer(badge) or badge, "BACKGROUND", -7)
+        parts.left:Hide()
+    end
+    local t = Px(parts.top, BorderPx())
+    -- The box starts at the bar's right edge with its own left strip over the
+    -- bar's right border (the badge is far above the bar's border layer).
+    -- Anchored to the health bar, not the strip: anchoring to a
+    -- ScaleFreeLayer region is refused (it carries a forbidden aspect).
     local ok, err = pcall(function()
         parts.bg:ClearAllPoints()
-        parts.bg:SetPoint("TOPLEFT", healthBar, "TOPRIGHT", t, 0)
-        parts.bg:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMRIGHT", t, 0)
-        -- Out to (just short of) the badge's own right edge: Blizzard shortens
-        -- the health bar by exactly the badge's width and centers the name
-        -- over bar + badge (Thin/Modern's name-above layout), so a much
-        -- narrower box left the bar looking shifted left of the name.
+        parts.bg:SetPoint("TOPLEFT", healthBar, "TOPRIGHT", 0, 0)
+        parts.bg:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMRIGHT", 0, 0)
+        -- Blizzard shortens the bar by the badge's width and centers the name
+        -- over bar + badge, so the box runs out to the badge's edge.
         parts.bg:SetPoint("RIGHT", badge, "RIGHT", -LEVEL_BOX_TRIM, 0)
         parts.top:ClearAllPoints()
         parts.top:SetPoint("BOTTOMLEFT", parts.bg, "TOPLEFT", 0, 0)
@@ -295,6 +303,10 @@ local function UpdateLevelBox(unitFrame, on)
         parts.right:SetPoint("TOPLEFT", parts.bg, "TOPRIGHT", 0, 0)
         parts.right:SetPoint("BOTTOMLEFT", parts.bg, "BOTTOMRIGHT", 0, 0)
         parts.right:SetWidth(t)
+        parts.left:ClearAllPoints()
+        parts.left:SetPoint("TOPLEFT", parts.bg, "TOPLEFT", 0, 0)
+        parts.left:SetPoint("BOTTOMLEFT", parts.bg, "BOTTOMLEFT", 0, 0)
+        parts.left:SetWidth(t)
         CenterLevelText(badge, parts.bg)
     end)
     if not ok then
@@ -303,7 +315,7 @@ local function UpdateLevelBox(unitFrame, on)
     end
     local dc = uuidb.general.darkencolor
     parts.bg:SetVertexColor(0, 0, 0, SQUARE_BG_ALPHA)
-    for _, key in ipairs({ "top", "bottom", "right" }) do
+    for _, key in ipairs({ "top", "bottom", "right", "left" }) do
         parts[key]:SetVertexColor(dc.r, dc.g, dc.b, 1)
     end
     for _, tex in pairs(parts) do tex:Show() end
@@ -326,12 +338,9 @@ local function SelectionColor(healthBar)
     return nil
 end
 
--- Blizzard also darkens every nameplate that isn't the target or focus with
--- deselectedOverlay, a ROUNDED atlas (ui-hud-nameplates-deselected-overlay),
--- which left a bright rounded rim inside the square border. Square mode swaps
--- it for a flat overlay of the same darkness (~34%, sampled in-game), shown
--- under Blizzard's own condition (NamePlateHealthBarMixin:
--- UpdateSelectionBorder: selection borders in use, not target, not focus).
+-- Blizzard's deselectedOverlay (dims non-target plates) is a rounded atlas
+-- that leaves a bright rim inside the square border; square mode uses a flat
+-- overlay of the same darkness under Blizzard's own conditions.
 local DESELECTED_ALPHA = 0.34
 local dimOverlays = setmetatable({}, { __mode = "k" }) -- healthBar -> texture
 
@@ -350,6 +359,7 @@ local function UpdateDeselectedOverlay(healthBar, on)
         dim = healthBar:CreateTexture(nil, "ARTWORK", nil, 6)
         dim:SetColorTexture(0, 0, 0, 1)
         dim:SetAllPoints(healthBar)
+        Unsnap(dim)
         dimOverlays[healthBar] = dim
     end
     if blizz then blizz:SetAlpha(0) end
@@ -375,12 +385,13 @@ local function UpdateSelectionOutline(unitFrame, on)
         return
     end
     if not parts then
-        parts = { NewStrip(healthBar, "OVERLAY", 7), NewStrip(healthBar, "OVERLAY", 7),
-                  NewStrip(healthBar, "OVERLAY", 7), NewStrip(healthBar, "OVERLAY", 7) }
+        local layer = ScaleFreeLayer(healthBar) or healthBar
+        parts = { NewStrip(layer, "OVERLAY", 7), NewStrip(layer, "OVERLAY", 7),
+                  NewStrip(layer, "OVERLAY", 7), NewStrip(layer, "OVERLAY", 7) }
         outlineParts[healthBar] = parts
     end
-    local t = Px(healthBar, BorderPx())
-    local o = Px(healthBar, OUTLINE_PX)
+    local t = Px(parts[1], BorderPx())
+    local o = Px(parts[1], OUTLINE_PX)
     -- Right edge: the level box's while Forever's badge is shown.
     local badge = unitFrame.PlayerLevelDiffFrame
     local rightRel = healthBar
@@ -415,28 +426,27 @@ local function UpdateSelectionOutline(unitFrame, on)
     end
 end
 
--- Cast bar: on WoW Forever (Camelot), Blizzard anchors HealthBarsContainer
--- only 2px above CastBarsContainer (castBarToHealthBarSpacing = 2), but the
--- health bar's background/border extends below that spacing:
---   - In Rounded mode, Blizzard's bgTexture extends 6px below the health bar,
---     hanging 4px down into the cast bar.
---   - In Square mode, the square bottom border adds BorderPx() px below the
---     health bar, touching or overlapping the cast bar.
---   - Uninterruptible shield and target indicators reach an extra 3-4px up.
--- Moving the castBar StatusBar (and its Classic border/icon if present) down
--- inside CastBarsContainer clears the overlap cleanly in both modes without
--- shifting HealthBarsContainer (which is anchored to CastBarsContainer itself).
--- Captures Blizzard's own anchor point(s) and restores them when needed.
+-- Cast bar (Forever): its target/important-cast indicators reach above the
+-- bar, into our square border and selection outline, so the bar moves down
+-- until they clear. Only anchors pointing at CastBarsContainer shift, so the
+-- bar's parts move together; Blizzard's anchors are re-captured after each
+-- UpdateAnchors and restored when square mode is off.
 local function IsForeverClient()
     return WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
 end
 
 local function GetNameplateCastBar(unitFrame)
-    if not unitFrame then return nil end
-    if unitFrame.CastBarsContainer and unitFrame.CastBarsContainer.castBar then
-        return unitFrame.CastBarsContainer.castBar
-    end
-    return unitFrame.castBar
+    local container = unitFrame and unitFrame.CastBarsContainer
+    return container and container.castBar
+end
+
+local CAST_OVERLAY_BLEED = 4  -- CastTargetIndicator's reach above the bar, UI units
+local CAST_BAR_CLEARANCE = 1
+
+local function CastBarNudge(castBar)
+    local spacing = NamePlateSetupOptions and tonumber(NamePlateSetupOptions.castBarToHealthBarSpacing) or 2
+    local below = Px(castBar, BorderPx()) + Px(castBar, OUTLINE_PX)
+    return math.max(0, below + CAST_OVERLAY_BLEED + CAST_BAR_CLEARANCE - spacing)
 end
 
 local function CaptureOriginalPoints(region)
@@ -445,105 +455,56 @@ local function CaptureOriginalPoints(region)
     for i = 1, region:GetNumPoints() do
         local ok, p1, p2, p3, p4, p5 = pcall(region.GetPoint, region, i)
         if ok and p1 then
-            points[#points + 1] = { p1, p2, p3, p4, p5 or 0 }
+            points[#points + 1] = { p1, p2, p3, p4 or 0, p5 or 0 }
         end
     end
     return #points > 0 and points or nil
 end
 
-local castBarOriginalPoints = setmetatable({}, { __mode = "k" })
-local castBarNudged = setmetatable({}, { __mode = "k" })
-local borderOriginalPoints = setmetatable({}, { __mode = "k" })
-local iconOriginalPoints = setmetatable({}, { __mode = "k" })
+local castBarAnchors = setmetatable({}, { __mode = "k" }) -- castBar -> Blizzard's own anchors
+
+local function CaptureCastBarAnchors(castBar)
+    local saved = {}
+    for _, region in ipairs({ castBar, castBar.Icon, castBar.Border }) do
+        local points = CaptureOriginalPoints(region)
+        if points then saved[#saved + 1] = { region = region, points = points } end
+    end
+    return #saved > 0 and saved or nil
+end
+
+local function PlaceCastBar(castBar, saved, dy)
+    local container = castBar:GetParent()
+    for _, entry in ipairs(saved) do
+        local region = entry.region
+        region:ClearAllPoints()
+        for _, pt in ipairs(entry.points) do
+            local y = pt[5]
+            if pt[2] == container then y = y - dy end
+            region:SetPoint(pt[1], pt[2], pt[3], pt[4], y)
+        end
+    end
+end
 
 local function UpdateNameplateCastBarNudge(unitFrame, on)
     local castBar = GetNameplateCastBar(unitFrame)
     if not castBar or castBar:IsForbidden() then return end
-
+    local saved = castBarAnchors[castBar]
     if not on then
-        if castBarNudged[castBar] then
-            local orig = castBarOriginalPoints[castBar]
-            if orig then
-                castBar:ClearAllPoints()
-                for _, pt in ipairs(orig) do
-                    castBar:SetPoint(unpack(pt))
-                end
-            end
-            local borderOrig = borderOriginalPoints[castBar]
-            if borderOrig and castBar.Border then
-                castBar.Border:ClearAllPoints()
-                for _, pt in ipairs(borderOrig) do
-                    castBar.Border:SetPoint(unpack(pt))
-                end
-            end
-            local iconOrig = iconOriginalPoints[castBar]
-            if iconOrig and castBar.Icon then
-                castBar.Icon:ClearAllPoints()
-                for _, pt in ipairs(iconOrig) do
-                    castBar.Icon:SetPoint(unpack(pt))
-                end
-            end
-            castBarOriginalPoints[castBar] = nil
-            borderOriginalPoints[castBar] = nil
-            iconOriginalPoints[castBar] = nil
-            castBarNudged[castBar] = nil
+        if saved then
+            castBarAnchors[castBar] = nil
+            PlaceCastBar(castBar, saved, 0)
         end
         return
     end
-
-    if not castBarNudged[castBar] then
-        local pts = CaptureOriginalPoints(castBar)
-        if pts then
-            castBarOriginalPoints[castBar] = pts
+    if not saved then
+        saved = CaptureCastBarAnchors(castBar)
+        if not saved then
+            return
         end
-        if castBar.Border and castBar.Border:IsShown() then
-            local bpts = CaptureOriginalPoints(castBar.Border)
-            if bpts then borderOriginalPoints[castBar] = bpts end
-        end
-        if castBar.Icon and castBar.Icon:GetNumPoints() > 0 then
-            local ok, _, relTo = pcall(castBar.Icon.GetPoint, castBar.Icon, 1)
-            if ok and relTo and relTo == castBar:GetParent() then
-                local ipts = CaptureOriginalPoints(castBar.Icon)
-                if ipts then iconOriginalPoints[castBar] = ipts end
-            end
-        end
+        castBarAnchors[castBar] = saved
     end
-
-    local orig = castBarOriginalPoints[castBar]
-    if not orig then return end
-
-    -- The cast bar's "Important Cast" indicator (ImportantCastIndicator) reaches 3px
-    -- above the cast bar, and the "targeting you" indicator (CastTargetIndicator)
-    -- reaches 4px above the cast bar.
-    -- Rounded mode: Blizzard bgTexture extends 6px down, spacing is 2px, so
-    -- an 8px nudge leaves the indicators sitting cleanly below the rounded frame.
-    -- Square mode: square border hangs BorderPx() down; a nudge of BorderPx() + 5
-    -- gives an exact clean 3px gap between the square border and the indicators.
-    local base = SquareBorderOn() and (BorderPx() + 5) or 8
-    local nudge = Px(castBar, base)
-
-    local ok, err = pcall(function()
-        castBar:ClearAllPoints()
-        for _, pt in ipairs(orig) do
-            castBar:SetPoint(pt[1], pt[2], pt[3], pt[4], pt[5] - nudge)
-        end
-        local borderOrig = borderOriginalPoints[castBar]
-        if borderOrig and castBar.Border and castBar.Border:IsShown() then
-            castBar.Border:ClearAllPoints()
-            for _, pt in ipairs(borderOrig) do
-                castBar.Border:SetPoint(pt[1], pt[2], pt[3], pt[4], pt[5] - nudge)
-            end
-        end
-        local iconOrig = iconOriginalPoints[castBar]
-        if iconOrig and castBar.Icon then
-            castBar.Icon:ClearAllPoints()
-            for _, pt in ipairs(iconOrig) do
-                castBar.Icon:SetPoint(pt[1], pt[2], pt[3], pt[4], pt[5] - nudge)
-            end
-        end
-        castBarNudged[castBar] = true
-    end)
-    if not ok then ReportError("cast bar nudge", err) end
+    local dy = CastBarNudge(castBar)
+    PlaceCastBar(castBar, saved, dy)
 end
 
 local function ApplySquareExtras(unitFrame, on)
@@ -551,7 +512,8 @@ local function ApplySquareExtras(unitFrame, on)
     if not ok then ReportError("level box", err) end
     ok, err = pcall(UpdateSelectionOutline, unitFrame, on)
     if not ok then ReportError("selection outline", err) end
-    UpdateNameplateCastBarNudge(unitFrame, IsForeverClient())
+    ok, err = pcall(UpdateNameplateCastBarNudge, unitFrame, on and IsForeverClient())
+    if not ok then ReportError("cast bar", err) end
 end
 
 local extrasPending = setmetatable({}, { __mode = "k" })
@@ -576,9 +538,7 @@ local function EnsureSquareExtrasHooks(unitFrame)
             QueueSquareExtras(selectionHooked[self])
         end)
     end
-    -- Forever's level badge: re-apply whenever Blizzard shows it (the level
-    -- update and plate reuse both do), in case the load-time pass didn't
-    -- stick on this plate.
+    -- Re-apply whenever Blizzard shows the level badge.
     local badge = unitFrame.PlayerLevelDiffFrame
     if badge and not badgeShowHooked[badge] then
         badgeShowHooked[badge] = true
@@ -612,18 +572,15 @@ local function EnsureUpdateAnchorsHook(unitFrame)
     if anchorHooked[unitFrame] or not unitFrame.UpdateAnchors then return end
     anchorHooked[unitFrame] = true
     hooksecurefunc(unitFrame, "UpdateAnchors", function(self)
+        -- Blizzard re-anchored the cast bar: drop our copy so the next pass
+        -- captures its fresh anchors (our own table only).
+        local cb = not self:IsForbidden() and GetNameplateCastBar(self)
+        if cb then castBarAnchors[cb] = nil end
         if anchorPending[self] then return end
         anchorPending[self] = true
         C_Timer.After(0, function()
             anchorPending[self] = nil
             if self:IsForbidden() or not self.healthBar or self.healthBar:IsForbidden() then return end
-            local cb = GetNameplateCastBar(self)
-            if cb then
-                castBarOriginalPoints[cb] = nil
-                borderOriginalPoints[cb] = nil
-                iconOriginalPoints[cb] = nil
-                castBarNudged[cb] = nil
-            end
             ApplyBarLook(self.healthBar, self)
         end)
     end)
@@ -633,25 +590,19 @@ function nameplates:OnNamePlateLoad(unitFrame)
     if not unitFrame or not unitFrame.healthBar then
         return
     end
-    -- Some nameplates (e.g. other players' in certain content) come up
-    -- fully Forbidden -- CreateMaskTexture/AddMaskTexture below throw
-    -- "Attempt to access forbidden object" on those, deferred timer or not.
+    -- Some plates are fully forbidden (mask calls would throw).
     if unitFrame:IsForbidden() or unitFrame.healthBar:IsForbidden() then
         return
     end
 
     local healthBar = unitFrame.healthBar
 
-    -- Main texture logic
     local textureToApply = GetNameplateBarTexture()
     ApplyHealthBarTexture(healthBar, textureToApply)
-    -- Blizzard re-sets the bar art on every UpdateAnchors; only hook when
-    -- there's something of ours to put back.
-    if textureToApply or SquareBorderOn() or IsForeverClient() then
+    if textureToApply or SquareBorderOn() then
         EnsureUpdateAnchorsHook(unitFrame)
     end
 
-    -- Secondary texture logic for absorbs and heals
     local secondaryTextureToApply
     if uuidb.general.secondarybartextures and uuidb.general.secondarybartexture ~= "Blizzard" then
         secondaryTextureToApply = uuidb.statusbars[uuidb.general.secondarybartexture]
@@ -692,15 +643,13 @@ function nameplates:OnNamePlateLoad(unitFrame)
     if square then EnsureSquareExtrasHooks(unitFrame) end
     ApplySquareExtras(unitFrame, square)
 
-    -- Darken Forever's level badge art -- only in Rounded mode. On a texture,
-    -- SetVertexColor's alpha IS its alpha, so this used to undo the Square
-    -- mode's fade of that art (UpdateLevelBox) on every plate but the target.
+    -- Darken Forever's level badge art only in Rounded mode (square fades it,
+    -- and SetVertexColor's alpha would undo that).
     if unitFrame.PlayerLevelDiffFrame and not square then
         unitFrame.PlayerLevelDiffFrame.playerLevelDiffIcon:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
     end
 
     if healthBar.selectedBorder then
-        -- Square border: our own square outline replaces this glow.
         healthBar.selectedBorder:SetAlpha((uuidb.general.hidenameplateglow or SquareBorderOn()) and 0 or 1);
     end
 
@@ -711,13 +660,8 @@ function nameplates:UpdateRaidTargetScale(unitFrame)
     if unitFrame and unitFrame.RaidTargetFrame and not unitFrame:IsForbidden() then
         local raidTargetFrame = unitFrame.RaidTargetFrame
 
-        -- Feature at its no-op default (scale 1, top anchor off): don't
-        -- touch Blizzard's nameplate layout at all. Re-anchoring/rescaling
-        -- the native RaidTargetFrame from addon code on every plate add was
-        -- the only nameplate layout write left at default settings, and is
-        -- the prime suspect for the "execution tainted by 'Uber UI'" secret
-        -- health compare errors in Blizzard's SetUnit chain. If we changed
-        -- this frame earlier (feature was on), restore it once and forget it.
+        -- At the no-op default, never touch Blizzard's layout (restore once if
+        -- we changed it earlier).
         local wantsScale = uuidb.general.nameplateraidtargetscale and uuidb.general.nameplateraidtargetscale ~= 1
         local wantsTopAnchor = uuidb.general.nameplateraidtargettopanchor
         if not (wantsScale or wantsTopAnchor) then
@@ -797,12 +741,7 @@ local _originalPlateWidths = setmetatable({}, { __mode = "k" })
 function nameplates:UpdateNameplateSize()
     for _, nameplateFrame in ipairs(C_NamePlate.GetNamePlates()) do
         if nameplateFrame.UnitFrame and nameplateFrame.UnitFrame.isFriend and not nameplateFrame:IsForbidden() and not InCombatLockdown() then
-            -- Capture this nameplate's own native width before we ever touch
-            -- it (not a single shared value -- friendly/hostile/simplified
-            -- nameplates aren't guaranteed to share one native width), so
-            -- disabling the option restores it instead of forcing a
-            -- hardcoded size on every nameplate regardless of its own
-            -- native default.
+            -- Each plate's own native width, restored when the option is off.
             if _originalPlateWidths[nameplateFrame] == nil then
                 _originalPlateWidths[nameplateFrame] = nameplateFrame:GetWidth()
             end
@@ -817,15 +756,9 @@ end
 
 if NamePlateUnitFrameMixin then
     hooksecurefunc(NamePlateUnitFrameMixin, "OnLoad", function(self)
-        -- Deferred: for a brand-new nameplate frame, OnLoad and the
-        -- immediately-following SetUnit -> CompactUnitFrame_UpdateAll ->
-        -- health-text-update chain can happen in the same synchronous
-        -- burst. OnNamePlateLoad's texture/mask writes on the native
-        -- healthBar (CreateMaskTexture/AddMaskTexture/SetStatusBarTexture)
-        -- running inside that burst tainted the rest of it, breaking
-        -- Blizzard's own later secret-health-value comparison with
-        -- "execution tainted by 'Uber UI'". Run this on the next frame
-        -- instead, fully detached from Blizzard's in-progress chain.
+        -- Deferred: OnLoad runs in the same synchronous burst as Blizzard's
+        -- SetUnit -> UpdateAll chain, and writing to the health bar inside it
+        -- taints that chain (secret health compares then error).
         local capturedFrame = self
         C_Timer.After(0, function()
             UberUI.nameplates:OnNamePlateLoad(capturedFrame)
@@ -833,7 +766,6 @@ if NamePlateUnitFrameMixin then
     end)
 end
 
--- Forward-declared: defined further down, called from f's OnEvent below.
 local MaybeRegisterRaidTargetScaleHooks
 
 local f = CreateFrame("Frame")
@@ -844,20 +776,8 @@ f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event, unit)
     MaybeRegisterRaidTargetScaleHooks()
     if event == "NAME_PLATE_UNIT_ADDED" then
-        -- Only do this at all while the feature is actually on -- when off,
-        -- friendly nameplates just keep Blizzard's native size, no addon
-        -- intervention needed (see the Small Friendly Nameplates onChange in
-        -- options/nameplates.lua for the one-time restore-to-native call when
-        -- the option gets turned off).
-        --
-        -- Deferred: this event fires nested inside Blizzard's own native
-        -- nameplate-add call stack (OnNamePlateAdded -> SetUnit -> ...).
-        -- Calling SetWidth synchronously from here tainted that same chain
-        -- for the rest of its run, breaking a later secret-health-value
-        -- comparison in Blizzard's own TextStatusBar code with "execution
-        -- tainted by 'Uber UI'". C_Timer.After(0, ...) runs this on the next
-        -- frame instead, in a clean call stack fully detached from
-        -- Blizzard's in-progress one.
+        -- Deferred: this fires inside Blizzard's nameplate-add chain, and a
+        -- synchronous SetWidth tainted it.
         if uuidb and uuidb.general and uuidb.general.smallfriendlynameplate then
             C_Timer.After(0, function()
                 UberUI.nameplates:UpdateNameplateSize()
@@ -865,16 +785,8 @@ f:SetScript("OnEvent", function(self, event, unit)
         end
         local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
         if nameplate and nameplate.UnitFrame then
-            -- Nameplate frames are pooled and reused across many different
-            -- units -- OnLoad (which OnNamePlateLoad's texture/mask setup
-            -- normally rides on) only fires once, the first time a given
-            -- pooled frame is ever created. Every later reuse for a new
-            -- unit only fires NAME_PLATE_UNIT_ADDED, and Blizzard's own
-            -- SetUnit-driven refresh resets the health bar back to its
-            -- default texture in the process -- so without reapplying here
-            -- too, the custom texture quietly reverts as plates get
-            -- recycled while running around. Same deferral as the OnLoad
-            -- hook, for the same taint reason.
+            -- Pooled plates only get OnLoad once; every reuse resets the bar,
+            -- so re-apply here too (deferred for the same taint reason).
             local capturedFrame = nameplate.UnitFrame
             C_Timer.After(0, function()
                 UberUI.nameplates:OnNamePlateLoad(capturedFrame)
@@ -921,16 +833,8 @@ function nameplates:GetSafeBgTexture(nameplateFrame)
     return nil
 end
 
--- Both hooks below fire synchronously as part of the same nameplate-render
--- burst as the OnLoad hook above (CompactUnitFrame_UpdateAll/
--- UpdateCenterStatusIcon are directly in Blizzard's OnNamePlateAdded ->
--- SetUnit chain) -- same taint risk, deferred the same way. Only registered
--- at all if the raid-target-scale feature is actually customized away from
--- its no-op default (scale=1, top-anchor off) -- our own events already
--- call UpdateRaidTargetScale/UpdateAllNameplateRaidTargetScale directly, so
--- these two hooks only exist to catch a narrower edge case (Blizzard's own
--- update cycle changing something ours might miss), which isn't worth the
--- extra hook surface when the feature isn't even in use.
+-- These fire inside Blizzard's SetUnit chain: deferred, and only registered
+-- when the raid target scale/anchor feature is actually customized.
 local raidTargetHooksRegistered = false
 function MaybeRegisterRaidTargetScaleHooks()
     if raidTargetHooksRegistered then return end

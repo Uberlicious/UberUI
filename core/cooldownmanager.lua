@@ -1,7 +1,6 @@
 local addon, ns = ...
 local cdManager = UberUI:CreateFrame("frame")
 
--- Get mask from config (fallback to hardcoded if not available)
 local function GetMaskTexture()
     if uuidb and uuidb.masks and uuidb.masks.cdm_mask then
         return uuidb.masks.cdm_mask
@@ -9,18 +8,14 @@ local function GetMaskTexture()
     return [[Interface\AddOns\Uber UI\textures\statusbars\cdm_bar_mask.tga]]
 end
 
--- Tuning knobs:
---   insetL/T/R/B: how much to crop in from each side (px)
---   shiftX/shiftY: move the whole mask without changing its size (px)
---     +X = move right,  -X = move left
---     +Y = move up,     -Y = move down
+-- Bar fill mask: per-side crop (px) and whole-mask shift (+X right, +Y up).
 local MASK_OPTS = {
-    insetL = 0,  -- left crop
-    insetT = -2, -- top crop (raise top edge)
-    insetR = 0,  -- right crop (pull right edge inward more)
-    insetB = -2, -- bottom crop
-    shiftX = 0,  -- whole mask shift on X
-    shiftY = 0,  -- whole mask shift on Y (raise mask slightly)
+    insetL = 0,
+    insetT = -2,
+    insetR = 0,
+    insetB = -2,
+    shiftX = 0,
+    shiftY = 0,
 }
 
 local function ApplyMask(bar, opts)
@@ -28,7 +23,6 @@ local function ApplyMask(bar, opts)
     local L, T, R, B = opts.insetL or 0, opts.insetT or 0, opts.insetR or 0, opts.insetB or 0
     local SX, SY = opts.shiftX or 0, opts.shiftY or 0
 
-    -- Create/reuse the mask
     if not bar._uberMask then
         local m = bar:CreateMaskTexture(nil, "OVERLAY")
         m:SetTexture(GetMaskTexture(), "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
@@ -40,15 +34,12 @@ local function ApplyMask(bar, opts)
     end
     local m = bar._uberMask
 
-    -- Position the mask relative to the BAR (not the BG)
     m:ClearAllPoints()
-    -- Note: Y offsets: negative goes down for TOP anchors; positive goes up for BOTTOM anchors.
     m:SetPoint("TOPLEFT", bar, "TOPLEFT", L + SX, -(T - SY))
     m:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -R + SX, B + SY)
 end
 
 function cdManager:Texture()
-    -- Safety checks
     if not BuffBarCooldownViewer then return end
     if not BuffBarCooldownViewer:IsShown() then return end
     if not uuidb or not uuidb.statusbars or not uuidb.general then return end
@@ -74,7 +65,7 @@ function cdManager:Texture()
         if f and f.Bar then
             local bar = f.Bar
 
-            -- Find/create the fill we want to clip (only the fill is masked)
+            -- Only the fill is masked.
             local fill
             if bar:GetObjectType() == "StatusBar" then
                 bar:SetStatusBarTexture(texture)
@@ -92,16 +83,13 @@ function cdManager:Texture()
                 fill:SetTexture(texture)
             end
 
-            -- Place the mask with custom insets + shift
             ApplyMask(bar, MASK_OPTS)
 
-            -- Apply the mask ONLY to the fill
             if fill and bar._uberMask and not fill._masked then
                 fill:AddMaskTexture(bar._uberMask)
                 fill._masked = true
             end
 
-            -- Keep mask aligned on resize and fix tiling on update
             if not bar._uberStyler then
                 bar._uberStyler = true
                 bar:HookScript("OnSizeChanged", function(self)
@@ -135,22 +123,13 @@ function cdManager:Color()
 
     local dc = uuidb.general.darkencolor
 
-    -- Same border atlas AND the same proportional padding formula the rest
-    -- of the addon's aura borders use (buffsandauras.lua's StyleAuraButton:
-    -- 5px of padding at a 30px reference icon width), instead of a fixed
-    -- pixel offset tuned for one specific icon size. Cooldown Viewer icons
-    -- have their own user-adjustable size/padding per category in Edit Mode,
-    -- so the border has to be computed from -- and kept in sync with -- each
-    -- icon's actual current width, not a hardcoded constant.
     local AURA_BORDER_ATLAS = "ui-debuff-border-default-noicon"
 
-    -- Tighter than the 5/30 ratio buffsandauras.lua uses elsewhere -- the
-    -- border extends outward past the icon's own bounds on every side, and
-    -- Cooldown Viewer icons can sit right next to each other (icon padding
-    -- set to 0), so a bigger pad here means neighboring borders overlap.
+    -- Proportional to the icon's width (Edit Mode resizes icons). 3/30 rather
+    -- than the aura borders' 5/30 so neighbors at 0 padding don't overlap.
     local function GetBorderPad(anchor)
-        local width = anchor.GetWidth and anchor:GetWidth()
-        if type(width) ~= "number" or width <= 0 then return 3 end
+        local ok, width = pcall(anchor.GetWidth, anchor)
+        if not ok or (issecretvalue and issecretvalue(width)) or type(width) ~= "number" or width <= 0 then return 3 end
         return math.max(1, math.floor(width * (3 / 30) + 0.5))
     end
 
@@ -165,7 +144,7 @@ function cdManager:Color()
         local holder
         if anchor:IsObjectType("Frame") then
             holder = anchor
-        else -- is a region
+        else
             holder = anchor:GetParent()
         end
 
@@ -175,9 +154,6 @@ function cdManager:Color()
         borderTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         PositionBorder(borderTexture, anchor)
 
-        -- Edit Mode's icon size/padding sliders resize the icon frame
-        -- directly and don't otherwise notify us -- keep the border in sync
-        -- with that instead of only ever sizing it once at creation.
         if not holder._uberBorderSized then
             holder._uberBorderSized = true
             holder:HookScript("OnSizeChanged", function()
@@ -188,12 +164,10 @@ function cdManager:Color()
         return borderTexture
     end
 
-    -- Safety checks for BuffBarCooldownViewer
     if BuffBarCooldownViewer and BuffBarCooldownViewer:IsShown() then
         local children = { BuffBarCooldownViewer:GetChildren() }
         for _, f in ipairs(children) do
             if f and f.Bar then
-                -- Tint bar background
                 for _, r in ipairs({ f.Bar:GetRegions() }) do
                     if r:IsObjectType("Texture") and r:GetDrawLayer() == "BACKGROUND" then
                         r:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
@@ -226,7 +200,6 @@ function cdManager:Color()
                 if f and not f.styled and f.Icon then
                     local icon = f.Icon
                     if icon:IsObjectType("Frame") then
-                        -- Handle case where f.Icon is a frame
                         local iconFrame = icon
                         local iconTexture
                         for _, region in ipairs({ iconFrame:GetRegions() }) do
@@ -241,7 +214,6 @@ function cdManager:Color()
                             f.styled = true
                         end
                     elseif icon:IsObjectType("Texture") then
-                        -- Handle case where f.Icon is a texture
                         local iconTexture = icon
                         f.uberBorder = CreateBorder(f, iconTexture)
                         f.styled = true
@@ -257,21 +229,9 @@ function cdManager:Color()
 end
 
 -------------------------------------------------------------------------------
--- Square icons ("Cooldown Manager Icon Shape: Square")
---
--- Blizzard draws every Cooldown Manager icon (Essential, Utility, tracked
--- buff icons, and the icon on tracked buff bars -- CooldownViewer.xml) through
--- a rounded mask (UI-HUD-CoolDownManager-Mask), with a ring overlay
--- (UI-HUD-CoolDownManager-IconOverlay) and a rounded-corner cooldown swipe.
--- Square mode takes the mask off the icon, hides the ring, zooms the icon
--- like our aura icons (the mask used to crop Blizzard's built-in icon edge),
--- gives the swipe a plain square texture, and draws a square border
--- (core/squareborders.lua, location "cdm": thickness / inside-outside) in
--- the darkness color in place of our rounded one. All of it is undone when
--- switching back. Blizzard only sets the mask, ring and swipe texture in XML
--- and re-sets the icon with SetTexture (which keeps texcoords), so nothing
--- needs re-applying on its updates; new item frames are styled as the
--- viewers lay them out (RefreshLayout hook below).
+-- Square icons: Blizzard's rounded mask, ring overlay and rounded swipe are
+-- taken off/hidden, the icon zoomed, and a square border (squareborders.lua,
+-- location "cdm") drawn instead. Undone when switching back.
 -------------------------------------------------------------------------------
 local SB = UberUI.squareborders
 local SQUARE_LOC = "cdm"
@@ -283,8 +243,7 @@ local function SquareOn()
     return SB and SB.IsEnabled(SQUARE_LOC)
 end
 
--- The icon texture and the frame holding it: the icon itself on the icon
--- viewers, a nested .Icon frame on buff bars.
+-- Icon texture and the frame holding it (bars nest the icon in an .Icon frame).
 local function GetIconParts(f)
     local icon = f and f.Icon
     if not icon then return nil end
@@ -304,11 +263,20 @@ end
 
 local sizeHooked = setmetatable({}, { __mode = "k" })  -- icon holder -> true
 
--- Blizzard's rounded masks leave empty transparent space around each icon's
--- edge; Blizzard offsets adjacent item frames closer than their size
--- (CooldownViewerMixin:GetAdditionalPaddingOffset) so the visible icons just touch.
--- Square icons are inset by the same 3/64 per side, or unmasked icons overlap their neighbors.
+-- Blizzard's grid overlaps item frames by GetAdditionalPaddingOffset() (-4,
+-- in item units) so the rounded art touches at padding 0. Square icons are
+-- inset by half that per side to touch the same way. Bar icons aren't in that
+-- grid and use MASK_INSET.
+local BLIZZARD_PADDING_OFFSET = -4
 local MASK_INSET = 3 / 64
+
+local function GetPaddingOffset(viewer)
+    if viewer and viewer.GetAdditionalPaddingOffset then
+        local ok, v = pcall(viewer.GetAdditionalPaddingOffset, viewer)
+        if ok and type(v) == "number" and not (issecretvalue and issecretvalue(v)) then return v end
+    end
+    return BLIZZARD_PADDING_OFFSET
+end
 
 local function IsAuraViewer(f)
     local p = f and (f._uberViewer or f:GetParent())
@@ -325,63 +293,10 @@ local function IsAuraViewer(f)
 end
 
 
--- Tracked auras that are harmful (e.g. your DoTs on the target) get
--- dispel-type border coloring when Cooldown Manager Debuff Border is set to
--- "dispel". In Square mode our square border takes the aura's dispel color
--- (or Blizzard's "None" red for auras with no type) at the colored-border
--- thickness. In Rounded mode our rounded border takes the dispel color.
-local KNOWN_SPELL_DISPEL = {
-    -- Shaman
-    [188389] = "Magic", -- Flame Shock debuff
-    [188838] = "Magic", -- Flame Shock
-    -- Priest
-    [589]    = "Magic", -- Shadow Word: Pain
-    [34914]  = "Magic", -- Vampiric Touch
-    [34433]  = "Magic", -- Shadowfiend
-    -- Druid
-    [8921]   = "Magic", -- Moonfire
-    [93402]  = "Magic", -- Sunfire
-    [155722] = "Bleed", -- Rake
-    [1079]   = "Bleed", -- Rip
-    -- Warlock
-    [980]    = "Curse", -- Agony
-    [172]    = "Magic", -- Corruption
-    [316099] = "Magic", -- Unstable Affliction
-    -- Rogue
-    [703]    = "Bleed", -- Garrote
-    [1943]   = "Bleed", -- Rupture
-    -- Death Knight
-    [191587] = "Disease", -- Virulent Plague
-    [55095]  = "Disease", -- Frost Fever
-    [55078]  = "Disease", -- Blood Plague
-    -- Mage
-    [12654]  = "Magic", -- Ignite
-}
+-- Borders are always dark; Blizzard's dispel-colored DebuffBorder stays hidden
+-- (the dispel type is secret to addons in combat).
 
-local knownDispelCache = {}
-local knownHarmfulCache = {}
-
-local function UpdateTargetAuraCache()
-    if not UnitExists("target") then return end
-    for i = 1, 40 do
-        local d = C_UnitAuras.GetDebuffDataByIndex("target", i)
-        if not d then break end
-        if not (issecretvalue and issecretvalue(d)) then
-            local spellID = d.spellId
-            if spellID and not (issecretvalue and issecretvalue(spellID)) then
-                if d.dispelName and not (issecretvalue and issecretvalue(d.dispelName)) then
-                    knownDispelCache[spellID] = d.dispelName
-                end
-                if d.isHarmful ~= nil and not (issecretvalue and issecretvalue(d.isHarmful)) then
-                    knownHarmfulCache[spellID] = d.isHarmful
-                end
-                if d.name and not (issecretvalue and issecretvalue(d.name)) then
-                    knownDispelCache[d.name] = d.dispelName
-                end
-            end
-        end
-    end
-end
+local QueueStyle -- defined further down
 
 local function SafeShown(region)
     local ok, shown = pcall(region.IsShown, region)
@@ -389,104 +304,110 @@ local function SafeShown(region)
     return shown and true or false
 end
 
--- "Cooldown Manager Debuff Border: Dark": harmful tracked auras (DoTs in the
--- Tracked Buffs section) get the same dark border as everything else instead
--- of Blizzard's dispel color (red for no type), so only the pandemic
--- highlight stands out.
-local function DebuffBorderDark()
-    return uuidb and uuidb.cooldown and uuidb.cooldown.debuffborder == "dark"
+local function IsSecret(v)
+    return issecretvalue and issecretvalue(v)
+end
+
+-- The aura's spell if showing one, else the (override) spell. Not
+-- f.cooldownID: that's the Cooldown Manager's own ID.
+local function ItemSpellID(f)
+    local ok, id
+    if f.GetAuraSpellID then
+        ok, id = pcall(f.GetAuraSpellID, f)
+        if ok and type(id) == "number" and not IsSecret(id) and id > 0 then return id end
+    end
+    if f.GetSpellID then
+        ok, id = pcall(f.GetSpellID, f)
+        if ok and type(id) == "number" and not IsSecret(id) and id > 0 then return id end
+    end
+    if f.GetBaseSpellID then
+        ok, id = pcall(f.GetBaseSpellID, f)
+        if ok and type(id) == "number" and not IsSecret(id) and id > 0 then return id end
+    end
+    return nil
+end
+
+-- The aura the item is displaying, its unit and instance ID. Fields may be secret.
+local function ItemAura(f)
+    local aura, unit, id
+    if f.GetAuraDataCached then
+        local ok, a = pcall(f.GetAuraDataCached, f)
+        if ok and a and not IsSecret(a) then aura = a end
+    end
+    if f.GetAuraDataUnit then
+        local ok, u = pcall(f.GetAuraDataUnit, f)
+        if ok and type(u) == "string" and not IsSecret(u) then unit = u end
+    end
+    if f.GetAuraSpellInstanceID then
+        local ok, i = pcall(f.GetAuraSpellInstanceID, f)
+        if ok and type(i) == "number" and not IsSecret(i) then id = i end
+    end
+    if not id and aura and not IsSecret(aura.auraInstanceID) then id = aura.auraInstanceID end
+    return aura, unit, id
 end
 
 local function FindItemAuraData(f)
-    local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
-    local spellName = spellID and type(spellID) == "number" and C_Spell.GetSpellName(spellID)
-    local aura, unit
-
-    -- 1. Check player auras
-    if spellID and type(spellID) == "number" then
-        local pAura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
-        if pAura and not (issecretvalue and issecretvalue(pAura)) then
-            aura = pAura
-            unit = "player"
-        end
-    end
-
-    -- 2. Check target debuffs (for harmful DoTs like Flame Shock)
-    if not aura and UnitExists("target") then
-        for i = 1, 40 do
-            local dAura = C_UnitAuras.GetDebuffDataByIndex("target", i)
-            if not dAura then break end
-            if not (issecretvalue and issecretvalue(dAura)) then
-                if (spellID and dAura.spellId == spellID) or (spellName and dAura.name == spellName) then
-                    aura = dAura
-                    unit = "target"
-                    break
-                end
-            end
-        end
-    end
-
-    -- 3. Check target buffs (in case tracked buff is on target)
-    if not aura and UnitExists("target") then
-        for i = 1, 40 do
-            local bAura = C_UnitAuras.GetBuffDataByIndex("target", i)
-            if not bAura then break end
-            if not (issecretvalue and issecretvalue(bAura)) then
-                if (spellID and bAura.spellId == spellID) or (spellName and bAura.name == spellName) then
-                    aura = bAura
-                    unit = "target"
-                    break
-                end
-            end
-        end
-    end
-
-    -- 4. Cache dispelName if discovered
-    if aura and aura.dispelName and not (issecretvalue and issecretvalue(aura.dispelName)) then
-        if spellID and type(spellID) == "number" then
-            knownDispelCache[spellID] = aura.dispelName
-        end
-        if spellName then
-            knownDispelCache[spellName] = aura.dispelName
-        end
-    end
-
+    local spellID = ItemSpellID(f)
+    local aura, unit = ItemAura(f)
     return aura, unit, spellID
 end
 
+-- Essential/Utility Cooldown frames also show the GCD swipe; anything this
+-- short is never the spell's own cooldown.
+local GCD_MAX = 1.5
+
+-- Seconds, whichever unit the source used (some report milliseconds).
+local function NormalizeTimes(start, duration, now)
+    if start > (now * 2) or duration > 1000 then
+        return start / 1000, duration / 1000
+    end
+    return start, duration
+end
+
+-- expTime, duration of what the item counts down. 0, 0 when nothing runs;
+-- nil when the values are secret, so callers keep their last known state.
 local function GetItemCooldownAndDuration(f, now)
     now = now or GetTime()
+    local sawSecret = false
 
-    -- 1. Widget Cooldown frame (direct C++ call, zero Blizzard Lua execution)
     if f.Cooldown and f.Cooldown.GetCooldownTimes then
-        local okTimes, startTime, duration = pcall(f.Cooldown.GetCooldownTimes, f.Cooldown)
-        if okTimes and startTime and duration then
-            if not (issecretvalue and (issecretvalue(startTime) or issecretvalue(duration))) then
-                if type(startTime) == "number" and type(duration) == "number" and duration > 0 then
-                    if startTime > (now * 2) or duration > 1000 then
-                        startTime = startTime / 1000
-                        duration = duration / 1000
-                    end
-                    local expTime = startTime + duration
-                    if expTime > now then
-                        return expTime, duration
-                    end
-                end
+        local ok, startTime, duration = pcall(f.Cooldown.GetCooldownTimes, f.Cooldown)
+        if ok and (IsSecret(startTime) or IsSecret(duration)) then
+            sawSecret = true
+        elseif ok and type(startTime) == "number" and type(duration) == "number" and duration > 0 then
+            startTime, duration = NormalizeTimes(startTime, duration, now)
+            local expTime = startTime + duration
+            if duration > GCD_MAX and expTime > now then
+                return expTime, duration
             end
         end
     end
 
-    -- 2. Check aura data on target or player
     local aura = FindItemAuraData(f)
-    if aura and aura.expirationTime and aura.duration then
-        if not (issecretvalue and (issecretvalue(aura.expirationTime) or issecretvalue(aura.duration))) then
-            local expTime = aura.expirationTime
-            local duration = aura.duration
-            if type(expTime) == "number" and type(duration) == "number" and duration > 0 then
-                if expTime > (now * 2) or duration > 1000 then
-                    expTime = expTime / 1000
-                    duration = duration / 1000
-                end
+    if aura then
+        local expTime, duration = aura.expirationTime, aura.duration
+        if IsSecret(expTime) or IsSecret(duration) then
+            sawSecret = true
+        elseif type(expTime) == "number" and type(duration) == "number" and duration > 0 then
+            expTime, duration = NormalizeTimes(expTime, duration, now)
+            if expTime > now then
+                return expTime, duration
+            end
+        end
+    end
+
+    -- Spell cooldown: Essential/Utility only (a tracked aura's spell cooldown
+    -- says nothing about the aura's time left).
+    if not IsAuraViewer(f) then
+        local spellID = ItemSpellID(f)
+        local ok, sc = pcall(C_Spell.GetSpellCooldown, spellID or 0)
+        if spellID and ok and sc then
+            if IsSecret(sc.startTime) or IsSecret(sc.duration) or IsSecret(sc.isOnGCD) then
+                sawSecret = true
+            elseif not sc.isOnGCD and type(sc.startTime) == "number" and type(sc.duration) == "number"
+                and sc.duration > GCD_MAX then
+                local startTime, duration = NormalizeTimes(sc.startTime, sc.duration, now)
+                local expTime = startTime + duration
                 if expTime > now then
                     return expTime, duration
                 end
@@ -494,39 +415,37 @@ local function GetItemCooldownAndDuration(f, now)
         end
     end
 
-    -- 3. Spell cooldown (for Essential / Utility cooldowns)
-    local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
-    if spellID and type(spellID) == "number" and spellID > 0 then
-        local sc = C_Spell.GetSpellCooldown(spellID)
-        if sc and sc.startTime and sc.duration then
-            if not (issecretvalue and (issecretvalue(sc.startTime) or issecretvalue(sc.duration))) then
-                local startTime = sc.startTime
-                local duration = sc.duration
-                if type(startTime) == "number" and type(duration) == "number" and duration > 0 then
-                    if startTime > (now * 2) or duration > 1000 then
-                        startTime = startTime / 1000
-                        duration = duration / 1000
-                    end
-                    local expTime = startTime + duration
-                    if expTime > now then
-                        return expTime, duration
-                    end
-                end
-            end
-        end
-    end
-
+    if sawSecret then return nil end
     return 0, 0
 end
 
+-- Keep Blizzard's proc glow (SpellActivationAlert) above our square border.
+local function RaiseProcGlow(f)
+    local alert = f.SpellActivationAlert
+    local sb = SB.Find(f, 1)
+    if alert and sb then
+        local ok, level = pcall(sb.GetFrameLevel, sb)
+        if ok and type(level) == "number" then alert:SetFrameLevel(level + 2) end
+    end
+end
+
+local procHookInstalled = false
+local function EnsureProcGlowHook()
+    if procHookInstalled or not (ActionButtonSpellAlertManager and ActionButtonSpellAlertManager.ShowAlert) then return end
+    procHookInstalled = true
+    hooksecurefunc(ActionButtonSpellAlertManager, "ShowAlert", function(_, button)
+        if button and SB.Find(button, 1) then
+            C_Timer.After(0, function() pcall(RaiseProcGlow, button) end)
+        end
+    end)
+end
+
+-- Blizzard shows/hides DebuffBorder itself, so it's faded by alpha.
 local function UpdateSquareDebuffColor(f)
     local tex = GetIconParts(f)
     if not tex then return end
 
-    local square = SquareOn()
-    if f.DebuffBorder then
-        f.DebuffBorder:SetAlpha(square and 0 or (DebuffBorderDark() and 0 or 1))
-    end
+    if f.DebuffBorder then f.DebuffBorder:SetAlpha(0) end
 
     if uuidb.cooldown.borders == false then
         local sb = SB.Find(f, 1)
@@ -535,101 +454,117 @@ local function UpdateSquareDebuffColor(f)
         return
     end
 
-    local isHarmful = false
-    local dispelName = "None"
-    local aura, unit
-
-    -- Only tracked buff/debuff auras can have dispel colors.
-    -- Essential Cooldowns and Utility Cooldowns are always plain dark borders.
-    if IsAuraViewer(f) then
-        local spellID = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID()) or (f.GetBaseSpellID and f:GetBaseSpellID())
-        if spellID and type(spellID) == "number" then
-            aura, unit = FindItemAuraData(f)
-        end
-
-        if aura and aura.isHarmful then
-            isHarmful = true
-        elseif unit == "target" then
-            isHarmful = true
-        elseif spellID and type(spellID) == "number" then
-            if KNOWN_SPELL_DISPEL[spellID] then
-                isHarmful = true
-            elseif knownHarmfulCache[spellID] then
-                isHarmful = true
-            end
-        end
-
-        if aura and aura.dispelName and not (issecretvalue and issecretvalue(aura.dispelName)) then
-            dispelName = aura.dispelName
-        elseif spellID and type(spellID) == "number" then
-            dispelName = knownDispelCache[spellID] or KNOWN_SPELL_DISPEL[spellID]
-        end
-        dispelName = dispelName or "None"
-    end
-
-    local useDispel = isHarmful and (not DebuffBorderDark())
-
-    if square then
+    if SquareOn() then
         local sb = SB.Get(f, 1)
-        if useDispel then
-            SB.LayoutDispelFor(sb, tex, SQUARE_LOC)
-            SB.ApplyDispelColor(sb, dispelName, unit or "target", aura and aura.auraInstanceID)
-        else
-            SB.LayoutFor(sb, tex, SQUARE_LOC)
-            SB.SetDarkColor(sb)
-        end
+        SB.LayoutFor(sb, tex, SQUARE_LOC)
+        SB.SetDarkColor(sb)
         SB.RaiseAbove(sb, f.DebuffBorder or f.Cooldown or f, 2)
         sb:Show()
-    else
-        -- Rounded icon: tint f.uberBorder
-        if f.uberBorder then
-            if useDispel then
-                local r, g, b, a = SB.GetDispelColor(dispelName, unit or "target", aura and aura.auraInstanceID)
-                f.uberBorder:SetVertexColor(r, g, b, a)
-            else
-                local dc = uuidb.general.darkencolor
-                f.uberBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
-            end
-            f.uberBorder:Show()
-        end
+        RaiseProcGlow(f)
+    elseif f.uberBorder then
+        local dc = uuidb.general.darkencolor
+        f.uberBorder:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        f.uberBorder:Show()
     end
+end
+
+local function QueueDebuffColor(f)
+    if f._uberDebuffQueued then return end
+    f._uberDebuffQueued = true
+    C_Timer.After(0, function()
+        f._uberDebuffQueued = nil
+        pcall(UpdateSquareDebuffColor, f)
+    end)
 end
 
 local function EnsureDebuffHook(f)
     if not f._uberDebuffHooked then
         f._uberDebuffHooked = true
-        f:HookScript("OnShow", function(self)
-            C_Timer.After(0, function() pcall(UpdateSquareDebuffColor, self) end)
-            local p = self._uberViewer or (self.GetParent and self:GetParent())
-            if p then
-                local collapse, centered = GetViewerLayoutSettings(p)
-                if collapse or centered then
-                    QueueStyle()
-                end
-            end
-        end)
-        f:HookScript("OnHide", function(self)
-            local p = self._uberViewer or (self.GetParent and self:GetParent())
-            if p then
-                local collapse, centered = GetViewerLayoutSettings(p)
-                if collapse or centered then
-                    QueueStyle()
-                end
-            end
-        end)
+        f:HookScript("OnShow", QueueDebuffColor)
     end
 end
 
-local function LayoutSquareIcon(f, tex, holder)
-    local ok, w = pcall(holder.GetWidth, holder)
-    local inset = (ok and type(w) == "number" and w > 0) and (w * MASK_INSET) or 0
-    tex:ClearAllPoints()
-    if inset > 0 then
-        tex:SetPoint("TOPLEFT", holder, "TOPLEFT", inset, -inset)
-        tex:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -inset, inset)
-    else
-        tex:SetAllPoints(holder)
+-- One physical pixel in `region`'s coordinate space.
+local function PixelUnit(region)
+    local factor = (PixelUtil and PixelUtil.GetPixelToUIUnitFactor and PixelUtil.GetPixelToUIUnitFactor()) or 1
+    local ok, scale = pcall(region.GetEffectiveScale, region)
+    if not ok or IsSecret(scale) or type(scale) ~= "number" or scale <= 0 then scale = 1 end
+    return factor / scale
+end
+
+-- Item sizes in the items' own units (CooldownViewer.xml; bars: the Icon
+-- frame). Edit Mode's icon size is a SetScale on top, so these are constant.
+-- Fallback for when GetSize comes back secret.
+local TEMPLATE_SIZES = {
+    EssentialCooldownViewer = 50,
+    UtilityCooldownViewer   = 30,
+    BuffIconCooldownViewer  = 40,
+    BuffBarCooldownViewer   = 30,
+}
+
+-- holder: an icon viewer's item frame, or a bar item's Icon frame.
+local function HolderSize(holder)
+    local ok, w, h = pcall(holder.GetSize, holder)
+    if ok and not IsSecret(w) and not IsSecret(h) and type(w) == "number" and w > 0
+        and type(h) == "number" and h > 0 then
+        return w, h
     end
+    local item = (holder.layoutIndex ~= nil) and holder or holder:GetParent()
+    local viewer = item and (item._uberViewer or item:GetParent())
+    local name = viewer and viewer.GetName and viewer:GetName()
+    local size = name and TEMPLATE_SIZES[name]
+    if size then return size, size end
+    return nil
+end
+
+local function IconInset(holder)
+    local w = HolderSize(holder)
+    if not w then return 0 end
+    local inset
+    if holder.layoutIndex ~= nil and holder.Bar == nil then
+        inset = -GetPaddingOffset(holder._uberViewer or holder:GetParent()) / 2
+    else
+        inset = w * MASK_INSET
+    end
+    return math.max(0, inset)
+end
+
+-- Round half up, with slack so float dust can't round equal edges apart.
+local function RoundPixel(v)
+    return math.floor(v + 0.5 + 0.001)
+end
+
+-- Insets (left, right, top, bottom) that put the icon's edges on whole
+-- physical pixels. Rounding absolute edges (not the inset) makes touching
+-- icons agree: one's right edge and the next one's left edge are the same
+-- number before rounding. Falls back to the plain inset if the rect is secret.
+local function PixelAlignedInsets(holder, inset)
+    local ok, left, bottom, width, height = pcall(holder.GetRect, holder)
+    if not ok or IsSecret(left) or IsSecret(bottom) or IsSecret(width) or IsSecret(height)
+        or type(left) ~= "number" or type(bottom) ~= "number"
+        or type(width) ~= "number" or type(height) ~= "number" or width <= 0 or height <= 0 then
+        return inset, inset, inset, inset
+    end
+    local px = PixelUnit(holder)
+    local L, R = left / px, (left + width) / px
+    local B, T = bottom / px, (bottom + height) / px
+    local i = inset / px
+    return (RoundPixel(L + i) - L) * px, (R - RoundPixel(R - i)) * px,
+           (T - RoundPixel(T - i)) * px, (RoundPixel(B + i) - B) * px
+end
+
+-- Visible icon width in item units, for sizing the pandemic glows (the item's
+-- scale applies on top).
+local function IconWidth(holder)
+    local w = HolderSize(holder)
+    return w and (w - 2 * IconInset(holder)) or nil
+end
+
+local function LayoutSquareIcon(f, tex, holder)
+    local l, r, t, b = PixelAlignedInsets(holder, IconInset(holder))
+    tex:ClearAllPoints()
+    tex:SetPoint("TOPLEFT", holder, "TOPLEFT", l, -t)
+    tex:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -r, b)
     if f.Cooldown then
         f.Cooldown:ClearAllPoints()
         f.Cooldown:SetAllPoints(tex)
@@ -648,6 +583,7 @@ local function ApplySquareIcon(f, square)
         if not state then return end
         for _, m in ipairs(state.masks) do pcall(tex.AddMaskTexture, tex, m) end
         if state.ring then state.ring:SetAlpha(1) end
+        if f.OutOfRange then f.OutOfRange:SetAlpha(1) end
         tex:SetTexCoord(0, 1, 0, 1)
         tex:ClearAllPoints()
         tex:SetAllPoints(holder)
@@ -658,13 +594,12 @@ local function ApplySquareIcon(f, square)
         end
         SB.Hide(f, 1)
         squareState[f] = nil
-        if f.DebuffBorder then f.DebuffBorder:SetAlpha(DebuffBorderDark() and 0 or 1) end
+        if f.DebuffBorder then f.DebuffBorder:SetAlpha(0) end
         return
     end
 
     if not state then
         state = { masks = {} }
-        -- Take Blizzard's rounded mask(s) off the icon, remembered for undo.
         local n = tex.GetNumMaskTextures and tex:GetNumMaskTextures() or 0
         for i = n, 1, -1 do
             local m = tex:GetMaskTexture(i)
@@ -677,9 +612,11 @@ local function ApplySquareIcon(f, square)
         squareState[f] = state
     end
     if state.ring then state.ring:SetAlpha(0) end
+    -- The out-of-range shadow is shaped for the rounded icon; the icon's red
+    -- tint still marks out of range.
+    if f.OutOfRange then f.OutOfRange:SetAlpha(0) end
     if f.DebuffBorder then f.DebuffBorder:SetAlpha(0) end
     tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    -- Edit Mode's icon size changes resize the frame directly.
     if not sizeHooked[holder] then
         sizeHooked[holder] = true
         holder:HookScript("OnSizeChanged", function()
@@ -696,17 +633,16 @@ local function ApplySquareIcon(f, square)
         SB.RaiseAbove(sb, f.Cooldown or holder, 2)
         SB.SetDarkColor(sb)
         sb:Show()
+        EnsureProcGlowHook()
+        RaiseProcGlow(f)
     end
     EnsureDebuffHook(f)
     LayoutSquareIcon(f, tex, holder)
 end
 
 -------------------------------------------------------------------------------
--- Pandemic highlight ("Cooldown Manager Pandemic Highlight")
---
--- Tracked auras in their pandemic window (<= 30% of base duration remaining)
--- get styled with the chosen highlight (Border, Proc Glow, or Marching Ants)
--- in the user's selected color.
+-- Pandemic highlight: Border, Proc Glow or Marching Ants in place of
+-- Blizzard's own pandemic effect.
 -------------------------------------------------------------------------------
 local aurakit = UberUI.aurakit
 local PANDEMIC_DEFAULT_COLOR = "ffff2626"
@@ -717,12 +653,19 @@ local function PandemicStyle()
 end
 
 local function PandemicColor()
+    if uuidb and uuidb.cooldown and uuidb.cooldown.pandemicclasscolor then
+        local _, class = UnitClass("player")
+        local c = class and ((C_ClassColor and C_ClassColor.GetClassColor(class)) or RAID_CLASS_COLORS[class])
+        if c then return c.r, c.g, c.b end
+    end
     local hex = uuidb and uuidb.cooldown and uuidb.cooldown.pandemiccolor
     if type(hex) ~= "string" or not hex:match("^%x%x%x%x%x%x%x%x$") then hex = PANDEMIC_DEFAULT_COLOR end
     local ok, c = pcall(CreateColorFromHexString, hex)
     if ok and c then return c.r, c.g, c.b end
     return 1, 0.15, 0.15
 end
+
+local CDM_GLOW_SCALE = 1.1
 
 local function StylePandemicHost(f)
     local tex, holder = GetIconParts(f)
@@ -736,7 +679,11 @@ local function StylePandemicHost(f)
         host:Hide()
         pandemicHosts[f] = host
     end
-    local ok, w = pcall(tex.GetWidth, tex)
+    local level = (f.Cooldown or holder):GetFrameLevel()
+    local sb = SB.Find(f, 1)
+    if sb then level = math.max(level, sb:GetFrameLevel()) end
+    host:SetFrameLevel(level + 2)
+    local w = IconWidth(holder)
     local r, g, b = PandemicColor()
     aurakit.StyleHighlight(host, {
         kind = PandemicStyle(),
@@ -744,14 +691,63 @@ local function StylePandemicHost(f)
         square = squareState[f] ~= nil,
         loc = SQUARE_LOC, icon = tex,
         ringFrom = holder, ringX = -2,
-        center = tex, size = (ok and type(w) == "number" and w > 0) and w or 36,
+        center = tex, size = w or 36, glowScale = CDM_GLOW_SCALE,
     })
     return host
+end
+
+-- Our highlight follows Blizzard's pandemic state (item.PandemicIcon, shown
+-- by ShowPandemicStateFrame): Blizzard knows which auras can pandemic and the
+-- real window, and it works while aura data is secret.
+local function HasBlizzardPandemic(f)
+    return type(f.ShowPandemicStateFrame) == "function"
+end
+
+-- Alpha, not Hide: Blizzard re-shows it every frame while in pandemic.
+local function SetBlizzardPandemicAlpha(f, alpha)
+    local p = f.PandemicIcon
+    if not p then return end
+    local ok, cur = pcall(p.GetAlpha, p)
+    if ok and not IsSecret(cur) and cur ~= alpha then pcall(p.SetAlpha, p, alpha) end
+end
+
+-- Only installed while a custom pandemic style is chosen.
+local pandemicShowHooked = setmetatable({}, { __mode = "k" })
+local function EnsurePandemicShowHook(f)
+    if pandemicShowHooked[f] or not HasBlizzardPandemic(f) then return end
+    pandemicShowHooked[f] = true
+    hooksecurefunc(f, "ShowPandemicStateFrame", function(self)
+        if PandemicStyle() == "blizzard" or self._uberPandemicPending then return end
+        local p = self.PandemicIcon
+        local ok, a = pcall(p and p.GetAlpha, p)
+        if not ok or IsSecret(a) or a == 0 then return end
+        self._uberPandemicPending = true
+        C_Timer.After(0, function()
+            self._uberPandemicPending = nil
+            if PandemicStyle() ~= "blizzard" then SetBlizzardPandemicAlpha(self, 0) end
+        end)
+    end)
+
+    -- Once an aura ends Blizzard stops updating the pandemic window but keeps
+    -- checking it, so a re-apply inside the old window would read as pandemic.
+    -- Distrust the flag from the aura leaving (auraInstanceID cleared before
+    -- the item hides) until Blizzard computes a new window.
+    f:HookScript("OnHide", function(self)
+        local id = self.auraInstanceID
+        if not IsSecret(id) and id == nil then self._uberPandemicStale = true end
+    end)
+    if type(f.SetPandemicAlertTriggerTime) == "function" then
+        hooksecurefunc(f, "SetPandemicAlertTriggerTime", function(self)
+            self._uberPandemicStale = nil
+        end)
+    end
 end
 
 local function UpdateItemPandemic(f, now)
     local custom = PandemicStyle() ~= "blizzard"
     if not custom then
+        -- Pooled: a frame we faded may come back on another item.
+        SetBlizzardPandemicAlpha(f, 1)
         if f._uberInPandemic then
             f._uberInPandemic = nil
             if pandemicHosts[f] then pandemicHosts[f]:Hide() end
@@ -759,12 +755,20 @@ local function UpdateItemPandemic(f, now)
         return
     end
 
-    local expTime, duration = GetItemCooldownAndDuration(f, now)
     local inPandemic = false
-    if expTime and duration and duration > 0 then
-        local remaining = expTime - now
-        if remaining > 0 and remaining <= (duration * 0.3) then
-            inPandemic = true
+    if HasBlizzardPandemic(f) then
+        EnsurePandemicShowHook(f)
+        SetBlizzardPandemicAlpha(f, 0)
+        inPandemic = not f._uberPandemicStale and f.PandemicIcon ~= nil and SafeShown(f.PandemicIcon) or false
+    elseif IsAuraViewer(f) then
+        -- No Blizzard pandemic state on this client: time the aura itself.
+        local aura = FindItemAuraData(f)
+        local expTime = aura and aura.expirationTime
+        local duration = aura and aura.duration
+        if not IsSecret(expTime) and not IsSecret(duration) and type(expTime) == "number"
+            and type(duration) == "number" and duration > 0 then
+            local remaining = expTime - now
+            inPandemic = remaining > 0 and remaining <= duration * 0.3
         end
     end
 
@@ -772,8 +776,12 @@ local function UpdateItemPandemic(f, now)
         f._uberInPandemic = inPandemic
         local host = pandemicHosts[f]
         if inPandemic and f:IsShown() then
-            host = StylePandemicHost(f)
-            if host then host:Show() end
+            local ok, res = pcall(StylePandemicHost, f)
+            if ok and res then
+                res:Show()
+            elseif not ok then
+                UberUI:ReportError("Cooldown Manager pandemic highlight", res)
+            end
         elseif host then
             host:Hide()
         end
@@ -808,7 +816,7 @@ local function ForEachItemFrame(fn)
 end
 
 -------------------------------------------------------------------------------
--- Expiration text coloring ("Cooldown Duration Colors")
+-- Countdown text colors
 -------------------------------------------------------------------------------
 local function GetDurationColors()
     local c = uuidb and uuidb.cooldown or {}
@@ -826,6 +834,11 @@ end
 
 local function GetCountdownFontString(f)
     if f._uberCdText then return f._uberCdText end
+
+    if f.Bar and f.Bar.Duration then
+        f._uberCdText = f.Bar.Duration
+        return f.Bar.Duration
+    end
 
     local cd = f.Cooldown
     if cd then
@@ -865,97 +878,103 @@ local function GetCountdownFontString(f)
     return nil
 end
 
-local function UpdateItemDurationColor(f, now)
-    local expTime, duration = GetItemCooldownAndDuration(f, now)
-    local cdText = GetCountdownFontString(f)
+-- Icon countdowns use an engine countdown formatter (Cooldown:
+-- SetCountdownFormatter): the engine picks the color from the time left (it's
+-- in the format string), so it works on secret durations and never sees the
+-- GCD. One shared formatter per (threshold, colors).
+local countdownFormatters = {}
+local formatterUnsupported = false
+local formatterAttached = setmetatable({}, { __mode = "k" }) -- Cooldown -> formatter
 
-    if not expTime or type(expTime) ~= "number" or expTime <= 0 then
-        if f._uberDurationState then
-            f._uberDurationState = nil
-            if cdText then
-                local normalHex = GetDurationColors()
-                local r, g, b = HexToRGB(normalHex, 1, 1, 1)
-                pcall(cdText.SetTextColor, cdText, r, g, b, 1)
-            end
-        end
-        return
+local function BuildCountdownFormatter(threshold, nr, ng, nb, er, eg, eb)
+    if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter
+        and Enum and Enum.NumericRuleFormatRounding) then
+        return nil
     end
-
-    local remaining = expTime - now
-    if remaining <= 0 then
-        if f._uberDurationState then
-            f._uberDurationState = nil
-            if cdText then
-                local normalHex = GetDurationColors()
-                local r, g, b = HexToRGB(normalHex, 1, 1, 1)
-                pcall(cdText.SetTextColor, cdText, r, g, b, 1)
-            end
-        end
-        return
-    end
-
-    local normalHex, expiringHex, threshold = GetDurationColors()
-    local isExpiring = (remaining <= threshold)
-    local state = isExpiring and "expiring" or "normal"
-
-    if f._uberDurationState ~= state or isExpiring then
-        f._uberDurationState = state
-        local r, g, b
-        if isExpiring then
-            r, g, b = HexToRGB(expiringHex, 1, 0.2, 0.2)
-        else
-            r, g, b = HexToRGB(normalHex, 1, 1, 1)
-        end
-        if cdText then
-            pcall(cdText.SetTextColor, cdText, r, g, b, 1)
-        end
-    end
+    local Up = Enum.NumericRuleFormatRounding.Up
+    local normal = CreateColor(nr, ng, nb, 1)
+    local function N(fmt) return normal:WrapTextInColorCode(fmt) end
+    local points = {
+        { threshold = 0, format = CreateColor(er, eg, eb, 1):WrapTextInColorCode("%d"), rounding = Up, step = 1 },
+        { threshold = threshold, format = N("%d"), rounding = Up, step = 1 },
+        -- Just above each unit boundary so an up-rounded 59.x reads "1:00", not "60".
+        { threshold = 59.0001, format = N("%d:%02d"), rounding = Up, step = 1,
+          components = { { div = 60 }, { mod = 60 } } },
+        { threshold = 3599.0001, format = N("%dh"), rounding = Up, step = 1,
+          components = { { div = 3600 } } },
+        { threshold = 86399.0001, format = N("%dd"), rounding = Up, step = 1,
+          components = { { div = 86400 } } },
+    }
+    local f = C_StringUtil.CreateNumericRuleFormatter()
+    if not pcall(f.SetBreakpoints, f, points) then return nil end
+    return f
 end
 
-
-
--- Debug (/uuidebugcdm): what each tracked buff icon is actually drawing.
-function cdManager:DebugReport()
-    local lines = { "==== cooldown manager report ====",
-        "square: " .. tostring(SquareOn()) .. "  pandemic style: " .. PandemicStyle() }
-    local function fmt(v)
-        if issecretvalue and issecretvalue(v) then return "<secret>" end
-        if type(v) == "number" then return string.format("%.2f", v) end
-        return tostring(v)
+local function GetCountdownFormatter()
+    if formatterUnsupported then return nil end
+    local normalHex, expiringHex, threshold = GetDurationColors()
+    threshold = math.min(threshold, 59)
+    local key = normalHex .. expiringHex .. threshold
+    local f = countdownFormatters[key]
+    if not f then
+        local nr, ng, nb = HexToRGB(normalHex, 1, 1, 1)
+        local er, eg, eb = HexToRGB(expiringHex, 1, 0.2, 0.2)
+        f = BuildCountdownFormatter(threshold, nr, ng, nb, er, eg, eb)
+        if not f then
+            formatterUnsupported = true
+            return nil
+        end
+        countdownFormatters[key] = f
     end
-    local now = GetTime()
-    for _, name in ipairs(VIEWERS) do
-        local viewer = _G[name]
-        if viewer then
-            lines[#lines + 1] = string.format("-- %s (isHoriz=%s, stride=%s)",
-                name, tostring(viewer.IsHorizontal and viewer:IsHorizontal()), fmt(viewer.GetStride and viewer:GetStride()))
-            local n = 0
-            if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then
-                for f in viewer.itemFramePool:EnumerateActive() do
-                    if f.Icon and n < 8 then
-                        local okS, shown = pcall(f.IsShown, f)
-                        if okS and shown == true then
-                            n = n + 1
-                            local sb = SB.Find(f, 1)
-                            local r, g, b
-                            if sb and sb.edges then r, g, b = sb.edges[1]:GetVertexColor() end
-                            local host = pandemicHosts[f]
-                            local spell = f.spellID or f.cooldownID or (f.GetSpellID and f:GetSpellID())
-                            local aura, unit = FindItemAuraData(f)
-                            local expTime, dur = GetItemCooldownAndDuration(f, now)
-                            local rem = (expTime and type(expTime) == "number" and expTime > now) and (expTime - now) or 0
-                            lines[#lines + 1] = string.format(
-                                "  spell=%s unit=%s dispel=%s | our border shown=%s color=(%.2f,%.2f,%.2f) | rem=%.1f/%.1f inPan=%s hostShown=%s durState=%s",
-                                fmt(spell), fmt(unit), fmt(aura and aura.dispelName or (spell and KNOWN_SPELL_DISPEL[spell])),
-                                fmt(sb and sb:IsShown()), r or 0, g or 0, b or 0,
-                                rem, dur or 0, fmt(f._uberInPandemic), fmt(host and host:IsShown()), fmt(f._uberDurationState))
-                        end
-                    end
-                end
+    return f
+end
+
+-- True once the item's countdown is the engine's job.
+local function ApplyCountdownFormatter(f)
+    local cd = f.Cooldown
+    if not (cd and cd.SetCountdownFormatter) then return false end
+    local formatter = GetCountdownFormatter()
+    if not formatter then return false end
+    if formatterAttached[cd] ~= formatter then
+        formatterAttached[cd] = formatter
+        pcall(cd.SetCountdownFormatter, cd, formatter)
+    end
+    return true
+end
+
+local function UpdateItemDurationColor(f, now)
+    if ApplyCountdownFormatter(f) then return end
+
+    -- Bars: Blizzard sets Bar.Duration's text from Lua, so color it by time
+    -- left; while that's secret, keep the last known state until it would end.
+    local threshold = select(3, GetDurationColors())
+    local expTime = GetItemCooldownAndDuration(f, now)
+    local state
+    if expTime == nil then
+        local known = f._uberDurationExp
+        state = (known and known > now and known - now <= threshold) and "expiring" or "normal"
+    elseif expTime > now then
+        f._uberDurationExp = expTime
+        state = (expTime - now <= threshold) and "expiring" or "normal"
+    else
+        f._uberDurationExp = nil
+        state = "normal"
+    end
+
+    if f._uberDurationState ~= state then
+        f._uberDurationState = state
+        local text = GetCountdownFontString(f)
+        if text then
+            local normalHex, expiringHex = GetDurationColors()
+            local r, g, b
+            if state == "expiring" then
+                r, g, b = HexToRGB(expiringHex, 1, 0.2, 0.2)
+            else
+                r, g, b = HexToRGB(normalHex, 1, 1, 1)
             end
+            pcall(text.SetTextColor, text, r, g, b, 1)
         end
     end
-    return table.concat(lines, "\n")
 end
 
 function cdManager:StyleIcons()
@@ -966,7 +985,6 @@ function cdManager:StyleIcons()
         EnsureDebuffHook(f)
         pcall(UpdateSquareDebuffColor, f)
         if pandemicHosts[f] then pcall(StylePandemicHost, f) end
-        -- Our rounded border (Color) only in Rounded mode.
         if f.uberBorder then f.uberBorder:SetShown(not square) end
     end)
 end
@@ -975,48 +993,93 @@ local function IsEditModeActive()
     return EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive and EditModeManagerFrame:IsEditModeActive()
 end
 
-local function GetViewerLayoutSettings(viewer)
+-------------------------------------------------------------------------------
+-- Alignment: "blizzard" (Blizzard's layout), "pack" (shown items packed from
+-- the Edit Mode edge) or "center".
+-------------------------------------------------------------------------------
+local ALIGN_FIELDS = {
+    EssentialCooldownViewer = { "essential_align", "blizzard" },
+    UtilityCooldownViewer   = { "utility_align", "blizzard" },
+    BuffIconCooldownViewer  = { "bufficon_align", "pack" },
+    BuffBarCooldownViewer   = { "buffbar_align", "pack" },
+}
+
+local function GetViewerAlign(viewer)
     local name = viewer and viewer.GetName and viewer:GetName()
-    local c = uuidb and uuidb.cooldown or {}
-    if name == "EssentialCooldownViewer" then
-        return c.essential_collapse == true, c.essential_centered == true
-    elseif name == "UtilityCooldownViewer" then
-        return c.utility_collapse == true, c.utility_centered == true
-    elseif name == "BuffIconCooldownViewer" then
-        return c.bufficon_collapse ~= false, c.bufficon_centered == true
-    elseif name == "BuffBarCooldownViewer" then
-        return c.buffbar_collapse ~= false, c.buffbar_centered == true
+    local entry = name and ALIGN_FIELDS[name]
+    if not entry then return "blizzard" end
+    local v = uuidb and uuidb.cooldown and uuidb.cooldown[entry[1]]
+    if v == "pack" or v == "center" or v == "blizzard" then return v end
+    return entry[2]
+end
+
+-- Re-pack as items show/hide. Only installed once a viewer uses our layout.
+local repackHooked = setmetatable({}, { __mode = "k" })
+local function EnsureRepackHook(f)
+    if repackHooked[f] then return end
+    repackHooked[f] = true
+    local function requeue(self)
+        local p = self._uberViewer or (self.GetParent and self:GetParent())
+        if p and GetViewerAlign(p) ~= "blizzard" then QueueStyle() end
     end
-    return false, false
+    f:HookScript("OnShow", requeue)
+    f:HookScript("OnHide", requeue)
+end
+
+-- Edit Mode padding/direction as CooldownViewerMixin:RefreshLayout reads
+-- them, with getter fallbacks for other clients.
+local function GetViewerPadding(viewer)
+    local pad = viewer.iconPadding
+    if type(pad) ~= "number" and viewer.GetPadding then
+        local ok, v = pcall(viewer.GetPadding, viewer)
+        if ok then pad = v end
+    end
+    if type(pad) ~= "number" or pad < 0 then pad = 0 end
+    return pad
+end
+
+local function GetViewerDirection(viewer, isHoriz)
+    local enum = Enum and Enum.CooldownViewerIconDirection
+    if viewer.iconDirection ~= nil and enum and enum.Right ~= nil then
+        local right = viewer.iconDirection == enum.Right
+        -- Vertical: always left to right; horizontal: always top to bottom.
+        return (not isHoriz) or right, (not isHoriz) and right
+    end
+    local toRight, toTop = true, false
+    if viewer.addIconsToRight ~= nil then
+        toRight = viewer.addIconsToRight
+    elseif viewer.GetAddIconsToRight then
+        local ok, v = pcall(viewer.GetAddIconsToRight, viewer)
+        if ok and v ~= nil then toRight = v end
+    end
+    if viewer.addIconsToTop ~= nil then
+        toTop = viewer.addIconsToTop
+    elseif viewer.GetAddIconsToTop then
+        local ok, v = pcall(viewer.GetAddIconsToTop, viewer)
+        if ok and v ~= nil then toTop = v end
+    end
+    return toRight, toTop
 end
 
 local function ApplyCustomViewerLayout(viewer)
     if not viewer or IsEditModeActive() then return end
-    local collapse, centered = GetViewerLayoutSettings(viewer)
-    if not collapse and not centered then return end
+    local align = GetViewerAlign(viewer)
+    if align == "blizzard" then return end
 
+    -- Only shown items get a slot, so hidden (inactive) ones leave no gap.
     local items = {}
-    if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then
-        for f in viewer.itemFramePool:EnumerateActive() do
-            if f and (f.Icon or f.Bar) then
-                local shown = f:IsShown()
-                if (not collapse) or shown then
-                    items[#items + 1] = f
-                end
-            end
+    local function consider(f)
+        if f and (f.Icon or f.Bar) then
+            EnsureRepackHook(f)
+            if f:IsShown() then items[#items + 1] = f end
         end
+    end
+    if viewer.itemFramePool and viewer.itemFramePool.EnumerateActive then
+        for f in viewer.itemFramePool:EnumerateActive() do consider(f) end
     end
     if #items == 0 then
-        for _, f in ipairs({ viewer:GetChildren() }) do
-            if f and (f.Icon or f.Bar) then
-                local shown = f:IsShown()
-                if (not collapse) or shown then
-                    items[#items + 1] = f
-                end
-            end
-        end
+        for _, f in ipairs({ viewer:GetChildren() }) do consider(f) end
     end
-
     if #items == 0 then return end
 
     table.sort(items, function(a, b)
@@ -1027,88 +1090,82 @@ local function ApplyCustomViewerLayout(viewer)
     end)
 
     local sample = items[1]
-    local w = sample:GetWidth() or 36
-    local h = sample:GetHeight() or 36
-    if not w or w <= 0 then w = 36 end
-    if not h or h <= 0 then h = 36 end
+    local w, h
+    if sample.Bar then
+        -- Bar width is set at runtime (no template size): skip while secret.
+        w, h = sample:GetWidth(), sample:GetHeight()
+        if IsSecret(w) or IsSecret(h) then return end
+    else
+        w, h = HolderSize(sample)
+    end
+    if type(w) ~= "number" or w <= 0 then w = 36 end
+    if type(h) ~= "number" or h <= 0 then h = 36 end
 
     local isHoriz = (viewer.IsHorizontal and viewer:IsHorizontal()) ~= false
     local stride = (viewer.GetStride and viewer:GetStride()) or 8
     if not stride or stride <= 0 then stride = 8 end
-    local pad = (viewer.GetPadding and viewer:GetPadding()) or 0
-    if pad < 0 then pad = 0 end
+    -- Whole pixels, so every gap is the same width.
+    local padPx = PixelUnit(sample)
+    local pad = math.floor(GetViewerPadding(viewer) / padPx + 0.5) * padPx
 
-    local toRight = true
-    if viewer.addIconsToRight ~= nil then
-        toRight = viewer.addIconsToRight
-    elseif viewer.GetAddIconsToRight then
-        local ok, v = pcall(viewer.GetAddIconsToRight, viewer)
-        if ok and v ~= nil then toRight = v end
+    -- Not rounded: PixelAlignedInsets aligns each icon afterward, which only
+    -- lines neighbors up when their unrounded edges coincide.
+    local stepX, stepY = w + pad, h + pad
+    if not sample.Bar then
+        -- Padding is between the visible icons, not the (overlapping) frames.
+        local inset = IconInset(sample)
+        stepX, stepY = w - 2 * inset + pad, h - 2 * inset + pad
+        -- Touching square icons share one border line.
+        if pad == 0 and SquareOn() and uuidb.cooldown.borders ~= false then
+            local t = SB.PixelsToUIUnits(sample, SB.Thickness(SQUARE_LOC))
+            local shared = SB.IsInset(SQUARE_LOC) and -t or t
+            stepX, stepY = stepX + shared, stepY + shared
+        end
     end
 
-    local toTop = false
-    if viewer.addIconsToTop ~= nil then
-        toTop = viewer.addIconsToTop
-    elseif viewer.GetAddIconsToTop then
-        local ok, v = pcall(viewer.GetAddIconsToTop, viewer)
-        if ok and v ~= nil then toTop = v end
-    end
-
-    local anchorPoint = (toTop and "BOTTOM" or "TOP") .. (toRight and "LEFT" or "RIGHT")
-    local xDir = toRight and 1 or -1
-    local yDir = toTop and 1 or -1
+    local goingRight, goingUp = GetViewerDirection(viewer, isHoriz)
+    local xDir = goingRight and 1 or -1
+    local yDir = goingUp and 1 or -1
+    local anchorPoint = (goingUp and "BOTTOM" or "TOP") .. (goingRight and "LEFT" or "RIGHT")
 
     local numItems = #items
-    if isHoriz then
-        local numRows = math.ceil(numItems / stride)
-        local totalH = numRows * h + (numRows - 1) * pad
-        for r = 1, numRows do
-            local startIdx = (r - 1) * stride + 1
-            local endIdx = math.min(r * stride, numItems)
-            local rowCount = endIdx - startIdx + 1
-            local rowW = rowCount * w + (rowCount - 1) * pad
-            local startX = -((rowW - w) / 2)
-            local rowY = ((totalH - h) / 2) - (r - 1) * (h + pad)
-
-            for col = 1, rowCount do
-                local item = items[startIdx + col - 1]
-                item:ClearAllPoints()
-                if centered then
-                    item:SetPoint("CENTER", viewer, "CENTER", startX + (col - 1) * (w + pad), rowY)
-                else
-                    item:SetPoint(anchorPoint, viewer, anchorPoint, xDir * (col - 1) * (w + pad), yDir * (r - 1) * (h + pad))
-                end
-            end
+    local numLines = math.ceil(numItems / stride)
+    for k = 1, numItems do
+        local line = math.floor((k - 1) / stride)
+        local i = (k - 1) % stride
+        local lineCount = math.min(stride, numItems - line * stride)
+        local col, row, nx, ny
+        if isHoriz then
+            col, row, nx, ny = i, line, lineCount, numLines
+        else
+            col, row, nx, ny = line, i, numLines, lineCount
         end
-    else
-        local numCols = math.ceil(numItems / stride)
-        local totalW = numCols * w + (numCols - 1) * pad
-        for col = 1, numCols do
-            local startIdx = (col - 1) * stride + 1
-            local endIdx = math.min(col * stride, numItems)
-            local colCount = endIdx - startIdx + 1
-            local colH = colCount * h + (colCount - 1) * pad
-            local startY = ((colH - h) / 2)
-            local colX = -((totalW - w) / 2) + (col - 1) * (w + pad)
 
-            for row = 1, colCount do
-                local item = items[startIdx + row - 1]
-                item:ClearAllPoints()
-                if centered then
-                    item:SetPoint("CENTER", viewer, "CENTER", colX, startY - (row - 1) * (h + pad))
-                else
-                    item:SetPoint(anchorPoint, viewer, anchorPoint, xDir * (col - 1) * (w + pad), yDir * (row - 1) * (h + pad))
-                end
-            end
+        local item = items[k]
+        item:ClearAllPoints()
+        if align == "center" then
+            local x = -(nx - 1) * stepX / 2 + col * stepX
+            local y = -(ny - 1) * stepY / 2 + row * stepY
+            item:SetPoint("CENTER", viewer, "CENTER", xDir * x, yDir * y)
+        else
+            item:SetPoint(anchorPoint, viewer, anchorPoint, xDir * col * stepX, yDir * row * stepY)
+        end
+    end
+
+    -- Moved: re-align the art to whole pixels.
+    for k = 1, numItems do
+        local item = items[k]
+        if squareState[item] then
+            local tex, holder = GetIconParts(item)
+            if tex then pcall(LayoutSquareIcon, item, tex, holder) end
         end
     end
 end
 
--- New item frames appear when a viewer lays out (spec change, Edit Mode
--- count/size change, settings changes): style them once it's done.
+-- Viewers re-create item frames when they lay out: restyle once it's done.
 local layoutHooked = false
 local stylePending = false
-local function QueueStyle()
+function QueueStyle()
     if stylePending then return end
     stylePending = true
     C_Timer.After(0, function()
@@ -1136,7 +1193,7 @@ local function EnsureLayoutHooks()
     end
 end
 
--- Centralized update loop for cooldown countdown text coloring and pandemic glows
+-- Countdown colors (bars) and pandemic highlights.
 local tickerElapsed = 0
 cdManager:SetScript("OnUpdate", function(self, elapsed)
     tickerElapsed = tickerElapsed + elapsed
@@ -1152,21 +1209,19 @@ cdManager:SetScript("OnUpdate", function(self, elapsed)
         else
             if pandemicHosts[f] then pandemicHosts[f]:Hide() end
             f._uberDurationState = nil
+            f._uberDurationExp = nil
             f._uberInPandemic = nil
         end
     end)
 end)
 
--- Register the specific callback we need
 local function RegisterCooldownCallbacks()
     if cdManager._callbackRegistered then return end
 
-    -- This is the specific callback that fires when hovering items in settings
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnEnterItem", function(cooldownItem)
         QueueStyle()
     end, cdManager)
 
-    -- Also register for data changes (when items added/removed)
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
         QueueStyle()
     end, cdManager)
@@ -1190,21 +1245,17 @@ local function RegisterCooldownCallbacks()
     cdManager._callbackRegistered = true
 end
 
--- Wait for CooldownViewer to load
 cdManager:RegisterEvent("ADDON_LOADED")
 cdManager:RegisterEvent("PLAYER_ENTERING_WORLD")
-cdManager:RegisterEvent("PLAYER_TARGET_CHANGED")
-cdManager:RegisterUnitEvent("UNIT_AURA", "player", "target")
+-- Pixel alignment depends on UI scale and resolution.
+cdManager:RegisterEvent("UI_SCALE_CHANGED")
+cdManager:RegisterEvent("DISPLAY_SIZE_CHANGED")
 
 cdManager:SetScript("OnEvent", function(self, event, addon)
-    if event == "PLAYER_TARGET_CHANGED" or event == "UNIT_AURA" then
-        UpdateTargetAuraCache()
-        ForEachItemFrame(function(f)
-            pcall(UpdateSquareDebuffColor, f)
-        end)
+    if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
+        QueueStyle()
         return
     end
-
     if event == "ADDON_LOADED" and addon == "Blizzard_CooldownViewer" then
         local function applyStyling()
             cdManager:Texture()
@@ -1213,20 +1264,16 @@ cdManager:SetScript("OnEvent", function(self, event, addon)
         end
         EnsureLayoutHooks()
 
-        -- Hook OnShow for all relevant viewers to apply styling when they are enabled
         if BuffBarCooldownViewer then BuffBarCooldownViewer:HookScript("OnShow", applyStyling) end
         if BuffIconCooldownViewer then BuffIconCooldownViewer:HookScript("OnShow", applyStyling) end
         if UtilityCooldownViewer then UtilityCooldownViewer:HookScript("OnShow", applyStyling) end
         if EssentialCooldownViewer then EssentialCooldownViewer:HookScript("OnShow", applyStyling) end
 
-        -- Give it a moment to fully initialize
         C_Timer.After(0.5, function()
             RegisterCooldownCallbacks()
-            -- Apply initial styling
             applyStyling()
         end)
     elseif event == "PLAYER_ENTERING_WORLD" then
-        -- Apply styling on world enter (after everything is loaded)
         C_Timer.After(1, function()
             if EventRegistry then
                 RegisterCooldownCallbacks()
@@ -1238,7 +1285,6 @@ cdManager:SetScript("OnEvent", function(self, event, addon)
     end
 end)
 
--- Public function for manual refresh
 function cdManager:Refresh()
     self:Texture()
     self:Color()

@@ -1,17 +1,5 @@
----------------------------------------
--- VARIABLES
----------------------------------------
-
---get the addon namespace
 local addon, ns = ...
-local actionbars = {}
-
-local localizedClass, englishClass = UnitClass("player")
-local classcolor = englishClass and ((C_ClassColor and C_ClassColor.GetClassColor(englishClass)) or (GetClassColorObj and GetClassColorObj(englishClass)) or RAID_CLASS_COLORS[englishClass])
-local class = localizedClass
-local dominos = C_AddOns.IsAddOnLoaded("Dominos")
 local bartender4 = C_AddOns.IsAddOnLoaded("Bartender4")
-
 
 local actionbars = UberUI:CreateFrame("frame")
 actionbars:RegisterEvent("ADDON_LOADED")

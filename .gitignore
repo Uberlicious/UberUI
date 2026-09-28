@@ -8,3 +8,6 @@
 
 Blizzard_*
 blizzard_*
+
+# Local dev/debug tools (never shipped)
+dev/

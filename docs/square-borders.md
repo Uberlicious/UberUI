@@ -127,7 +127,7 @@ v1 notes (Player only) follow.
 Opt-in via Options → Uber UI (main page) → Aura Borders → "Square Aura
 Borders" (`uuidb.general.squareauraborders_player`, default off; lives on
 the main page because it's meant to grow to every frame) + "Square Border
-Thickness" slider (`squareauraborders_thickness`, 1–8 px, default 2) and
+Thickness" slider (`squareauraborders_thickness`, 1–8 px, default 1) and
 "Inset Square Border" toggle, both greyed out while it's off. Code
 lives at the top of `core/buffsandauras.lua` (`GetSquareBorder`,
 `LayoutSquareBorder`, `ApplyDebuffDispelColor`) and is used from
@@ -151,7 +151,7 @@ Implementation notes (what v1 actually does, vs. the research below):
   `AuraUtil.SetAuraBorderColor` below can't be used directly with a secret
   dispel type (it indexes a table with it).
 - Defaults mirror EllesmereUI's `PP.CreateBorder` (the reference design):
-  inset (default now 2px by user preference; EllesmereUI uses 1px), thickness rounded to whole pixels (min 1),
+  inset (default 1px), thickness rounded to whole pixels (min 1),
   `SetSnapToPixelGrid(false)` + `SetTexelSnappingBias(0)` on the strips so a
   1px edge can't vanish, and a re-measure on `UI_SCALE_CHANGED` /
   `DISPLAY_SIZE_CHANGED`. EllesmereUI uses 2px only for its dispel ring.

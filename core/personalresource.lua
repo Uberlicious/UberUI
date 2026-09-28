@@ -136,11 +136,7 @@ function prd:StylePRD(frame)
     end
 end
 
--- hooksecurefunc can't be undone, so these two independent Setup hooks are
--- only installed once their own setting is actually active. Both toggles
--- already route through ForceTexture() below on change (directly, or via
--- misc:AllFramesHealthManaTexture()), so re-checking here from ForceTexture()
--- gives full live on/off with no reload ever required.
+-- Setup hooks installed lazily once their setting is active.
 local darkenHookInstalled = false
 local function EnsureDarkenHook()
     if darkenHookInstalled then return end

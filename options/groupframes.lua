@@ -38,12 +38,7 @@ function opt.BuildGroupFrames(page)
 
     opt.Header(page, "Frames");
 
-    opt.AddCheckbox(page, {
-        variable = "SortPartyMeOnTop", name = "Party Sorting \"Me on Top\"",
-        tooltip = "Always position yourself at the top of Raid-Style Party Frames, with remaining party members ordered by your chosen sort method (Role, Group, or Alphabetical).",
-        db = "cuf", field = "sortMeOnTop", default = false,
-        onChange = function() UberUI.cuf:UpdatePartySort() end,
-    });
+
 
     opt.AddCheckbox(page, {
         variable = "HideRaidFrameTitles", name = "Hide Raid Frame Titles",

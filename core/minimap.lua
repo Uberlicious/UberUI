@@ -1,9 +1,5 @@
 local addon, ns = ...
-local minimap = {}
-
-minimap = UberUI:CreateFrame("frame")
--- minimap:RegisterEvent("ADDON_LOADED")
--- minimap:RegisterEvent("PLAYER_LOGIN")
+local minimap = UberUI:CreateFrame("frame")
 minimap:RegisterEvent("PLAYER_LOGIN")
 minimap:RegisterEvent("PLAYER_ENTERING_WORLD")
 local lateRescanDone = false
@@ -65,12 +61,7 @@ function minimap.Color()
     minimap.DarkenAddonButtons()
 end
 
--- Other addons' minimap buttons. Nearly all use LibDBIcon or copy its look:
--- the addon's icon inside Blizzard's standard MiniMap-TrackingBorder ring.
--- Only that ring texture is tinted -- identified by file ID / path, the same
--- test EllesmereUI's minimap uses -- so each addon's own icon keeps its
--- colors. Buttons with custom ring art are deliberately left alone rather
--- than guessing which texture is the frame.
+-- Tint tracking border ring on third-party minimap buttons.
 local RING_FILE_IDS = {
     [136430] = true, -- Interface\Minimap\MiniMap-TrackingBorder
 }
@@ -146,11 +137,7 @@ function minimap.DarkenAddonButtons()
     end
 end
 
--- LibDBIcon announces every button it creates, including ones made after
--- login; tint those as they appear. Registered once, and only while the
--- option is on (from PLAYER_LOGIN -- when every non-load-on-demand addon,
--- and so its copy of LibDBIcon, is loaded -- or when the option is turned
--- on); the callback itself re-checks the option since it can't be removed.
+-- Darken buttons created dynamically by LibDBIcon after login.
 local libDBIconRegistered = false
 RegisterLibDBIconCallback = function()
     if libDBIconRegistered or not Enabled() then return end

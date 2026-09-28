@@ -278,7 +278,7 @@ function opt.AddAuraOptions(page, o)
         variable = "squareAuraBorderThickness" .. (o.squareVarSuffix or o.suffix),
         name = o.label .. " Border Thickness",
         tooltip = "Thickness of the square " .. o.label .. " aura border, in screen pixels.",
-        db = "general", field = SBkeys[2], default = 2,
+        db = "general", field = SBkeys[2], default = 1,
         min = 1, max = 8, step = 1,
         onChange = refresh,
     }), shapeInit, IsSquare);

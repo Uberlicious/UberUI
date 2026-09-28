@@ -1,9 +1,5 @@
--- Centralized functions for UberUI
 
 function UberUI:CreateFrame(frameType, frameName, parent, template)
-    -- This function wraps the global CreateFrame.
-    -- It allows for centralized control and can be expanded later
-    -- to add debugging or frame management.
     local frame = CreateFrame(frameType, frameName, parent, template)
     return frame
 end
@@ -20,9 +16,7 @@ function general:PvPIcon(frame)
             if frame.PvPBackgroundCircle and frame.PvPBackgroundCircle.SetVertexColor then
                 frame.PvPBackgroundCircle:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
             end
-            -- PlayerFrame has no PvPBackgroundCircle of its own -- its PvP
-            -- status badge is PrestigePortrait (the round backdrop behind
-            -- the honor icon), which needs the same darken treatment.
+            -- The player frame's PvP backdrop is PrestigePortrait.
             if frame.PrestigePortrait and frame.PrestigePortrait.SetVertexColor then
                 frame.PrestigePortrait:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
             end
@@ -30,54 +24,27 @@ function general:PvPIcon(frame)
     end
 end
 
--- Hide Honor: hides the whole PvP badge (icon + background + Prestige art)
--- on the Player, Target, and Focus frames.
---
--- CONFIRMED (via wow-ui-source origin/live vs origin/forever): retail 12.1
--- and WoW Forever 1.60.1 are NOT on the same PvP-indicator code here. Forever
--- already has Blizzard's newer shared abstraction -- each frame exposes
--- GetPvPIndicatorElements(), and Player/Target/Focus all funnel through one
--- UnitFrameUtil.UpdateUnitPvPIndicator delegate ("also safe for addons to
--- use"). Retail 12.1 does not have that abstraction at all (zero references
--- in origin/live) -- it still sets PVPIcon/PvpIcon/PrestigePortrait/
--- PrestigeBadge directly inline inside PlayerFrame_UpdatePvPStatus and
--- TargetFrameMixin:CheckFaction. Both function NAMES exist unchanged on both
--- clients (only their bodies differ), so we hook those directly as the
--- universal fallback, and additionally hook the new delegate when present.
--- Whichever path actually runs on a given client, it converges on the same
--- ApplyHideHonor(elements) call.
---
--- UPDATE (origin/forever, Sept 2026): Forever's Camelot game type now loads
--- Camelot/PlayerFrame.lua + Camelot/TargetFrame.lua overrides that draw the
--- badge with PvpBackgroundCircle/PvpBackgroundIcon instead and never touch
--- the Mainline PVPIcon/PrestigePortrait/PrestigeBadge regions (which still
--- exist, permanently hidden). Both sets are collected below.
---
--- ApplyHideHonor must NEVER Show() anything Blizzard didn't. It used to do
--- SetShown(not hide), which with the setting off force-showed every badge
--- element on every target/flag/roster event -- unflagged units got a badge on
--- retail, and Forever got the never-used Mainline badge art popping up.
+-- Hide Honor: hides the PvP badge on Player, Target, Focus and party frames.
+-- Retail sets the badge regions inline (PlayerFrame_UpdatePvPStatus,
+-- TargetFrameMixin:CheckFaction); Forever routes through
+-- UnitFrameUtil.UpdateUnitPvPIndicator and its Camelot frames use
+-- PvpBackgroundCircle/Icon instead. Both paths are hooked and both sets of
+-- regions collected. Never Show() anything Blizzard didn't.
 local PvPBadgeElementKeys = {
     "pvpIcon", "pvpBackground", "prestigePortrait", "prestigeBadge",
     "pvpBackgroundCircle", "pvpBackgroundIcon",
 }
 
--- Texture -> { unit, frame }, for badge textures that were visible (i.e.
--- Blizzard showed them) when we hid them. Turning Hide Honor off re-shows only
--- these, and only if Blizzard's own show conditions still hold, so we never
--- resurrect a badge Blizzard wouldn't show. Anything stale gets fixed by
--- Blizzard's own next PvP update.
+-- Badge textures we hid while Blizzard was showing them. Turning Hide Honor
+-- off re-shows only these, and only if Blizzard would still show them.
 local hiddenByHideHonor = {}
 
 local function IsSecret(val)
     return issecretvalue and issecretvalue(val)
 end
 
--- Mirrors the show conditions in PlayerFrame_UpdatePvPStatus /
--- TargetFrameMixin:CheckFaction / PartyMemberFrameMixin:UpdatePvPStatus
--- (identical on origin/live and origin/forever's Camelot overrides): game
--- rule not disabling it, the frame's showPVP (target/focus only -- small
--- focus clears it), and FFA or faction-flagged PvP. Unknown/secret -> false.
+-- Blizzard's own badge show conditions (game rule, frame showPVP, FFA or
+-- faction-flagged). Unknown/secret -> false.
 local function BlizzardWouldShowBadge(record)
     local unit, frame = record.unit, record.frame
     if not unit or not UnitExists(unit) then return false end
@@ -100,8 +67,8 @@ local function ApplyHideHonor(elements, unit, frame)
     if not elements then return end
     local hide = uuidb and uuidb.general and uuidb.general.hidehonor
     if hide then
-        -- If Blizzard just re-decided this badge (something is visible), its
-        -- previous choice (e.g. icon vs. prestige badge) is stale -- drop it.
+        -- Something visible means Blizzard just re-decided the badge; stale
+        -- records for its other elements are dropped.
         local anyShown = false
         for _, key in ipairs(PvPBadgeElementKeys) do
             local tex = elements[key]
@@ -132,9 +99,6 @@ local function ApplyHideHonor(elements, unit, frame)
     end
 end
 
--- Player: Forever's PlayerFrame_GetPvPIndicatorElements() when present;
--- otherwise read the Mainline PVPIcon/PrestigePortrait/PrestigeBadge fields
--- retail's inline code uses, plus Forever Camelot's PvpBackground* regions.
 local function GetPlayerPvPBadgeElements()
     if PlayerFrame_GetPvPIndicatorElements then
         return PlayerFrame_GetPvPIndicatorElements()
@@ -151,10 +115,7 @@ local function GetPlayerPvPBadgeElements()
     }
 end
 
--- Target/Focus (frame = TargetFrame or FocusFrame): same idea, using each
--- frame's own GetPvPIndicatorElements method when present, otherwise reading
--- TargetFrameContentContextual's PvpIcon/PrestigePortrait/PrestigeBadge the
--- way retail's inline CheckFaction code does (plus Camelot's PvpBackground*).
+-- frame = TargetFrame or FocusFrame.
 local function GetFramePvPBadgeElements(frame)
     if not frame then return nil end
     if frame.GetPvPIndicatorElements then
@@ -171,38 +132,26 @@ local function GetFramePvPBadgeElements(frame)
     }
 end
 
--- Non-compact party member frames have their own, much simpler PvP icon --
--- PartyMemberOverlay.PVPIcon, no background/prestige art -- set by
--- PartyMemberFrameMixin:UpdatePvPStatus (core/partyframes.lua's own aura/
--- color code never touches this, so it needed separate coverage here).
+-- Party member frames: just PartyMemberOverlay.PVPIcon.
 local function GetPartyMemberPvPBadgeElements(p)
     local overlay = p and p.PartyMemberOverlay
     if not overlay then return nil end
     return { pvpIcon = overlay.PVPIcon }
 end
 
--- hooksecurefunc can never be undone, so we don't install these until Hide
--- Honor is actually turned on -- installed lazily (once) from RefreshHideHonor
--- below the first time it runs with the setting enabled, the same pattern
--- nameplates.lua uses for its raid-target-icon hooks. This means enabling the
--- setting live (no reload) still gets full coverage; only re-disabling it
--- leaves the (now harmless, since ApplyHideHonor no-ops when hidehonor is
--- false) hooks installed for the rest of the session.
+-- Installed only once Hide Honor is turned on (hooks can't be removed).
 local hideHonorHooksInstalled = false
 local function EnsureHideHonorHooks()
     if hideHonorHooksInstalled then return end
     hideHonorHooksInstalled = true
 
-    -- Forever's shared delegate, when present.
     if UnitFrameUtil and UnitFrameUtil.UpdateUnitPvPIndicator then
         hooksecurefunc(UnitFrameUtil, "UpdateUnitPvPIndicator", function(elements, unitToken)
             ApplyHideHonor(elements, unitToken)
         end)
     end
 
-    -- Retail 12.1's separate per-frame update functions -- present under the
-    -- same names on Forever too, so these hooks are harmless (redundant with
-    -- the delegate hook above) there, and load-bearing on retail.
+    -- Retail's per-frame updates (redundant with the delegate on Forever).
     if PlayerFrame_UpdatePvPStatus then
         hooksecurefunc("PlayerFrame_UpdatePvPStatus", function()
             ApplyHideHonor(GetPlayerPvPBadgeElements(), "player")
@@ -234,14 +183,8 @@ function general:RefreshHideHonor()
     end
 end
 
--- Belt-and-suspenders: don't rely solely on successfully hooking Blizzard's
--- internal update functions (a mixin method hook can be shadowed if some
--- other addon -- or a future Blizzard refactor -- assigns a per-instance
--- override that shadows the shared mixin table, and we have no reliable way
--- to detect that from here). Directly watching the actual game events that
--- drive every PvP-badge update (targeting, focusing, faction/flag changes,
--- roster changes) and re-running RefreshHideHonor ourselves means the hide
--- holds even if a specific internal hook above turns out not to fire.
+-- Also re-applied on the events behind every badge update, in case a hook
+-- above is shadowed by a per-instance override.
 local hideHonorWatcher = CreateFrame("Frame")
 hideHonorWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 hideHonorWatcher:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -323,7 +266,6 @@ function general:SetHealthColor(healthBar, unit, db)
         return
     end
 
-    -- Default to friendly color if no other condition is met
     healthBar:SetStatusBarDesaturated(true)
     if isEnemy then
         healthBar:SetStatusBarColor(1, 0, 0)
@@ -332,16 +274,8 @@ function general:SetHealthColor(healthBar, unit, db)
     end
 end
 
--- Offensive dispel capability (Purge/Dispel Magic on an enemy/Spellsteal),
--- shared by targetframe.lua and focusframe.lua rather than duplicated per
--- file. Stock Blizzard only shows the stealable/dispellable indicator to
--- classes that can act on it, and there's no direct Blizzard API for "can I
--- offensively dispel" -- so this checks known-spell state
--- (C_SpellBook.IsSpellKnown) against the Purge/Dispel Magic/Spellsteal
--- family instead of a class table, so it stays correct as more specs gain
--- the ability. Classic-safe IDs only; retail-only specs/spells (e.g. Demon
--- Hunter) are added separately -- IsSpellKnown just returns false where they
--- don't apply, so this is purely additive.
+-- Offensive dispel capability (Purge, Dispel Magic, Spellsteal, ...): there's
+-- no API for it, so check whether any such spell is known.
 local OFFENSIVE_MAGIC_DISPEL_SPELLS = {
     370,    -- Purge (Shaman)
     528,    -- Dispel Magic (Priest)
@@ -377,8 +311,7 @@ local function RefreshPlayerCanOffensiveDispel()
     playerCanOffensiveDispel = false
 end
 
--- Talents/specs can change known spells mid-session, so re-check instead of
--- computing once at load.
+-- Known spells change with talents/specs.
 local dispelCapabilityWatcher = CreateFrame("Frame")
 dispelCapabilityWatcher:RegisterEvent("SPELLS_CHANGED")
 dispelCapabilityWatcher:RegisterEvent("TRAIT_CONFIG_UPDATED")
@@ -390,9 +323,7 @@ function general:PlayerCanOffensiveDispel()
     return playerCanOffensiveDispel
 end
 
--- Blizzard's own StealableBorder texture (same one stock target/focus frames
--- use, see TargetFrameAuraButton.xml), used as a CustomAsset dispel-type
--- texture map so every dispel-type key renders the same fixed indicator.
+-- Blizzard's StealableBorder texture for every dispel type (CustomAsset map).
 local STEALABLE_ASSET = { asset = "Interface\\TargetingFrame\\UI-TargetingFrame-Stealable" }
 local STEALABLE_DISPEL_ASSET_MAP = {
     Magic = STEALABLE_ASSET,
@@ -407,9 +338,7 @@ function general:GetStealableDispelAssetMap()
     return STEALABLE_DISPEL_ASSET_MAP
 end
 
--- Safer ApplyIconZoom in Uber UI/core/generalfunctions.lua
 function general:ApplyIconZoom(textureObject, enable)
-    -- Check if the object is actually a texture before attempting the call
     if textureObject and textureObject:IsObjectType("Texture") then
         if enable then
             local inset = 0.07
@@ -417,20 +346,11 @@ function general:ApplyIconZoom(textureObject, enable)
         else
             textureObject:SetTexCoord(0, 1, 0, 1)
         end
-    else
-        -- This will help you track down which object is being passed incorrectly
-        print("ApplyIconZoom received non-Texture object: " .. tostring(textureObject))
     end
 end
 
--- Shared icon-inset convention used by every aura style implementation
--- (target/focus/party/arena/nameplate): whenever zoom or a border is active,
--- the icon insets 1px inward from its parent so the crop and the border read
--- as one cohesive unit instead of the border framing a boundary the icon no
--- longer visually fills. Native ("None") keeps the icon at its own
--- full-bleed anchor. Safe even on a masked icon (e.g. nameplate auras): the
--- icon shrinking inside an unmoved mask just crops slightly more, not a
--- misaligned crop.
+-- With zoom or a border, the icon insets 1px inside its parent so crop and
+-- border read as one unit; otherwise it fills its anchor.
 function general:ApplyAuraIconInset(icon, insetEnabled)
     if not icon then return end
     local parent = icon:GetParent()
@@ -444,13 +364,8 @@ function general:ApplyAuraIconInset(icon, insetEnabled)
     end
 end
 
--- Divider pieces between buttons on the main action bar (retail and
--- Forever) and Forever's bags bar. Both bars keep them in two frame pools
--- (HorizontalDividersPool / VerticalDividersPool) that UpdateDividers()
--- releases and re-acquires whenever the visible buttons change, so callers
--- re-run this from a post-hook on UpdateDividers. The dividers are
--- three-slice layouts: TopEdge/Center/BottomEdge on a horizontal bar,
--- LeftEdge/Center/RightEdge on a vertical one.
+-- Divider pieces on the main action bar and Forever's bags bar live in frame
+-- pools that UpdateDividers() re-acquires, so this re-runs after it.
 local DIVIDER_PIECES = { "TopEdge", "Center", "BottomEdge", "LeftEdge", "RightEdge" }
 
 function general:DarkenDividers(bar)
@@ -471,8 +386,7 @@ function general:DarkenDividers(bar)
     end
 end
 
--- Hooks bar:UpdateDividers once so new dividers get darkened as Blizzard
--- creates them, then darkens the ones already showing.
+-- Hooks UpdateDividers once, then darkens the dividers already showing.
 function general:HookDividers(bar)
     if not bar or not bar.UpdateDividers then return end
     if not self.hookedDividerBars then

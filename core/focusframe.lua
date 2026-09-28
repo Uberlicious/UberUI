@@ -28,13 +28,7 @@ focusframes:RegisterUnitEvent("UNIT_MAXPOWER", "focus")
 focusframes:RegisterUnitEvent("UNIT_AURA", "focus")
 focusframes:RegisterEvent("GROUP_ROSTER_UPDATE")
 focusframes:RegisterEvent("PARTY_LEADER_CHANGED")
--- The engine's PLAYER/!PLAYER caster classification (see
--- aurakit.HasAmbiguousMineMatch) goes ambiguous or clears back up a few
--- seconds after a zone transition, not instantly at the event -- these
--- three events cover both crossing a zone boundary and moving between
--- indoor/outdoor areas within one, and UpdateAuras() itself is re-run a
--- few times with delay below to actually catch the transition whichever
--- direction it goes.
+-- Cross-zone transitions can cause brief classification delay; re-check after delay.
 focusframes:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 focusframes:RegisterEvent("ZONE_CHANGED")
 focusframes:RegisterEvent("ZONE_CHANGED_INDOORS")
@@ -63,13 +57,11 @@ focusframes:SetScript("OnEvent", function(self, event, unit)
         C_Timer.After(3, function() focusframes:UpdateAuras() end)
         C_Timer.After(5, function() focusframes:UpdateAuras() end)
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Force a correctness pass once combat lockdown lifts, in case any
-        -- styling was skipped or failed while we were in combat.
         focusframes:UpdateAuras()
     end
 end)
 
--- Shared lookups for the frequently-nested Blizzard focus frame paths.
+-- Cached subframe lookups.
 local function GetFocusFrameMain()
     return FocusFrame and FocusFrame.TargetFrameContent and FocusFrame.TargetFrameContent.TargetFrameContentMain
 end
@@ -251,21 +243,14 @@ end
 local FOCUS_TOP_X = 25
 local FOCUS_TOP_Y = 26
 local FOCUS_TOP_ON_TOP_X = 5
--- Same as Target / Blizzard (21 / 17). Our containers are children of
--- FocusFrame, so Blizzard's 0.75x small-focus scale still applies on top.
 local FOCUS_LARGE_AURA_SIZE = 21
 local FOCUS_SMALL_AURA_SIZE = 17
 local FOCUS_AURA_SPACING = 3
-local FOCUS_CONTAINER_GAP = 3 -- Blizzard: groupLineSpacing = FlowLayoutLineSpacing (3)
+local FOCUS_CONTAINER_GAP = 3
 
 local isUpdatingAuras = false
 
--- Mirrors targetframe.lua's UpdateAuraPositions (see aurakit.UpdatePairedPositions
--- for the shared anchor math) with one difference: stock Blizzard disables
--- buffsOnTop repositioning entirely while the focus frame is in its small/
--- compact form (FocusFrameMixin:SetSmallSize sets maxBuffs=0 -- there's
--- nothing to put "on top" -- see UpdateAuras below for the matching buff
--- count override).
+-- Primary/secondary container anchor placement based on hostility.
 function focusframes:UpdateAuraPositions()
     aurakit.UpdatePairedPositions({
         frameObj = self,
@@ -279,8 +264,7 @@ function focusframes:UpdateAuraPositions()
     })
 end
 
--- Border on the cast bar's spell icon (Cast Bar Icon Border option), in
--- this frame's aura border look (aurakit.StyleCastBarIcon).
+-- Cast bar icon border in this frame's aura border look.
 function focusframes:StyleCastBarIcon()
     local bar = FocusFrame.spellbar or FocusFrameSpellBar
     if not bar then return end
@@ -333,21 +317,11 @@ function focusframes:UpdateAuras()
     aurakit.ShowAuraContainers(self, true)
     self:UpdateAuraPositions()
 
-    -- Group identity/container are permanent (see SetupCustomAuraContainer);
-    -- hostility is handled entirely in UpdateAuraPositions above. Small/
-    -- compact focus frames never show buffs at all (stock Blizzard: see
-    -- FocusFrameMixin:SetSmallSize's maxBuffs=0) -- the one place focus
-    -- deviates from target's aura logic.
     local debuffCount = (styleDebuffs ~= "none") and 16 or 0
     local buffCount = (styleBuffs ~= "none") and 32 or 0
     if FocusFrame and FocusFrame.smallSize then
         buffCount = 0
     end
-    -- "mine" gets forced to 0 specifically when the engine's PLAYER/!PLAYER
-    -- caster classification is currently ambiguous for this unit (see
-    -- aurakit.HasAmbiguousMineMatch -- confirmed tied to the unit being in
-    -- a different zone from the local player). "other" is left untouched,
-    -- so the aura stays visible there instead of duplicating OR vanishing.
     local debuffMineCount = aurakit.GetSafeMineMaxFrameCount("focus", true, debuffCount)
     local buffMineCount = aurakit.GetSafeMineMaxFrameCount("focus", false, buffCount)
     pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_mine", debuffMineCount)
@@ -358,7 +332,6 @@ function focusframes:UpdateAuras()
     pcall(self.customDebuffs.UpdateAllAuras, self.customDebuffs)
     pcall(self.customBuffs.UpdateAllAuras, self.customBuffs)
 
-    -- Force a final button style pass.
     aurakit.RefreshContainerButtons(self.customDebuffs, "debuffs_mine", "debuffs_other", function(btn) focusframes:UpdateAuraButtonStyle(btn) end)
     aurakit.RefreshContainerButtons(self.customBuffs, "buffs_mine", "buffs_other", function(btn) focusframes:UpdateAuraButtonStyle(btn) end)
 
@@ -503,11 +476,7 @@ function focusframes:SetupCustomAuraContainer()
     self:ApplyToTPlacement()
 end
 
--- "Target of Target" setting, same as Target's. Blizzard re-anchors the
--- focus ToT itself whenever Edit Mode's small-focus-frame setting changes
--- (FocusFrameMixin:SetSmallSize), which undoes an aside shift -- so while
--- Move ToT Aside is in use, re-apply after it (hook installed only once the
--- option is actually chosen; deferred a frame).
+-- Focus Target of Target placement option.
 local focusSmallSizeHooked = false
 function focusframes:ApplyToTPlacement()
     local aside = uuidb and uuidb.focusframes and uuidb.focusframes.totplacement == "aside"

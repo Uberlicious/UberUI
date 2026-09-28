@@ -26,10 +26,7 @@ local function SafeIsForbidden(frame)
     return ok and SafeBool(isForbid)
 end
 
--- Square pixel-depth borders (docs/square-borders.md). The border itself,
--- per-location settings and dispel coloring live in core/squareborders.lua
--- (shared with every aura location); what stays here is Player-only: the
--- duration-text push for outset borders and the temp enchant color.
+-- Player square borders and temp enchant styling.
 local SB = UberUI.squareborders
 local SQUARE_LOC = "player"
 
@@ -42,13 +39,7 @@ local function GetSquareBorder(button) return SB.Get(button) end
 local function FindSquareBorder(button) return SB.Find(button) end
 local function SetSquareBorderColor(sb, r, g, b, a) SB.SetColor(sb, r, g, b, a) end
 
--- Blizzard anchors the Duration text to the icon's edge with no gap
--- (AuraContainerMixin:UpdateGridLayout -- TOP/BOTTOM or LEFT/RIGHT depending
--- on Edit Mode orientation), so an outset border would run into it. Push it
--- out by the border thickness along Blizzard's own anchor direction. The
--- offset is set absolutely (never added to), so repeated passes don't drift
--- and 0 puts it back exactly where Blizzard had it. Only touches Blizzard's
--- single icon-relative anchor; anything else is left alone.
+-- Pushes duration text outward for outset borders.
 local DURATION_PUSH = { TOP = { 0, 1 }, BOTTOM = { 0, -1 }, LEFT = { -1, 0 }, RIGHT = { 1, 0 } }
 local movedDurations = setmetatable({}, {__mode = "k"})
 
@@ -66,15 +57,7 @@ local function OffsetDurationText(button, iconTexture, amount)
     movedDurations[button] = (amount ~= 0) or nil
 end
 
--- Blizzard's layout pass re-anchors every Duration back to the icon edge
--- (AuraContainerMixin:UpdateGridLayout), and it runs right AFTER
--- UpdateAuraButtons -- i.e. after our styling -- so the outset push above
--- only lasted until the next aura update. The mixin hook further down can't
--- catch it: BuffFrame/DebuffFrame exist before this addon loads and call
--- their own copied AuraContainer:UpdateGridLayout, so hook those two
--- instances directly. Installed once, only when outset square borders are
--- actually in use (hooks can't be removed); deferred a frame to stay out of
--- Blizzard's update chain.
+-- Re-applies duration text offset after Blizzard's UpdateGridLayout.
 local squareLayoutHooksInstalled = false
 
 local function ReapplyDurationOffsets(auraFrame)
@@ -109,10 +92,7 @@ local function EnsureSquareBorderLayoutHooks()
     end
 end
 
--- Blizzard's temp enchant border is a purple texture file
--- (Interface\Buttons\UI-TempEnchant-Border), not a vertex color. Sampled
--- from the exported BLP (BlizzardInterfaceArt): its bright rim -- the part
--- that reads as "the border" -- averages ~(128, 57, 183)/255.
+-- Blizzard temp enchant purple border color.
 local TEMP_ENCHANT_BORDER_COLOR = { 0.50, 0.22, 0.72 }
 
 -- Player debuff buttons carry buttonInfo.index (and sometimes
@@ -896,10 +876,7 @@ if BuffFrame_UpdateAllBuffAnchors then
     end)
 end
 
--- Square border thickness is baked in from the effective scale at style
--- time, so re-measure when UI scale or resolution changes (neither restyles
--- the aura buttons on its own). Deferred a frame so the new scale has
--- settled; Refresh() itself skips combat.
+-- Re-measure square borders when UI scale or resolution changes.
 local squareBorderScaleWatcher = CreateFrame("Frame")
 squareBorderScaleWatcher:RegisterEvent("UI_SCALE_CHANGED")
 squareBorderScaleWatcher:RegisterEvent("DISPLAY_SIZE_CHANGED")

@@ -1,9 +1,5 @@
--- Shared building blocks for the "target-style" custom aura containers used
--- by targetframe.lua and focusframe.lua (and any future frame that wants
--- the same two-permanent-container/dispel-border/stealable-overlay design).
--- Nothing in here is target- or focus-specific; every per-frame detail
--- (which global frame, which unit token, which uuidb keys, pixel constants)
--- is passed in by the caller.
+-- Shared building blocks for the custom aura containers (target, focus,
+-- boss, compact frames). Per-frame details are passed in by the caller.
 
 local addon, ns = ...
 
@@ -29,21 +25,9 @@ aurakit.IsSecret = IsSecret
 aurakit.SafeBool = SafeBool
 aurakit.SafeIsForbidden = SafeIsForbidden
 
--- Detects the "sourceUnit resolution failed" engine state that causes an
--- aura to satisfy both "<base>|PLAYER" and "<base>|!PLAYER" simultaneously
--- -- confirmed (via /uuidebugoverlapwatch) to be triggered specifically by
--- the unit being in a different zone than the local player, on BOTH WoW
--- Forever and retail. auraData.sourceUnit goes nil for the affected aura
--- when this happens; the two filter-string queries then both admit it
--- instead of exactly one.
---
--- Queries C_UnitAuras.GetUnitAuraInstanceIDs DIRECTLY -- no container/
--- button involved -- so this can be checked cheaply before deciding
--- whether it's safe to show the "mine" group at all. When ambiguous,
--- hiding "mine" (see aurakit.GetSafeMineMaxFrameCount below) leaves the
--- aura visible via the correctly-populated "other" group instead of
--- either duplicating it or -- like Blizzard's own default UI does under
--- the same condition -- losing it entirely.
+-- When a unit is in another zone the engine can fail to resolve an aura's
+-- source, and the aura then matches both "|PLAYER" and "|!PLAYER". Detected
+-- so the "mine" group can be hidden and the aura shows once, in "other".
 function aurakit.HasAmbiguousMineMatch(unit, isHarmful)
     if not unit or not UnitExists(unit) then return false end
     if not (C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs) then return false end
@@ -66,10 +50,7 @@ function aurakit.HasAmbiguousMineMatch(unit, isHarmful)
     return false
 end
 
--- Caller passes its normal (style-driven) max count for the "mine" group;
--- this returns 0 instead whenever HasAmbiguousMineMatch is true for that
--- unit, and the normal count otherwise. Callers apply this identically to
--- how they already apply the "none" style's max-count override.
+-- 0 instead of normalMaxCount while the unit has ambiguous "mine" matches.
 function aurakit.GetSafeMineMaxFrameCount(unit, isHarmful, normalMaxCount)
     if aurakit.HasAmbiguousMineMatch(unit, isHarmful) then
         return 0
@@ -77,9 +58,8 @@ function aurakit.GetSafeMineMaxFrameCount(unit, isHarmful, normalMaxCount)
     return normalMaxCount
 end
 
--- exactLineSpacing: rows spaced exactly spacingY apart (Blizzard's target
--- frame: 3px everywhere). Without it rows get spacingY + 2, which every
--- other container was tuned with.
+-- exactLineSpacing: rows exactly spacingY apart (Blizzard's target frame);
+-- otherwise spacingY + 2.
 function aurakit.MakeGroupLayout(elementSize, spacingX, spacingY, forceNewLine, layoutIndex, exactLineSpacing)
     spacingX = spacingX or 1
     spacingY = spacingY or 1
@@ -112,13 +92,8 @@ function aurakit.GetLeaderIcon(frame)
     return nil
 end
 
--- Restyle every aura button currently active in one of a container's two
--- permanent groups ("mine"/"other"), using the container's own authoritative
--- group membership (GetAuraGroupFrameCount/GetAuraGroupFrame) rather than
--- any addon-cached per-button state. A group's harmful/helpful identity and
--- its container never change, so buttons are never reclassified between
--- buff and debuff roles -- each button's role is fixed for its entire
--- lifetime by which group it was created in.
+-- Every active button in a container's two groups, from the container's own
+-- group membership. A button's buff/debuff role is fixed by its group.
 function aurakit.ForEachActiveAuraButton(container, keyMine, keyOther, callback)
     if not container or type(container.GetAuraGroupFrameCount) ~= "function"
         or type(container.GetAuraGroupFrame) ~= "function" then
@@ -148,9 +123,7 @@ function aurakit.RefreshContainerButtons(container, keyMine, keyOther, updateSty
     end)
 end
 
--- Same as RefreshContainerButtons, for containers built with
--- BuildGroupedAuraContainer (any number of groups, not a fixed mine/other
--- pair).
+-- RefreshContainerButtons for BuildGroupedAuraContainer (any number of groups).
 function aurakit.RefreshGroupButtons(container, groupKeys, updateStyleFn)
     if not container or not updateStyleFn or not groupKeys then return end
     for _, key in ipairs(groupKeys) do
@@ -160,34 +133,19 @@ function aurakit.RefreshGroupButtons(container, groupKeys, updateStyleFn)
     end
 end
 
--- Offensive dispel capability and the stealable-border asset map live in
--- UberUI.general (generalfunctions.lua) -- shared by every frame type.
---
--- AddDispelTypeTexture is denied outright while aura data is "secret"
--- (loading screens/zone transitions) -- a single attempt at button-creation
--- time can silently and permanently fail, so we retry every style pass
--- until it succeeds. A button's buff/debuff role is fixed for life (see
--- InitAuraButton/BuildAuraContainer), so only one registration is ever
--- needed per button.
---
--- Buffs: Blizzard's own StealableBorder texture (same one stock target/
--- focus frames use, see TargetFrameAuraButton.xml), gated by stealableFilter
--- so the ENGINE decides show/hide from the real, otherwise-secret
--- isStealable flag. Style = CustomAsset, not PreserveAsset: PreserveAsset is
--- the only style that computes the REAL per-dispel-type color (AuraUtil.
--- SetAuraBorderColor) -- every other style, including CustomAsset, forces
--- SetVertexColor(1,1,1,1), which is what we want here.
+-- AddDispelTypeTexture is refused while aura data is secret (loading
+-- screens), so registration is retried every style pass until it sticks.
+-- Buffs: Blizzard's StealableBorder texture, gated by stealableFilter so the
+-- engine decides show/hide from the secret isStealable flag. CustomAsset
+-- (not PreserveAsset) keeps it white.
 function aurakit.TryRegisterDispelBorder(button)
     if type(button.AddDispelTypeTexture) ~= "function" then return end
     if not (Enum and Enum.CustomAuraButtonDispelTypeTextureStyle) then return end
 
-    -- Square-border strips (core/squareborders.lua), registered alongside the
-    -- round border so toggling square borders on later needs no aura update
-    -- to get real colors: debuffs get engine dispel-colored strips (slot 1),
-    -- buffs get engine stealable-gated white strips (slot 2; slot 1 is the
-    -- plain dark border). They live in hidden frames until square borders are
-    -- on for this button's location. Same retry-until-it-sticks contract.
-    -- Tinted rounded ring for "Dispel Color" (see InitAuraButton).
+    -- Square-border strips are registered up front too (debuffs: engine
+    -- dispel-colored, slot 1; buffs: engine stealable-gated, slot 2), so
+    -- switching to square later needs no aura update to get real colors.
+    -- The tinted rounded ring is for "Dispel Color" (see InitAuraButton).
     if not button.isBuff and button.roundDispelTexPending and not button.roundDispelTex then
         local preserve = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset
         if preserve then
@@ -236,8 +194,6 @@ function aurakit.TryRegisterDispelBorder(button)
         button.dispelRegErr = (not okAdd) and tostring(addErr) or nil
     else
         if button.dispelBorderTex or not button.dispelBorderTexPending then return end
-        -- Border: hands the engine both atlas + color together, the same
-        -- mechanism Blizzard's own native aura frames use for debuffs.
         local borderStyle = Enum.CustomAuraButtonDispelTypeTextureStyle.Border
         if not borderStyle then return end
         local options = {
@@ -257,13 +213,9 @@ function aurakit.TryRegisterDispelBorder(button)
 end
 
 -- Rounded white "purgeable" border (opts.stealableRing): a white texture
--- masked by the same rounded art the dark border uses
--- (ui-debuff-border-default-noicon -- its ring art is red, so it can't just
--- be tinted white), registered with the engine so it only shows on stealable
--- buffs (the flag is secret to us). Replaces Blizzard's stealable glow,
--- which reaches well past the icon. Registration is refused while aura data
--- is secret, so it's retried every style pass. Lives on the button, not in
--- borderHost: the buff border choice "None" and square borders hide that.
+-- masked by the rounded border art (which is red, so it can't be tinted),
+-- engine-registered so it only shows on stealable buffs. Lives on the button,
+-- not borderHost, which "None" and square borders hide.
 local RING_ATLAS = "ui-debuff-border-default-noicon"
 local ringHosts = setmetatable({}, { __mode = "k" }) -- button -> host frame
 
@@ -296,40 +248,13 @@ local function GetStealableRing(button)
     return host
 end
 
--- Debug (/uuidebugrings): the stealable rings' registration and state.
-function aurakit.DebugStealableRings()
-    local total, registered, shown, lines = 0, 0, 0, {}
-    for button, host in pairs(ringHosts) do
-        total = total + 1
-        if host.registered then registered = registered + 1 end
-        local okS, s = pcall(host.IsShown, host)
-        if okS and issecretvalue and issecretvalue(s) then okS = false end
-        if okS and s == true then shown = shown + 1 end
-        if #lines < 6 and okS and s == true then
-            local okV, r, g, b, a = pcall(host.tex.GetVertexColor, host.tex)
-            local okT, file = pcall(host.tex.GetTexture, host.tex)
-            local okTS, texShown = pcall(host.tex.IsShown, host.tex)
-            local fmt = function(v) return (issecretvalue and issecretvalue(v)) and "<secret>" or tostring(v) end
-            lines[#lines + 1] = string.format("  shown ring: tex shown=%s file=%s color=%s,%s,%s,%s",
-                fmt(okTS and texShown), fmt(okT and file), fmt(r), fmt(g), fmt(b), fmt(a))
-        end
-    end
-    return string.format("stealable rings: %d created, %d registered with the engine, %d hosts shown", total, registered, shown), lines
-end
-
--- button.isBuff is fixed permanently at button creation (see InitAuraButton)
--- based on which permanent aura group the button belongs to.
---
--- opts: { style = "both"|"zoom"|"border"|"none", showDispel = bool }
--- style is the CALLER's already-resolved aurastyle_<frame><buffs/debuffs>
--- setting for this button's buff/debuff role; showDispel is the caller's
--- already-resolved "Show Dispels for <Frame> Buffs" setting.
+-- opts: { style = "both"|"zoom"|"border"|"none", showDispel = bool,
+--         squareLoc, stealableRing }, already resolved by the caller for
+-- this button's buff/debuff role.
 function aurakit.ApplyAuraButtonStyle(button, opts)
     if not button or IsSecret(button) then return end
-    -- Not bailing out on SafeIsForbidden(button): a forbidden AuraButton
-    -- rejects some calls (SetSize) but not others (border show/hide still
-    -- works mid-combat) -- every widget call below is already individually
-    -- pcall-wrapped, so there's nothing to gain from bailing out entirely.
+    -- No SafeIsForbidden bail-out: a forbidden button still accepts border
+    -- show/hide, and every widget call below is pcall-wrapped.
     aurakit.TryRegisterDispelBorder(button)
 
     local isBuff = button.isBuff
@@ -337,9 +262,8 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
     local zoomEnabled = (style == "both" or style == "zoom")
     local darkBorderEnabled = (style == "both" or style == "border")
 
-    -- Square borders are drawn over the icon's own edge (or just outside it),
-    -- so the 1px inset kept for the round border only shrinks the icon: let
-    -- it fill the button, like Blizzard's own aura buttons.
+    -- Square borders sit on or outside the icon edge, so the icon fills the
+    -- button instead of keeping the round border's 1px inset.
     local SBk = UberUI.squareborders
     local squareOn = opts and opts.squareLoc and style ~= "none" and SBk and SBk.IsEnabled(opts.squareLoc)
     if button.icon then
@@ -357,12 +281,7 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
                 button.icon:SetTexCoord(0, 1, 0, 1)
             end
         end)
-        -- Cooldown tracks the icon's own bounds, not the full button -- the
-        -- icon is inset 1px from the button edges above, and a Cooldown
-        -- anchored to the (larger) button instead would render its swipe a
-        -- pixel or two past the icon on every side, most visible on the
-        -- small aura icons where that overhang is a bigger fraction of the
-        -- total size.
+        -- Cooldown follows the icon's bounds so the swipe never overhangs it.
         if button.cooldown then
             pcall(function()
                 button.cooldown:ClearAllPoints()
@@ -392,15 +311,9 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
                 button.borderTex:SetAllPoints(button.borderHost)
             end
 
-            -- This widget type has no native border texture of its own, so
-            -- "stock" means reproducing Blizzard's target/focus frame
-            -- ourselves: no border on buffs, real dispel-type color on
-            -- debuffs. We can't compute that color ourselves --
-            -- auraData.dispelName reads back as a secret value to addon
-            -- code -- so debuffs register button.dispelBorderTex via
-            -- AddDispelTypeTexture (once, see InitAuraButton) and from here
-            -- on we only show/hide the frame that hosts it; Blizzard colors
-            -- it.
+            -- Debuff dispel colors can't be computed (dispelName is secret),
+            -- so the engine colors the registered textures and we only
+            -- show/hide their hosts.
             local function ApplyDarkBorder()
                 button.borderHost:Show()
                 if button.dispelBorderHost then button.dispelBorderHost:Hide() end
@@ -416,34 +329,25 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
             end
 
             local function ApplyNoBorder()
-                -- Blizzard's stock target/focus frame never draws a border
-                -- on buffs.
                 button.borderHost:Hide()
                 if button.borderTex then button.borderTex:Hide() end
                 if button.dispelBorderHost then button.dispelBorderHost:Hide() end
                 if button.roundDispelHost then button.roundDispelHost:Hide() end
             end
 
-            -- Debuffs only -- buffs use the separate button.stealable
-            -- mechanism below instead, shown/hidden independently of style.
+            -- Debuffs only; buffs use button.stealable below.
             local function ApplyDispelColoredBorder()
                 button.borderHost:Show()
                 if button.borderTex then button.borderTex:Hide() end
-                -- Blizzard's own per-type border art, picked by the engine
-                -- (dispelBorderTex, style Border). Preferred over our tinted
-                -- ring (roundDispelTex): that ring art is painted red, so once
-                -- desaturated it's only ~24% bright and any dispel tint on it
-                -- comes out dark (sampled from Blizzard's debuff border BLP).
-                -- The per-type art is already full-brightness in each color.
+                -- Prefer Blizzard's per-type art (dispelBorderTex): our tinted
+                -- ring is red art desaturated, so dispel tints on it come out dark.
                 if button.dispelBorderTex or (button.dispelBorderHost and not button.roundDispelTex) then
                     if button.roundDispelHost then button.roundDispelHost:Hide() end
                     button.dispelBorderHost:Show()
                 elseif button.roundDispelTex then
-                    -- Only if the per-type art never registered.
                     button.roundDispelHost:Show()
                     if button.dispelBorderHost then button.dispelBorderHost:Hide() end
                 elseif button.borderTex then
-                    -- Fallback if AddDispelTypeTexture is unavailable.
                     button.borderTex:Show()
                     button.borderTex:SetAtlas("ui-debuff-border-default-noicon")
                     button.borderTex:SetDesaturated(false)
@@ -463,11 +367,8 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
                 ApplyDispelColoredBorder()
             end
 
-            -- Stealable overlay: button.stealable is engine-registered
-            -- (stealableFilter decides if it renders at all), but
-            -- stealableHost is OUR frame -- never registered -- so it's what
-            -- the caller's showDispel + PlayerCanOffensiveDispel actually
-            -- gate, independent of the base border above.
+            -- stealableHost is our own (unregistered) frame, so showDispel
+            -- gates it independently of the engine-registered texture.
             if button.stealableHost then
                 local showStealable = isBuff and UberUI.general:PlayerCanOffensiveDispel() and
                 (opts and opts.showDispel)
@@ -489,10 +390,8 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
             local ring = GetStealableRing(button)
             if not ring then return end
             local showStealable = UberUI.general:PlayerCanOffensiveDispel() and opts.showDispel
-            -- Square borders show their own white strips instead, once those
-            -- are registered (ApplySquareBorder's rule). Decided from our own
-            -- settings: reading the strips' IsShown back is secret on
-            -- container buttons (it errored here and the ring never showed).
+            -- Square borders use their own white strips once registered.
+            -- Decided from settings: the strips' IsShown is secret here.
             local steal = SBk and SBk.Find(button, 2)
             local stripsUsed = squareOn and steal and steal.engineRegistered
             ring:SetShown((showStealable and ring.registered and not stripsUsed) and true or false)
@@ -500,17 +399,11 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
     end
 end
 
--- Square borders (core/squareborders.lua) for opts.squareLoc ("target",
--- "focus", "boss", "compact"). Replaces the atlas border above, following
--- the same Buff/Debuff Border choices: dark when the style includes a dark
--- border, otherwise Blizzard's look -- dispel color on debuffs (engine-
--- applied, so it's right even while aura data is secret), no border on
--- buffs. The "Highlight Purgeable Buffs" stealable border becomes a square
--- white one. Slots: 1 = buff dark border / debuff engine dispel strips,
--- 2 = buff engine stealable strips, 3 = debuff dark border (plain strips --
--- the engine re-tints slot 1 on every aura update, so it can't be darkened).
--- Until the engine strips are registered (denied while aura data is secret),
--- the round border above stays as the fallback.
+-- Square borders for opts.squareLoc, following the same Buff/Debuff Border
+-- choices. Slots: 1 = buff dark border / debuff engine dispel strips,
+-- 2 = buff engine stealable strips, 3 = debuff dark border (the engine
+-- re-tints slot 1, so it can't be darkened). Until the engine strips are
+-- registered the round border stays as the fallback.
 function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
     local SB = UberUI.squareborders
     if not SB or not button.icon then return end
@@ -551,8 +444,6 @@ function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
 
         if showMain then
             main = main or SB.Get(button, 1)
-            -- Buffs: slot 1 is the plain dark border. Debuffs: the engine's
-            -- dispel-colored strips, 1px thicker (SB.DispelThickness).
             if isBuff then
                 SB.LayoutFor(main, button.icon, loc)
             else
@@ -585,10 +476,7 @@ function aurakit.ApplySquareBorder(button, opts, style, darkBorderEnabled)
     end)
 end
 
--- Generic per-button widget setup: icon/cooldown/text/border/stealable
--- overlay. Identical for every frame type that uses this container design --
--- only size/group membership differ, both passed in. updateStyleFn(button)
--- is called once at the end to apply the caller's current style.
+-- Per-button widget setup; updateStyleFn(button) applies the caller's style.
 function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMine, updateStyleFn)
     if container then
         if not container.allButtons then container.allButtons = {} end
@@ -605,10 +493,8 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     icon:ClearAllPoints()
     icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
     icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
-    -- Independent pixel-grid snapping between the icon and border textures
-    -- is what causes a hairline gap between them at non-1x UI scale (each
-    -- texture rounds to the nearest physical pixel on its own) -- same fix
-    -- Blizzard's own TargetFrame.lua uses on its scaled status bar textures.
+    -- Unsnapped so icon and border textures don't round to pixels apart
+    -- (hairline gaps at non-1x UI scale).
     icon:SetTexelSnappingBias(0)
     icon:SetSnapToPixelGrid(false)
     button.icon = icon
@@ -623,15 +509,8 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     cd:SetDrawEdge(false)
     cd:SetDrawSwipe(false)
     cd:SetHideCountdownNumbers(true)
-    -- The swipe's default texture sweeps its dark shade all the way into the
-    -- button's actual square corners, showing a hard, sharp-edged wedge
-    -- there. Swap in a texture that's transparent in the four corners
-    -- instead: the swipe still sweeps normally, it just never darkens those
-    -- corner pixels. Confirmed working for the fill/background -- the only
-    -- remaining artifact was the bright edge-highlight line still tracing a
-    -- full circle, which is a separate flag from the swipe texture content:
-    -- force it off explicitly (SetDrawEdge(false) alone wasn't enough to
-    -- keep that line's own shape square).
+    -- A swipe texture transparent in the corners keeps the dark sweep off the
+    -- square corners; the circular edge line is turned off separately.
     pcall(cd.SetSwipeTexture, cd, "Interface\\AddOns\\Uber UI\\textures\\auracornermask", 0, 0, 0, 0.8)
     pcall(cd.SetUseCircularEdge, cd, false)
     button.cooldown = cd
@@ -672,9 +551,7 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     button.borderHost = borderHost
     button.borderTex = borderTex
 
-    -- Dedicated engine-colored border for stock-style debuffs (see
-    -- ApplyAuraButtonStyle and TryRegisterDispelBorder). Debuffs only --
-    -- buffs use the separate button.stealable mechanism below.
+    -- Engine-colored border for debuffs (see TryRegisterDispelBorder).
     if not isBuff and not button.dispelBorderHost then
         local dispelBorderHost = CreateFrame("Frame", nil, borderHost)
         dispelBorderHost:SetAllPoints(borderHost)
@@ -691,12 +568,9 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
         button.dispelBorderTexPending = dispelBorderTex
     end
 
-    -- Our own rounded ring (same art as the Dark border), tinted by the
-    -- ENGINE with the real dispel color (PreserveAsset keeps the art and only
-    -- applies AuraUtil.SetAuraBorderColor, so it's right even while aura data
-    -- is secret). This is what "Dispel Color" shows, so Dark and Dispel Color
-    -- are the same ring with only the color changing; dispelBorderHost above
-    -- (Blizzard's per-type art) is the fallback until this registers.
+    -- Rounded ring tinted by the engine with the real dispel color
+    -- (PreserveAsset), what "Dispel Color" shows; dispelBorderHost above is the
+    -- fallback until this registers.
     if not isBuff and not button.roundDispelHost then
         local roundDispelHost = CreateFrame("Frame", nil, borderHost)
         roundDispelHost:SetAllPoints(borderHost)
@@ -714,10 +588,8 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
         button.roundDispelTexPending = roundDispelTex
     end
 
-    -- Buffs only: Blizzard's own StealableBorder texture, layered over (not
-    -- replacing) the normal border. stealableHost is OUR frame, never
-    -- registered, so the "Show Dispels" option can reliably show/hide it
-    -- regardless of the (also-registered) button.stealable.
+    -- Buffs: Blizzard's StealableBorder texture over the normal border, in our
+    -- own host so "Show Dispels" can show/hide it.
     if isBuff and not button.stealableHost then
         local stealableHost = CreateFrame("Frame", nil, borderHost)
         stealableHost:SetAllPoints(borderHost)
@@ -740,20 +612,13 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     end
 end
 
--- Two permanent, structurally-identical containers -- debuffs and buffs --
--- each with a fixed "mine"(large)/"other"(small) group pair, never
--- reconfigured after creation. Which one anchors under the health bar is
--- decided entirely by the caller's UpdatePairedPositions call, not touched
--- again here.
---
+-- Two permanent containers (debuffs, buffs), each with a "mine" (large) and
+-- "other" (small) group. The caller positions them (UpdatePairedPositions).
 -- opts: {
 --   namePrefix, parentFrame, unitToken,
 --   mineKey, otherKey, mineFilter, otherFilter,
---   frameLevelBonus, largeSize, smallSize, spacing,
---   updateStyleFn(button),      -- applies current style to one button
---   isUpdating(),               -- returns true while caller's own UpdateAuras is running
---   onApplyLayout(),            -- optional, called after a Blizzard-driven ApplyLayout refresh
---   clearUpdating(),            -- optional, called after onApplyLayout
+--   frameLevelBonus, largeSize, smallSize, spacing, exactLineSpacing,
+--   updateStyleFn(button), isUpdating(), onApplyLayout(), clearUpdating(),
 -- }
 function aurakit.BuildAuraContainer(opts)
     local okC, container = pcall(function()
@@ -817,25 +682,15 @@ function aurakit.BuildAuraContainer(opts)
     return container
 end
 
--- Generic container with any number of groups, for frames that don't use
--- the target/focus mine/other pair (compact party/raid frames). Each group
--- description:
+-- Container with any number of groups (compact party/raid frames). Group:
 --   { key, filter, isBuff, size, maxFrameCount, layoutIndex,
 --     sortMethod, candidateFilters }
--- isBuff is explicit (not derived from the filter) because Blizzard's
--- ProcessAura classification can put a HELPFUL aura (boss buffs) in a
--- debuff-styled group.
---
--- opts: {
---   name, parentFrame, frameLevelBonus, spacing, maxLineSize,
---   processAura,       -- optional SetAuraProcessingPolicy(ProcessAura) options
---   groups,            -- array of group descriptions (above)
---   updateStyleFn(button),
--- }
---
--- Unit starts as "none" (the engine's null binding). Callers point it at a
--- real unit with container:SetUnit() -- never "player" as a placeholder, or
--- an unassigned container shows the player's own auras.
+-- isBuff is explicit: Blizzard's ProcessAura can put a HELPFUL aura (boss
+-- buffs) in a debuff-styled group.
+-- opts: { name, parentFrame, frameLevelBonus, spacing, maxLineSize,
+--         processAura, groups, updateStyleFn(button) }
+-- The unit starts unset; callers SetUnit() a real unit (never a "player"
+-- placeholder, or an unassigned container shows the player's auras).
 function aurakit.BuildGroupedAuraContainer(opts)
     local okC, container = pcall(function()
         return CreateFrame("AuraContainer", opts.name, opts.parentFrame, "CustomAuraContainerTemplate")
@@ -875,8 +730,7 @@ function aurakit.BuildGroupedAuraContainer(opts)
 
         local groupOptions = {
             maxFrameCount = group.maxFrameCount or 0,
-            -- Reads def.size at init time, not a captured copy, so buttons
-            -- created after a SetGroupedContainerSizes call get the new size.
+            -- Reads def.size at init so later buttons pick up resizes.
             initializeFrame = function(btn)
                 aurakit.InitAuraButton(container, btn, def.key, def.isBuff, def.size, false, opts.updateStyleFn)
             end,
@@ -907,10 +761,7 @@ function aurakit.BuildGroupedAuraContainer(opts)
     return container
 end
 
--- Resize groups of a BuildGroupedAuraContainer container in place (Edit Mode
--- icon size % changed). sizes = { [groupKey] = size }. Updates the group's
--- flow layout and every button already created for it; buttons created
--- later pick the new size up from the group def.
+-- Resize groups in place (Edit Mode icon size). sizes = { [groupKey] = size }.
 function aurakit.SetGroupedContainerSizes(container, sizes, updateStyleFn)
     if not container or not container.uuGroups then return end
     for key, size in pairs(sizes) do
@@ -934,9 +785,7 @@ function aurakit.SetGroupedContainerSizes(container, sizes, updateStyleFn)
     end
 end
 
--- Shared show/hide for both permanent containers together. frameObj is
--- whatever module table owns .customDebuffs/.customBuffs (e.g. targetframes,
--- focusframes).
+-- frameObj: the module table owning .customDebuffs/.customBuffs.
 function aurakit.ShowAuraContainers(frameObj, shown)
     if not frameObj then return end
     if frameObj.customDebuffs then
@@ -951,14 +800,8 @@ function aurakit.GetAuraContainers(frameObj)
     return { frameObj.customDebuffs, frameObj.customBuffs }
 end
 
--- Whether a container is showing any aura: true (at least one shown), false
--- (every button positively reports hidden), or nil (can't tell). In combat
--- the engine makes aura buttons' state secret or refuses the read outright,
--- and the old geometry-based check (GetContainerAuraExtent, removed) treated that
--- the same as "nothing shown" --
--- which made an enemy WITH debuffs look empty, pinning its buff row onto the
--- debuff row (regression from 031b8ef's gap fix). Callers should only act on
--- a positive false.
+-- true (an aura shown), false (every button reports hidden), or nil (can't
+-- tell: button state is secret in combat). Act only on a positive false.
 function aurakit.ContainerHasShownAuras(container)
     if not container or not container.allButtons then return false end
     local unknown = false
@@ -978,28 +821,17 @@ function aurakit.ContainerHasShownAuras(container)
     return false
 end
 
--- Which container sits directly under the health/mana bar ("primary") vs
--- trails behind it ("secondary") swaps with hostility: debuffs primary on
--- an enemy, buffs primary on a friendly (including self). This is a plain
--- SetPoint on a container-level frame, not a per-AuraButton call, so it
--- isn't subject to the forbidden/combat-secrecy restriction. The secondary
--- container anchors to the primary's own edge (not a fixed refFrame
--- offset), so it auto-restacks when the primary's size changes, including
--- collapsing to ~0 when empty -- "no buffs -> debuffs sit where buffs
--- would've been" for free, no row-counting needed.
+-- The primary container sits under the frame (debuffs on enemies, buffs on
+-- friendlies); the secondary anchors to the primary's edge, so it restacks
+-- as the primary grows or empties.
 -- opts: { frameObj, refFrame, isEnemyFn(), buffsOnTop, topX, topY, topOnTopX, containerGap }
--- Blizzard narrows the first 2 aura rows to the frame's TOT_AURA_ROW_WIDTH
--- (101; Blizzard sets 80 on a small focus frame) while the target-of-target
--- frame is shown, so auras don't run under the ToT portrait (TargetFrame.lua
--- UpdateAuras, TargetFrameAuraFlowLayoutMixin:GetMaximumLineSizeForLine).
--- That per-row width lives in Blizzard's private layout; addon containers
--- take one width for every row, so the whole container narrows instead --
--- rows 3+ lose a little width, which few targets ever reach. Frames with no
--- ToT (boss) stay at the full width. Only reads Blizzard's fields.
+--
+-- While the ToT frame is shown Blizzard narrows the first two aura rows to
+-- TOT_AURA_ROW_WIDTH so they clear the ToT portrait. Our containers take one
+-- width for every row, so the whole container narrows instead.
 local FULL_AURA_ROW_WIDTH = 122 -- TargetFrameAuraContainerDefaults.FlowLayoutLineSize
 
--- Frames whose ToT we've moved aside (keyed by the Target/Focus frame;
--- our table, never a field on Blizzard's frame). Those keep full-width rows.
+-- Frames whose ToT we've moved aside; those keep full-width rows.
 local totAside = setmetatable({}, { __mode = "k" })
 
 function aurakit.ApplyToTRowWidth(frameObj, refFrame)
@@ -1016,18 +848,11 @@ function aurakit.ApplyToTRowWidth(frameObj, refFrame)
     end
 end
 
--- "Move ToT Aside": shift the target-of-target frame right, clear of the
--- aura rows, so they can keep their full width. Blizzard's ToT covers the
--- last ~21px of a 122px row (it narrows rows to 101), so 24px clears it
--- with a small gap.
---
--- The ToT frame is a protected (secure unit) frame: only moved out of
--- combat; a change made in combat is applied on PLAYER_REGEN_ENABLED. The
--- shift is relative to Blizzard's own anchor, captured before we first move
--- it and re-captured whenever Blizzard re-anchors it itself (FocusFrame:
--- SetSmallSize -- see RecaptureToTAnchor), so it never compounds; "Narrow
--- Auras" puts Blizzard's exact anchor back. Only single-anchor ToT frames
--- (Blizzard's layout) are touched.
+-- "Move ToT Aside": shift the target-of-target frame 24px right so aura rows
+-- keep full width. The ToT is a protected frame: only moved out of combat
+-- (in-combat changes apply on PLAYER_REGEN_ENABLED). The shift is relative to
+-- Blizzard's own anchor, re-captured when Blizzard re-anchors it
+-- (RecaptureToTAnchor), so it never compounds.
 local TOT_ASIDE_X = 24
 local totBase = setmetatable({}, { __mode = "k" })    -- tot frame -> Blizzard's anchor
 local totWanted = setmetatable({}, { __mode = "k" })  -- refFrame -> desired aside state
@@ -1071,8 +896,7 @@ function aurakit.SetToTPlacement(refFrame, aside)
             totRegen:SetScript("OnEvent", function(self)
                 self:UnregisterEvent("PLAYER_REGEN_ENABLED")
                 for frame in pairs(totWanted) do pcall(ApplyToTPlacementNow, frame) end
-                -- Frames switched back to Narrow in combat aren't in
-                -- totWanted any more; restore those too.
+                -- Frames switched back in combat aren't in totWanted; restore them too.
                 for frame in pairs(totAside) do pcall(ApplyToTPlacementNow, frame) end
             end)
         end
@@ -1082,8 +906,7 @@ function aurakit.SetToTPlacement(refFrame, aside)
     pcall(ApplyToTPlacementNow, refFrame)
 end
 
--- Blizzard just re-anchored this ToT (FocusFrame:SetSmallSize): its new
--- anchor becomes the base, and an aside shift is re-applied on top of it.
+-- Blizzard re-anchored this ToT (FocusFrame:SetSmallSize): new base anchor.
 function aurakit.RecaptureToTAnchor(refFrame)
     local tot = refFrame and refFrame.totFrame
     if not tot or InCombatLockdown() then return end
@@ -1109,19 +932,9 @@ function aurakit.UpdatePairedPositions(opts)
     primary:ClearAllPoints()
     secondary:ClearAllPoints()
 
-    -- The ask was narrow: on an enemy with no debuff, nudge its (secondary)
-    -- buff row up closer to the frame instead of leaving it hanging off
-    -- where the empty debuff row would have been. Everything else --
-    -- including the friendly side, where buffs are primary and debuffs
-    -- trail -- keeps the original unconditional chain (secondary anchored
-    -- straight off primary's own edge, live-updating with zero extra calls
-    -- as primary's row count changes). Scoping the bypass to isEnemy only
-    -- avoids the friendly-side regression where an over-eager "is primary
-    -- empty" check picked the wrong anchor and stacked debuffs on top of
-    -- buffs instead of below them.
-    -- Only a POSITIVE "nothing shown" bypasses the chain; if the debuff
-    -- buttons can't be read (combat), keep the chain so buffs still follow
-    -- below real debuffs.
+    -- On an enemy with no debuffs shown, buffs take the empty debuff row's
+    -- spot. Only a positive "nothing shown" does this; unreadable (combat)
+    -- keeps the chain so buffs still follow real debuffs.
     local primaryIsEmpty = false
     if isEnemy then
         primaryIsEmpty = (aurakit.ContainerHasShownAuras(primary) == false)
@@ -1146,9 +959,8 @@ function aurakit.UpdatePairedPositions(opts)
         end
         startY = startY + extraY
         primary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
-        -- Empty primary: take its exact spot, no gap -- Blizzard's flow
-        -- layout drops an empty group, so the next one starts on the first
-        -- row (groupLineSpacing only applies after a row that exists).
+        -- Empty primary: take its exact spot (Blizzard's flow layout drops
+        -- an empty group, so no gap).
         if primaryIsEmpty then
             secondary:SetPoint("BOTTOMLEFT", ref, "TOPLEFT", offsetX, startY)
         else
@@ -1180,11 +992,8 @@ function aurakit.UpdatePairedPositions(opts)
     end
 end
 
--- Spellbar auto-repositioning below whichever container's buttons sit
--- lowest. isAdjustingSpellbar is a single shared reentrancy latch: it only
--- guards against a spellbar's own AdjustPosition hook recursively
--- retriggering itself, so sharing it across every frame type that uses this
--- kit is correct, not a cross-frame data leak.
+-- Spellbar placement below the lowest aura row. The latch only stops the
+-- spellbar's own AdjustPosition hook from re-triggering itself.
 local isAdjustingSpellbar = false
 
 function aurakit.TriggerSpellbarAdjust(spellbar)
@@ -1279,18 +1088,11 @@ function aurakit.HookSpellbarAdjustPosition(spellbar, frameObj, getContainer)
     end)
 end
 
--- Border on a Target/Focus cast bar's spell icon (Blizzard draws none), in
--- the frame's own aura border look: loc's Border Shape (rounded ring or
--- square strips with that thickness/position), always the darkness color,
--- and the icon zoomed like aura icons. enabled=false puts Blizzard's plain
--- icon back. The border frame is ours, a child of the spell bar (so it
--- shows and hides with it -- the icon itself is always shown on unit-frame
--- cast bars, CastingBarMixin:ShouldIconBeShown). Born with
--- DisableUntrustedLayoutScriptsTemplate: 12.1 gives the spell bar the aura
--- container's layout aspects when it anchors under the auras
--- (TargetSpellBarMixin:AdjustPosition), and a plain frame anchored to its
--- icon would then refuse to lay out. Kept in a weak table, never a field on
--- Blizzard's frame.
+-- Border on a Target/Focus cast bar's spell icon in the frame's aura border
+-- look (rounded or square, darkness color), icon zoomed. Our frame is born
+-- with DisableUntrustedLayoutScriptsTemplate: in 12.1 the spell bar can take
+-- the aura container's layout aspects, and a plain frame anchored to its icon
+-- would refuse to lay out.
 local castIconBorders = setmetatable({}, { __mode = "k" }) -- spellbar -> host
 
 function aurakit.StyleCastBarIcon(spellbar, loc, enabled)
@@ -1348,21 +1150,13 @@ function aurakit.StyleCastBarIcon(spellbar, loc, enabled)
     host:Show()
 end
 
--- Highlight visuals shared by the pandemic highlights (nameplate auras,
--- Cooldown Manager). Styles `host`'s children only -- whoever owns host
--- decides when it's shown (the engine's pandemic region, or our own hooks).
--- opts: {
---   kind   = "border" | "glow" | "ants" (anything else: nothing drawn),
---   r, g, b,
---   square = true for square strips (squareborders, `loc`'s thickness/
---            position at the colored thickness), false for a rounded ring,
---   loc    = squareborders location, icon = region the square strips hug,
---   ringFrom, ringTo = regions whose TOPLEFT / BOTTOMRIGHT bound the ring,
---   center = region the glow centers on, size = glow size before padding,
--- }
+-- Highlight visuals (nameplate aura and Cooldown Manager pandemic). Styles
+-- host's children only; the caller decides when host is shown.
+-- opts: { kind = "border"|"glow"|"ants", r, g, b,
+--         square, loc, icon (square strips), ringFrom, ringTo, ringX (ring),
+--         center, size, glowScale (glows) }
 local HIGHLIGHT_GLOWS = {
-    -- FlipBook sheets (6x5, 30 frames) and how far their art is padded past
-    -- the icon (EllesmereUI_Glows.lua's measurements).
+    -- FlipBook sheets (6x5, 30 frames); pad = art padding past the icon.
     glow = { atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook", pad = 1.4 },
     ants = { atlas = "RotationHelper_Ants_Flipbook", pad = 1.6 },
 }
@@ -1373,8 +1167,8 @@ function aurakit.StyleHighlight(host, opts)
     local kind = opts.kind
     local r, g, b = opts.r or 1, opts.g or 0.15, opts.b or 0.15
 
-    -- Rounded: the rounded border art as a mask over a solid color (the art
-    -- itself is red, so it can't be tinted to an arbitrary color).
+    -- Rounded: the border art as a mask over a solid color (the art is red,
+    -- so it can't be tinted).
     local wantRing = kind == "border" and not opts.square
     if wantRing and not host.uuRing and opts.ringFrom then
         local ring = host:CreateTexture(nil, "OVERLAY")
@@ -1395,7 +1189,6 @@ function aurakit.StyleHighlight(host, opts)
         host.uuRing:SetShown(wantRing)
     end
 
-    -- Square: strips like the dispel border (same thickness and position).
     local wantSquare = kind == "border" and opts.square and SB and opts.icon
     if wantSquare and not host.uuSquare then host.uuSquare = SB.CreateBorder(host) end
     if host.uuSquare then
@@ -1408,7 +1201,6 @@ function aurakit.StyleHighlight(host, opts)
         end
     end
 
-    -- Glow: a looping FlipBook, tinted.
     local glowDef = HIGHLIGHT_GLOWS[kind]
     if glowDef and not host.uuGlow then
         local tex = host:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -1425,7 +1217,7 @@ function aurakit.StyleHighlight(host, opts)
     end
     if host.uuGlow then
         if glowDef then
-            local size = (opts.size or 24) * glowDef.pad
+            local size = (opts.size or 24) * glowDef.pad * (opts.glowScale or 1)
             host.uuGlow:ClearAllPoints()
             host.uuGlow:SetPoint("CENTER", opts.center or host, "CENTER")
             if host.uuGlowAtlas ~= glowDef.atlas then
