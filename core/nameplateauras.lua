@@ -31,7 +31,11 @@ local SPACING = 3                         -- 22 + 3 = Blizzard's 25px pitch
 -- Extra gap from the health bar: our borders draw outside the icon.
 local SIDE_GAP = 3
 local DEBUFF_MAX = 12
-local BUFF_MAX, CC_MAX = 2, 2
+-- BUFF_MAX is the per-group ceiling the groups are built at (the slider's max);
+-- the counts actually shown are set per unit in Bind. CC and debuff counts are
+-- Blizzard's own (maxAuraItemsDisplayed in Blizzard_NamePlates.xml: 12/2/2).
+local BUFF_MAX, CC_MAX = 4, 2
+local BUFF_BUDGET_DEFAULT = 1
 local POOL_SIZE = 16
 local POOL_TARGET_INSTANCE = 25
 local CONTAINER_KEYS = { "debuffs", "buffs", "cc" }
@@ -45,11 +49,34 @@ local attachedTo = setmetatable({}, { __mode = "k" })  -- AurasFrame -> bundle
 local hookedAuras = setmetatable({}, { __mode = "k" }) -- AurasFrame -> true
 local fadedLists = setmetatable({}, { __mode = "k" })  -- AurasFrame -> true
 local dispellableToken = true                          -- false once DISPELLABLE is refused
+local raidDispelToken = true                           -- false once RAID_PLAYER_DISPELLABLE is refused
 
 local IsSecret = UberUI.util.IsSecret
 
 local function Enabled()
     return uuidb and uuidb.general and uuidb.general.nameplateauras == true
+end
+
+-- Enemy buff settings. Read through functions, never at file scope: uuidb is
+-- still config.lua's placeholder while this file loads.
+local function BuffBudget()
+    local g = uuidb and uuidb.general
+    local n = (g and tonumber(g.nameplatebuffbudget)) or BUFF_BUDGET_DEFAULT
+    return math.max(1, math.min(BUFF_MAX, math.floor(n + 0.5)))
+end
+
+local function ShowImportantBuffs()
+    local g = uuidb and uuidb.general
+    return not (g and g.nameplatebuffsimportant == false)
+end
+
+-- "group" (someone in your raid can dispel it -- just you when ungrouped),
+-- "any" (Blizzard's own rule: anything flagged dispellable), or "off".
+local function PurgeableMode()
+    local g = uuidb and uuidb.general
+    local v = g and g.nameplatebuffspurgeable
+    if v == "off" or v == "any" then return v end
+    return "group"
 end
 
 local function EnsureAuraContainerAddOn()
@@ -447,7 +474,11 @@ local function BuildBundle()
     pcall(b.cc.SetFlowLayoutAnchorPoint, b.cc, "BOTTOMLEFT")
     pcall(b.cc.SetFlowLayoutGrowthDirection, b.cc, 1, 1)
     local oneRow = 2 * (ICON_SIZE + SPACING)
-    pcall(b.buffs.SetFlowLayoutMaximumLineSize, b.buffs, oneRow * 2)
+    -- Buffs stay on one line, however many the budget allows: Blizzard only
+    -- ever gives DebuffListFrame a stride, and BuffListFrame/CrowdControlList
+    -- carry needsFixedHeight, so buff rows never wrap and the plate's height
+    -- never shifts. Bind sets the real width once the budget is known.
+    pcall(b.buffs.SetFlowLayoutMaximumLineSize, b.buffs, BUFF_MAX * 2 * (ICON_SIZE + SPACING))
     pcall(b.cc.SetFlowLayoutMaximumLineSize, b.cc, oneRow * 2)
 
     for _, key in ipairs(CONTAINER_KEYS) do
@@ -540,7 +571,38 @@ local function Bind(b, unit)
         or "HARMFUL|INCLUDE_NAME_PLATE_ONLY|!CROWD_CONTROL|PLAYER")
     pcall(b.buffs.SetAuraGroupFilterString, b.buffs, "important",
         isFriend and "HELPFUL|INCLUDE_NAME_PLATE_ONLY|PLAYER" or "HELPFUL|INCLUDE_NAME_PLATE_ONLY|IMPORTANT")
-    pcall(b.buffs.SetAuraGroupMaxFrameCount, b.buffs, "dispellable", isFriend and 0 or BUFF_MAX)
+
+    -- Enemy buff budget. It is per category, not a shared total: the engine
+    -- counts each aura group on its own and aura counts are secret to us, so
+    -- one combined cap across important+purgeable isn't expressible. At the
+    -- default of 1 each the worst case is 2 icons, matching Blizzard's own
+    -- BuffListFrame cap. Friendlies keep Blizzard's 2 (only your own buffs
+    -- show there, and the purgeable group is off).
+    local importantCount, purgeableCount
+    if isFriend then
+        importantCount, purgeableCount = 2, 0
+    else
+        local budget = BuffBudget()
+        local purge = PurgeableMode()
+        importantCount = ShowImportantBuffs() and budget or 0
+        purgeableCount = (purge ~= "off") and budget or 0
+        if purgeableCount > 0 and dispellableToken then
+            local anyFilter = "HELPFUL|INCLUDE_NAME_PLATE_ONLY|!IMPORTANT|DISPELLABLE"
+            local wantGroup = purge == "group" and raidDispelToken
+            local ok = pcall(b.buffs.SetAuraGroupFilterString, b.buffs, "dispellable",
+                wantGroup and "HELPFUL|INCLUDE_NAME_PLATE_ONLY|!IMPORTANT|RAID_PLAYER_DISPELLABLE" or anyFilter)
+            if not ok and wantGroup then
+                -- No RAID_PLAYER_DISPELLABLE on this client; fall back to any.
+                raidDispelToken = false
+                pcall(b.buffs.SetAuraGroupFilterString, b.buffs, "dispellable", anyFilter)
+            end
+        end
+    end
+    pcall(b.buffs.SetAuraGroupMaxFrameCount, b.buffs, "important", importantCount)
+    pcall(b.buffs.SetAuraGroupMaxFrameCount, b.buffs, "dispellable", purgeableCount)
+    -- Wide enough for every icon the budget allows, so the row never wraps.
+    pcall(b.buffs.SetFlowLayoutMaximumLineSize, b.buffs,
+        math.max(1, importantCount + purgeableCount) * (ICON_SIZE + SPACING))
 
     local showAllPersonal = ShowAllPersonal()
     if showAllPersonal ~= b.showAllPersonal and b.debuffs.SetAuraGroupCandidateFilters then

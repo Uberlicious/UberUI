@@ -64,20 +64,51 @@ function opt.BuildNameplates(page)
         if UberUI.nameplateauras then UberUI.nameplateauras:RefreshStyle() end
     end
 
-    opt.AddCheckbox(page, {
+    local function RefreshNameplateAuras()
+        if UberUI.nameplateauras then UberUI.nameplateauras:Refresh() end
+    end
+
+    local nameplateAurasInit = opt.AddCheckbox(page, {
         variable = "NameplateAuras", name = "Uber UI Nameplate Auras",
         tooltip = "Show nameplate buffs, debuffs and crowd control in Uber UI's own aura icons, styled with the options below, in the same places and following the same Blizzard nameplate settings as Blizzard's own icons. The loss-of-control icon on players stays Blizzard's.\n\nThe icons are built ahead of time behind the loading screen, so this may slightly increase loading screen times.",
         db = "general", field = "nameplateauras", default = false,
-        onChange = function()
-            if UberUI.nameplateauras then UberUI.nameplateauras:Refresh() end
-        end,
+        onChange = RefreshNameplateAuras,
     });
+    local function NameplateAurasOn() return uuidb.general and uuidb.general.nameplateauras == true end
 
     opt.AddAuraOptions(page, {
         loc = "nameplate", label = "Nameplate", suffix = "Nameplate",
         buffKey = "aurastyle_nameplatebuffs", debuffKey = "aurastyle_nameplatedebuffs",
         refresh = RefreshNameplateAuraStyle,
     });
+
+    opt.DependsOn(opt.AddSlider(page, {
+        variable = "NameplateEnemyBuffIcons", name = "Enemy Buff Icons",
+        tooltip = "How many buff icons an enemy nameplate can show.\n\nThis applies to each category on its own (important, purgeable), because the game no longer lets addons count auras, so one shared total across them isn't possible. At 1 each the worst case is 2 icons, which is Blizzard's own limit.\n\nThe row never wraps, so raising this makes it wider, not taller.",
+        db = "general", field = "nameplatebuffbudget", default = 1,
+        min = 1, max = 4, step = 1,
+        onChange = RefreshNameplateAuras,
+    }), nameplateAurasInit, NameplateAurasOn);
+
+    opt.DependsOn(opt.AddCheckbox(page, {
+        variable = "NameplateEnemyBuffsImportant", name = "Enemy Buffs: Show Important",
+        tooltip = "Show the buffs the game flags as important on enemy nameplates -- offensive cooldowns and the like. This is the same set Blizzard shows.",
+        db = "general", field = "nameplatebuffsimportant", default = true,
+        onChange = RefreshNameplateAuras,
+    }), nameplateAurasInit, NameplateAurasOn);
+
+    opt.DependsOn(opt.AddDropdown(page, {
+        variable = "NameplateEnemyBuffsPurgeable", name = "Enemy Buffs: Show Purgeable",
+        tooltip = "Which purgeable buffs to show on enemy nameplates.\n\nMy Group Can Purge: only auras someone in your party or raid can actually remove -- just you when you're on your own.\n\nAny Purgeable: everything the game flags as dispellable, whether or not anyone present can remove it. This is Blizzard's own rule.",
+        default = "group",
+        values = { { "group", "My Group Can Purge" }, { "any", "Any Purgeable" }, { "off", "Off" } },
+        get = function()
+            local v = uuidb.general and uuidb.general.nameplatebuffspurgeable
+            return (v == "any" or v == "off") and v or "group"
+        end,
+        set = function(value) uuidb.general.nameplatebuffspurgeable = value end,
+        onChange = RefreshNameplateAuras,
+    }), nameplateAurasInit, NameplateAurasOn);
 
     opt.AddCheckbox(page, {
         variable = "nameplatebuffsShowDispel", name = "Nameplate Highlight Purgeable Buffs",
