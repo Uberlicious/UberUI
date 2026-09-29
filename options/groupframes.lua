@@ -29,6 +29,13 @@ function opt.BuildGroupFrames(page)
         });
 
         opt.AddCheckbox(page, {
+            variable = "compactAuraDuration", name = "Compact Raid/Party Aura Duration Text",
+            tooltip = "Show the time left on compact raid and party auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
+            db = "general", field = "compactauraduration", default = false,
+            onChange = RefreshCompactAuras,
+        });
+
+        opt.AddCheckbox(page, {
             variable = "compactBigDefensive", name = "Compact Raid/Party Big Defensive",
             tooltip = "Replace the large defensive cooldown icon in the center of compact raid and party frames with Uber UI's, styled like Compact Raid/Party buffs (same zoom, border and shape). Size follows Blizzard's Edit Mode Big Defensive size.\n\nWhen off, Blizzard's own icon is restored.",
             db = "general", field = "compactbigdefensive", default = true,

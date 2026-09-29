@@ -244,6 +244,7 @@ function targetframes:UpdateAuraButtonStyle(button)
     end
     local showDispel = uuidb and uuidb.general and uuidb.general.targetbuffs_showdispel
     aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "target", stealableRing = true })
+    aurakit.UpdateDurationText(button, uuidb and uuidb.general and uuidb.general.targetauraduration)
 end
 
 local TOP_X = 25

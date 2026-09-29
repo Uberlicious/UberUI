@@ -202,6 +202,7 @@ function compactauras:UpdateAuraButtonStyle(button)
         showDispel = false,
         squareLoc = "compact",
     })
+    aurakit.UpdateDurationText(button, uuidb and uuidb.general and uuidb.general.compactauraduration)
 end
 
 local function StyleFn(btn)
@@ -324,6 +325,17 @@ local function UpdateFrame(frame)
     local layouts = GetLayouts(metrics)
     local unit = GetUnit(frame)
 
+    -- Aura buttons can't be resized in combat, and SetGroupedContainerSizes
+    -- records the new size before trying, so a size change made in combat
+    -- would never be retried. Leave sizes and placement for
+    -- PLAYER_REGEN_ENABLED; unit and visibility still update now.
+    local inCombat = InCombatLockdown()
+    if inCombat then
+        pendingBuild[frame] = true
+    else
+        pendingBuild[frame] = nil
+    end
+
     local function apply(container, enabled)
         if not container then return end
         if enabled then
@@ -335,21 +347,27 @@ local function UpdateFrame(frame)
     end
 
     if state.debuffs then
-        aurakit.SetGroupedContainerSizes(state.debuffs, { debuffs = metrics.debuffSize, dispels = metrics.debuffSize }, StyleFn)
-        PlaceContainer(state.debuffs, frame, layouts.debuffs, metrics.debuffSize)
+        if not inCombat then
+            aurakit.SetGroupedContainerSizes(state.debuffs, { debuffs = metrics.debuffSize, dispels = metrics.debuffSize }, StyleFn)
+            PlaceContainer(state.debuffs, frame, layouts.debuffs, metrics.debuffSize)
+        end
         apply(state.debuffs, DebuffsEnabled())
     end
     if state.buffs then
-        aurakit.SetGroupedContainerSizes(state.buffs, { buffs = metrics.buffSize }, StyleFn)
-        PlaceContainer(state.buffs, frame, layouts.buffs, metrics.buffSize)
+        if not inCombat then
+            aurakit.SetGroupedContainerSizes(state.buffs, { buffs = metrics.buffSize }, StyleFn)
+            PlaceContainer(state.buffs, frame, layouts.buffs, metrics.buffSize)
+        end
         apply(state.buffs, BuffsEnabled())
     end
     if state.bigDefensive then
-        aurakit.SetGroupedContainerSizes(state.bigDefensive, { bigdefensive = metrics.bigDefensiveSize }, StyleFn)
-        state.bigDefensive:ClearAllPoints()
-        state.bigDefensive:SetPoint("CENTER", frame, "CENTER", 0, 0)
-        pcall(state.bigDefensive.SetFlowLayoutAnchorPoint, state.bigDefensive, "CENTER")
-        pcall(state.bigDefensive.SetFlowLayoutMaximumLineSize, state.bigDefensive, metrics.bigDefensiveSize + 0.5)
+        if not inCombat then
+            aurakit.SetGroupedContainerSizes(state.bigDefensive, { bigdefensive = metrics.bigDefensiveSize }, StyleFn)
+            state.bigDefensive:ClearAllPoints()
+            state.bigDefensive:SetPoint("CENTER", frame, "CENTER", 0, 0)
+            pcall(state.bigDefensive.SetFlowLayoutAnchorPoint, state.bigDefensive, "CENTER")
+            pcall(state.bigDefensive.SetFlowLayoutMaximumLineSize, state.bigDefensive, metrics.bigDefensiveSize + 0.5)
+        end
         apply(state.bigDefensive, BigDefensiveEnabled())
     end
 end
@@ -458,6 +476,26 @@ local function InstallHooks()
     if DefaultCompactUnitFrameSetup then
         hooksecurefunc("DefaultCompactUnitFrameSetup", function(frame)
             if frameState[frame] then UpdateFrame(frame) end
+        end)
+    end
+    -- Edit Mode's buff/debuff/big defensive icon size sliders don't re-run the
+    -- setup; they call this on every frame instead. Deferred and batched: it
+    -- fires once per frame per slider step, inside Edit Mode's update chain.
+    if CompactUnitFrame_UpdateAllFromEditMode then
+        local pending = {}
+        local queued = false
+        hooksecurefunc("CompactUnitFrame_UpdateAllFromEditMode", function(frame)
+            if not frameState[frame] then return end
+            pending[frame] = true
+            if queued then return end
+            queued = true
+            C_Timer.After(0, function()
+                queued = false
+                for f in pairs(pending) do
+                    pending[f] = nil
+                    if frameState[f] then UpdateFrame(f) end
+                end
+            end)
         end)
     end
 end

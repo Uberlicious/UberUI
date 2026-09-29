@@ -27,6 +27,7 @@ local nameplateauras = {}
 
 local SQUARE_LOC = "nameplate"
 local ICON_SIZE = 22
+local BLIZZARD_AURA_SIZE = NamePlateConstants and NamePlateConstants.AURA_ITEM_HEIGHT or 25
 local SPACING = 3                         -- 22 + 3 = Blizzard's 25px pitch
 -- Extra gap from the health bar: our borders draw outside the icon.
 local SIDE_GAP = 3
@@ -105,85 +106,8 @@ end
 -- Styling
 -------------------------------------------------------------------------------
 
--- Duration text in Blizzard's nameplate look. The duration is secret, so the
--- engine formats it (whole seconds, rounded up) and colors it from a step
--- curve on the remaining time: expiring color up to the threshold, normal up
--- to 60 s, transparent above (Blizzard shows no number over a minute). The
--- curve is copied at registration, so settings changes re-register.
-local function DurationSettings()
-    local g = uuidb and uuidb.general or {}
-    local threshold = tonumber(g.nameplatedurationthreshold) or 5
-    if threshold < 0 then threshold = 0 end
-    return g.nameplatedurationcolor or "ffffffff", g.nameplatedurationexpiringcolor or "ffff3333", threshold
-end
-
 local function HexColor(hex, fallback)
     return UberUI.util.HexColor(hex) or fallback
-end
-
-local durationFormatter
-local durationOptions, durationOptionsKey
-local function GetDurationTextOptions()
-    local normal, expiring, threshold = DurationSettings()
-    local key = normal .. "|" .. expiring .. "|" .. threshold
-    if durationOptionsKey == key then return durationOptions, key end
-    durationOptionsKey = key
-    durationOptions = nil
-    pcall(function()
-        local opts = {}
-        if durationFormatter == nil then
-            durationFormatter = false
-            if C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum.NumericRuleFormatRounding then
-                local formatter = C_StringUtil.CreateNumericRuleFormatter()
-                formatter:AddBreakpoint({ threshold = 0, step = 1, rounding = Enum.NumericRuleFormatRounding.Up, format = "%d" })
-                durationFormatter = formatter
-            end
-        end
-        if durationFormatter then opts.textFormatter = durationFormatter end
-        if C_CurveUtil and C_CurveUtil.CreateColorCurve and Enum.DurationTextBindingProperty then
-            local n = HexColor(normal, CreateColor(1, 1, 1, 1))
-            local e = HexColor(expiring, CreateColor(1, 0.2, 0.2, 1))
-            local curve = C_CurveUtil.CreateColorCurve()
-            curve:SetType(Enum.LuaCurveType.Step)
-            curve:AddPoint(0, CreateColor(e.r, e.g, e.b, 1))
-            if threshold > 0 and threshold < 60 then
-                curve:AddPoint(threshold, CreateColor(n.r, n.g, n.b, 1))
-            end
-            curve:AddPoint(60.001, CreateColor(n.r, n.g, n.b, 0))
-            opts.textColor = { curve = curve, property = Enum.DurationTextBindingProperty.RemainingDuration }
-        end
-        durationOptions = opts
-    end)
-    return durationOptions, key
-end
-
-local function ApplyDurationText(button)
-    local text = button.uuDuration
-    if not text then return end
-    local opts, key = GetDurationTextOptions()
-    if button.uuDurationKey == key then return end
-    if opts and pcall(button.SetDurationText, button, text, opts) then
-        button.uuDurationKey = key
-    elseif not button.uuDurationKey then
-        pcall(button.SetDurationText, button, text) -- engine default, retried next style pass
-    end
-end
-
-local function AddDurationText(button)
-    if not button.SetDurationText or button.uuDuration then return end
-    local parent = button.textHolder or button
-    local text = parent:CreateFontString(nil, "OVERLAY")
-    local cdText = button.cooldown and button.cooldown.GetCountdownFontString and button.cooldown:GetCountdownFontString()
-    local font, size, flags
-    if cdText then font, size, flags = cdText:GetFont() end
-    if font then
-        text:SetFont(font, size, flags)
-    else
-        text:SetFontObject(NumberFontNormal)
-    end
-    text:SetPoint("CENTER", button.icon or button, "CENTER", 0, 0)
-    button.uuDuration = text
-    ApplyDurationText(button)
 end
 
 -- Pandemic highlight on debuffs: the engine shows the region
@@ -375,7 +299,7 @@ StyleButton = function(button)
         stealableRing = true,
     })
     pcall(StylePandemic, button, style)
-    pcall(ApplyDurationText, button)
+    pcall(aurakit.UpdateDurationText, button, true)
     -- Every aura update restyles the button, which re-shows the dispel border;
     -- keep it hidden while the pandemic highlight is up.
     if button._uberInPandemic then pcall(HideDebuffBorders, button) end
@@ -418,6 +342,10 @@ local function NewContainer(holder)
     c:SetSize(1, 1)
     pcall(c.SetFlowLayoutPadding, c, 0, 0, 0, 0)
     if c.SetFlowLayoutSpacing then pcall(c.SetFlowLayoutSpacing, c, SPACING, SPACING) end
+    -- Nameplates put the stack count further out than the other locations
+    -- (Blizzard_NamePlateAuras.xml: BOTTOMRIGHT x=3 y=-2).
+    c._uberCountOffset = { 3, -2 }
+    c._uberCountScale = ICON_SIZE / BLIZZARD_AURA_SIZE
     return c
 end
 
@@ -427,7 +355,6 @@ local function AddGroup(c, key, filter, maxCount, isBuff, candidates, index)
         maxFrameCount = maxCount,
         initializeFrame = function(button)
             aurakit.InitAuraButton(c, button, key, isBuff, ICON_SIZE, false, StyleButton)
-            AddDurationText(button)
         end,
         layout = aurakit.MakeGroupLayout(ICON_SIZE, SPACING, SPACING, false, index, true),
     }

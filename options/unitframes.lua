@@ -79,6 +79,13 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
+        variable = "targetAuraDuration", name = "Target Aura Duration Text",
+        tooltip = "Show the time left on Target auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
+        db = "general", field = "targetauraduration", default = false,
+        onChange = RefreshTargetAuras,
+    });
+
+    opt.AddCheckbox(page, {
         variable = "targetbuffsShowDispel", name = "Target Highlight Purgeable Buffs",
         tooltip = opt.DispelTooltip("Target"),
         db = "general", field = "targetbuffs_showdispel", default = true,
@@ -169,6 +176,13 @@ function opt.BuildUnitFrames(page)
         loc = "focus", label = "Focus", suffix = "Focus",
         buffKey = "aurastyle_focusbuffs", debuffKey = "aurastyle_focusdebuffs",
         refresh = RefreshFocusAuraStyle,
+    });
+
+    opt.AddCheckbox(page, {
+        variable = "focusAuraDuration", name = "Focus Aura Duration Text",
+        tooltip = "Show the time left on Focus auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
+        db = "general", field = "focusauraduration", default = false,
+        onChange = RefreshFocusAuras,
     });
 
     opt.AddCheckbox(page, {

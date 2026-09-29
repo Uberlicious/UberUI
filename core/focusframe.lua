@@ -233,6 +233,7 @@ function focusframes:UpdateAuraButtonStyle(button)
     end
     local showDispel = uuidb and uuidb.general and uuidb.general.focusbuffs_showdispel
     aurakit.ApplyAuraButtonStyle(button, { style = style, showDispel = showDispel, squareLoc = "focus" })
+    aurakit.UpdateDurationText(button, uuidb and uuidb.general and uuidb.general.focusauraduration)
 end
 
 local FOCUS_TOP_X = 25

@@ -562,9 +562,27 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     textHolder:EnableMouse(false)
     button.textHolder = textHolder
 
+    -- Blizzard's own count offsets, which differ per location and are the same
+    -- on retail and Forever: target/focus/boss aura buttons use BOTTOMRIGHT
+    -- x=1 (TargetFrameAuraButton.xml), nameplates x=3 y=-2
+    -- (Blizzard_NamePlateAuras.xml). Both overhang rather than inset -- the
+    -- inset we used before pushed the count into the centred duration text.
+    -- Containers override via _uberCountOffset; the default is the target
+    -- frame's, which is what most callers are.
+    local countOffset = container and container._uberCountOffset
+    local countX = countOffset and countOffset[1] or 1
+    local countY = countOffset and countOffset[2] or 0
     local count = button.count or textHolder:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     count:ClearAllPoints()
-    count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", countX, countY)
+    -- Containers whose icons are smaller than Blizzard's shrink the count to
+    -- match via _uberCountScale. Sized from the font object, not the current
+    -- font, so re-initialising a button doesn't compound it.
+    local countScale = container and container._uberCountScale
+    if countScale and NumberFontNormalSmall then
+        local font, fsize, flags = NumberFontNormalSmall:GetFont()
+        if font then count:SetFont(font, math.max(6, math.floor(fsize * countScale + 0.5)), flags) end
+    end
     button.count = count
     if button.SetApplicationCount then
         pcall(button.SetApplicationCount, button, count, {})
@@ -663,6 +681,101 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     if updateStyleFn then
         updateStyleFn(button)
     end
+end
+
+-- Duration text in Blizzard's nameplate look, shared by every location that
+-- shows it. The duration is secret, so the engine formats it (whole seconds,
+-- rounded up) and colors it from a step curve on the remaining time: expiring
+-- color up to the threshold, normal up to 60 s, transparent above (Blizzard
+-- shows no number over a minute). The curve is copied at registration, so
+-- settings changes re-register. Colors and threshold are the nameplate ones.
+local DURATION_REF_SIZE = NamePlateConstants and NamePlateConstants.AURA_ITEM_HEIGHT or 25
+
+local function DurationSettings()
+    local g = uuidb and uuidb.general or {}
+    local threshold = tonumber(g.nameplatedurationthreshold) or 5
+    if threshold < 0 then threshold = 0 end
+    return g.nameplatedurationcolor or "ffffffff", g.nameplatedurationexpiringcolor or "ffff3333", threshold
+end
+
+local durationFormatter
+local durationOptions, durationOptionsKey
+local function GetDurationTextOptions()
+    local normal, expiring, threshold = DurationSettings()
+    local key = normal .. "|" .. expiring .. "|" .. threshold
+    if durationOptionsKey == key then return durationOptions, key end
+    durationOptionsKey = key
+    durationOptions = nil
+    pcall(function()
+        local opts = {}
+        if durationFormatter == nil then
+            durationFormatter = false
+            if C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum.NumericRuleFormatRounding then
+                local formatter = C_StringUtil.CreateNumericRuleFormatter()
+                formatter:AddBreakpoint({ threshold = 0, step = 1, rounding = Enum.NumericRuleFormatRounding.Up, format = "%d" })
+                durationFormatter = formatter
+            end
+        end
+        if durationFormatter then opts.textFormatter = durationFormatter end
+        if C_CurveUtil and C_CurveUtil.CreateColorCurve and Enum.DurationTextBindingProperty then
+            local n = UberUI.util.HexColor(normal) or CreateColor(1, 1, 1, 1)
+            local e = UberUI.util.HexColor(expiring) or CreateColor(1, 0.2, 0.2, 1)
+            local curve = C_CurveUtil.CreateColorCurve()
+            curve:SetType(Enum.LuaCurveType.Step)
+            curve:AddPoint(0, CreateColor(e.r, e.g, e.b, 1))
+            if threshold > 0 and threshold < 60 then
+                curve:AddPoint(threshold, CreateColor(n.r, n.g, n.b, 1))
+            end
+            curve:AddPoint(60.001, CreateColor(n.r, n.g, n.b, 0))
+            opts.textColor = { curve = curve, property = Enum.DurationTextBindingProperty.RemainingDuration }
+        end
+        durationOptions = opts
+    end)
+    return durationOptions, key
+end
+
+-- Creates, sizes, registers and shows (or hides) a button's duration text.
+-- Call from the location's style function; it's cheap when nothing changed.
+-- The font is the cooldown countdown font scaled by icon size against
+-- Blizzard's 25px nameplate aura, re-sized when the icon size changes.
+function aurakit.UpdateDurationText(button, enabled)
+    if not button or not button.SetDurationText then return end
+    local text = button.uuDuration
+    if not enabled then
+        if text then text:Hide() end
+        return
+    end
+    if not text then
+        text = (button.textHolder or button):CreateFontString(nil, "OVERLAY")
+        text:SetPoint("CENTER", button.icon or button, "CENTER", 0, 0)
+        local cdText = button.cooldown and button.cooldown.GetCountdownFontString and button.cooldown:GetCountdownFontString()
+        local font, size, flags
+        if cdText then font, size, flags = cdText:GetFont() end
+        if not font and NumberFontNormal then font, size, flags = NumberFontNormal:GetFont() end
+        button.uuDurationFont = font and { font, size, flags } or false
+        button.uuDuration = text
+    end
+
+    local iconSize = button.elementSize or DURATION_REF_SIZE
+    if button.uuDurationSize ~= iconSize then
+        local f = button.uuDurationFont
+        if f then
+            text:SetFont(f[1], math.max(6, math.floor(f[2] * iconSize / DURATION_REF_SIZE + 0.5)), f[3])
+        else
+            text:SetFontObject(NumberFontNormal)
+        end
+        button.uuDurationSize = iconSize
+    end
+
+    local opts, key = GetDurationTextOptions()
+    if button.uuDurationKey ~= key then
+        if opts and pcall(button.SetDurationText, button, text, opts) then
+            button.uuDurationKey = key
+        elseif not button.uuDurationKey then
+            pcall(button.SetDurationText, button, text) -- engine default, retried next style pass
+        end
+    end
+    text:Show()
 end
 
 -- Two permanent containers (debuffs, buffs), each with a "mine" (large) and
@@ -1045,16 +1158,16 @@ function aurakit.UpdatePairedPositions(opts)
     end
 end
 
--- Spellbar placement below the lowest aura row. The latch only stops the
--- spellbar's own AdjustPosition hook from re-triggering itself.
-local isAdjustingSpellbar = false
-
-function aurakit.TriggerSpellbarAdjust(spellbar)
-    if isAdjustingSpellbar or not spellbar.AdjustPosition then return end
-    isAdjustingSpellbar = true
-    pcall(spellbar.AdjustPosition, spellbar)
-    isAdjustingSpellbar = false
-end
+-- Spellbar placement below the lowest aura row: we record auraRows and
+-- spellbarAnchor, and Blizzard's own AdjustPosition reads them.
+--
+-- We must never call AdjustPosition ourselves. It opens with
+-- TargetFrame:ShouldAnchorSpellBarToAuraContainer(), which compares
+-- GetNumVisibleFlowLayoutLines() -- a secret aura-row count -- so a call
+-- originating here taints that comparison and the game blocks it. taintLog
+-- caught it as our largest source by far: 411 blocked comparisons in one
+-- retail session, 17 on Forever. Setting the fields is fine; triggering the
+-- placement is not, so we wait for Blizzard to run it.
 
 function aurakit.UpdateSpellbar(frameObj, containers)
     if InCombatLockdown() then return end
@@ -1065,7 +1178,6 @@ function aurakit.UpdateSpellbar(frameObj, containers)
     if frameObj.buffsOnTop then
         frameObj.auraRows = 0
         frameObj.spellbarAnchor = nil
-        aurakit.TriggerSpellbarAdjust(spellbar)
         return
     end
 
@@ -1092,7 +1204,6 @@ function aurakit.UpdateSpellbar(frameObj, containers)
     if #visibleButtons == 0 then
         frameObj.auraRows = 0
         frameObj.spellbarAnchor = nil
-        aurakit.TriggerSpellbarAdjust(spellbar)
         return
     end
 
@@ -1123,15 +1234,13 @@ function aurakit.UpdateSpellbar(frameObj, containers)
 
     frameObj.auraRows = rows
     frameObj.spellbarAnchor = lowestLeftBtn
-
-    aurakit.TriggerSpellbarAdjust(spellbar)
 end
 
 function aurakit.HookSpellbarAdjustPosition(spellbar, frameObj, getContainer)
     if not spellbar or not spellbar.AdjustPosition or spellbar._uberUIHooked then return end
     spellbar._uberUIHooked = true
     hooksecurefunc(spellbar, "AdjustPosition", function(self)
-        if isAdjustingSpellbar or InCombatLockdown() then return end
+        if InCombatLockdown() then return end
         local parent = self:GetParent()
         if parent ~= frameObj then return end
         local containers = getContainer and getContainer()

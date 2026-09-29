@@ -91,7 +91,6 @@ end
 -- live on a layer that ignores the plate's scale (whole-pixel thickness at
 -- any scale), and every texture meeting a strip has pixel snapping off like
 -- the strips -- mixed snapped/unsnapped edges round apart into hairline gaps.
-local IsForeverClient = UberUI.util.IsForeverClient
 
 -- Square border base color (Forever copper, retail silver), multiplied by
 -- the darkness color.
@@ -438,90 +437,11 @@ local function UpdateSelectionOutline(unitFrame, on)
     end
 end
 
--- Cast bar (Forever): its target/important-cast indicators reach above the
--- bar, into our square border and selection outline, so the bar moves down
--- until they clear. Only anchors pointing at CastBarsContainer shift, so the
--- bar's parts move together; Blizzard's anchors are re-captured after each
--- UpdateAnchors and restored when square mode is off.
-local function GetNameplateCastBar(unitFrame)
-    local container = unitFrame and unitFrame.CastBarsContainer
-    return container and container.castBar
-end
-
-local CAST_OVERLAY_BLEED = 4  -- CastTargetIndicator's reach above the bar, UI units
-local CAST_BAR_CLEARANCE = 1
-
-local function CastBarNudge(castBar)
-    local spacing = NamePlateSetupOptions and tonumber(NamePlateSetupOptions.castBarToHealthBarSpacing) or 2
-    local below = Px(castBar, BorderPx()) + Px(castBar, OUTLINE_PX)
-    return math.max(0, below + CAST_OVERLAY_BLEED + CAST_BAR_CLEARANCE - spacing)
-end
-
-local function CaptureOriginalPoints(region)
-    if not region or region:GetNumPoints() == 0 then return nil end
-    local points = {}
-    for i = 1, region:GetNumPoints() do
-        local ok, p1, p2, p3, p4, p5 = pcall(region.GetPoint, region, i)
-        if ok and p1 then
-            points[#points + 1] = { p1, p2, p3, p4 or 0, p5 or 0 }
-        end
-    end
-    return #points > 0 and points or nil
-end
-
-local castBarAnchors = setmetatable({}, { __mode = "k" }) -- castBar -> Blizzard's own anchors
-
-local function CaptureCastBarAnchors(castBar)
-    local saved = {}
-    for _, region in ipairs({ castBar, castBar.Icon, castBar.Border }) do
-        local points = CaptureOriginalPoints(region)
-        if points then saved[#saved + 1] = { region = region, points = points } end
-    end
-    return #saved > 0 and saved or nil
-end
-
-local function PlaceCastBar(castBar, saved, dy)
-    local container = castBar:GetParent()
-    for _, entry in ipairs(saved) do
-        local region = entry.region
-        region:ClearAllPoints()
-        for _, pt in ipairs(entry.points) do
-            local y = pt[5]
-            if pt[2] == container then y = y - dy end
-            region:SetPoint(pt[1], pt[2], pt[3], pt[4], y)
-        end
-    end
-end
-
-local function UpdateNameplateCastBarNudge(unitFrame, on)
-    local castBar = GetNameplateCastBar(unitFrame)
-    if not castBar or castBar:IsForbidden() then return end
-    local saved = castBarAnchors[castBar]
-    if not on then
-        if saved then
-            castBarAnchors[castBar] = nil
-            PlaceCastBar(castBar, saved, 0)
-        end
-        return
-    end
-    if not saved then
-        saved = CaptureCastBarAnchors(castBar)
-        if not saved then
-            return
-        end
-        castBarAnchors[castBar] = saved
-    end
-    local dy = CastBarNudge(castBar)
-    PlaceCastBar(castBar, saved, dy)
-end
-
 local function ApplySquareExtras(unitFrame, on)
     local ok, err = pcall(UpdateLevelBox, unitFrame, on)
     if not ok then ReportError("level box", err) end
     ok, err = pcall(UpdateSelectionOutline, unitFrame, on)
     if not ok then ReportError("selection outline", err) end
-    ok, err = pcall(UpdateNameplateCastBarNudge, unitFrame, on and IsForeverClient())
-    if not ok then ReportError("cast bar", err) end
 end
 
 local extrasPending = setmetatable({}, { __mode = "k" })
@@ -565,9 +485,9 @@ end
 
 -- Everything this file re-applies to a nameplate's health bar.
 local function ApplyBarLook(healthBar, unitFrame)
+    local square = SquareBorderOn()
     local tex = GetNameplateBarTexture()
     ApplyHealthBarTexture(healthBar, tex)
-    local square = SquareBorderOn()
     UpdateBarMask(healthBar, tex ~= nil and not square)
     UpdateSquareBorder(healthBar, square)
     if unitFrame then
@@ -580,10 +500,6 @@ local function EnsureUpdateAnchorsHook(unitFrame)
     if anchorHooked[unitFrame] or not unitFrame.UpdateAnchors then return end
     anchorHooked[unitFrame] = true
     hooksecurefunc(unitFrame, "UpdateAnchors", function(self)
-        -- Blizzard re-anchored the cast bar: drop our copy so the next pass
-        -- captures its fresh anchors (our own table only).
-        local cb = not self:IsForbidden() and GetNameplateCastBar(self)
-        if cb then castBarAnchors[cb] = nil end
         if anchorPending[self] then return end
         anchorPending[self] = true
         C_Timer.After(0, function()
