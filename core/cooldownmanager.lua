@@ -1,14 +1,6 @@
 local addon, ns = ...
 local cdManager = UberUI:CreateFrame("frame")
 local IsSecret, SafeShown = UberUI.util.IsSecret, UberUI.util.SafeShown
-
--- Diagnostic sink, set by core/cdmdebug.lua while /uicdmdebug is watching.
--- Nil (and free) otherwise.
-function CdmDebugLog(fmt, ...)
-    local sink = UberUI.cdmDebugLog
-    if not sink then return end
-    sink(fmt, ...)
-end
 local IsSquareBarBG, SquareBarsOn -- defined with the Tracked Bars code
 local darkenedBarArt = setmetatable({}, { __mode = "k" }) -- texture -> true
 
@@ -1255,9 +1247,10 @@ local function GetViewerAlign(viewer)
 end
 
 -- Re-pack as items show/hide, or as an item's own active/aura state changes
--- (procs, aura gain/loss) -- confirmed via /uicdmdebug that Blizzard's item
--- container has its own independent, always-on relayout path that resets our
--- positions on those same triggers without ever calling RefreshLayout.
+-- (procs, aura gain/loss). Blizzard's item container has its own independent,
+-- always-on relayout path (alwaysUpdateLayout) that resets our positions on
+-- those same triggers without ever calling RefreshLayout, so RefreshLayout
+-- alone is not a signal we can rely on.
 -- Hooking the container's own :Layout() to react to that (tried first)
 -- backfired: our own repositioning inside that hook perturbs the container's
 -- dirty-tracking, retriggering :Layout() again -> visible jitter. Hooking
@@ -1269,22 +1262,20 @@ local repackHooked = setmetatable({}, { __mode = "k" })
 local function EnsureRepackHook(f)
     if repackHooked[f] then return end
     repackHooked[f] = true
-    local function requeueFor(tag)
-        return function(self)
-            local p = self._uberViewer or (self.GetParent and self:GetParent())
-            if p and GetViewerAlign(p) ~= "blizzard" then QueueStyle(tag) end
-        end
+    local function requeue(self)
+        local p = self._uberViewer or (self.GetParent and self:GetParent())
+        if p and GetViewerAlign(p) ~= "blizzard" then QueueStyle() end
     end
-    f:HookScript("OnShow", requeueFor("item:OnShow"))
-    f:HookScript("OnHide", requeueFor("item:OnHide"))
+    f:HookScript("OnShow", requeue)
+    f:HookScript("OnHide", requeue)
     if f.OnActiveStateChanged then
-        pcall(hooksecurefunc, f, "OnActiveStateChanged", requeueFor("item:ActiveStateChanged"))
+        pcall(hooksecurefunc, f, "OnActiveStateChanged", requeue)
     end
     if f.OnUnitAuraAddedEvent then
-        pcall(hooksecurefunc, f, "OnUnitAuraAddedEvent", requeueFor("item:AuraAdded"))
+        pcall(hooksecurefunc, f, "OnUnitAuraAddedEvent", requeue)
     end
     if f.OnUnitAuraRemovedEvent then
-        pcall(hooksecurefunc, f, "OnUnitAuraRemovedEvent", requeueFor("item:AuraRemoved"))
+        pcall(hooksecurefunc, f, "OnUnitAuraRemovedEvent", requeue)
     end
 end
 
@@ -1421,7 +1412,6 @@ local function ApplyCustomViewerLayout(viewer)
 
     local numItems = #items
     local numLines = math.ceil(numItems / stride)
-    local moved = 0
     for k = 1, numItems do
         local line = math.floor((k - 1) / stride)
         local i = (k - 1) % stride
@@ -1458,13 +1448,10 @@ local function ApplyCustomViewerLayout(viewer)
             end
         end)
         if not settled then
-            moved = moved + 1
             item:ClearAllPoints()
             item:SetPoint(point, viewer, point, wantX, wantY)
         end
     end
-    CdmDebugLog("%-22s layout    align=%-8s count=%d moved=%d", tostring(viewer.GetName and viewer:GetName()),
-        align, numItems, moved)
 
     -- Moved: re-align the art to whole pixels.
     for k = 1, numItems do
@@ -1479,14 +1466,11 @@ end
 -- Viewers re-create item frames when they lay out: restyle once it's done.
 local layoutHooked = false
 local stylePending = false
-function QueueStyle(reason)
-    CdmDebugLog("queue     reason=%s%s", tostring(reason or "?"), stylePending and " (coalesced)" or "")
+function QueueStyle()
     if stylePending then return end
     stylePending = true
-    local queuedAt = GetTime()
     C_Timer.After(0, function()
         stylePending = false
-        CdmDebugLog("apply:start  waited=%.3f", GetTime() - queuedAt)
         cdManager:Texture()
         cdManager:Color()
         cdManager:StyleIcons()
@@ -1494,7 +1478,6 @@ function QueueStyle(reason)
             local v = _G[name]
             if v then pcall(ApplyCustomViewerLayout, v) end
         end
-        CdmDebugLog("apply:done")
     end)
 end
 
@@ -1505,7 +1488,7 @@ local function EnsureLayoutHooks()
         local viewer = _G[name]
         if viewer and viewer.RefreshLayout then
             hooksecurefunc(viewer, "RefreshLayout", function(self)
-                QueueStyle("RefreshLayout")
+                QueueStyle()
             end)
         end
         -- Do NOT hook the item container's own :Layout() here: its
@@ -1544,17 +1527,17 @@ local function RegisterCooldownCallbacks()
     if cdManager._callbackRegistered then return end
 
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnEnterItem", function(cooldownItem)
-        QueueStyle("settings:OnEnterItem")
+        QueueStyle()
     end, cdManager)
 
     EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
-        QueueStyle("settings:OnDataChanged")
+        QueueStyle()
     end, cdManager)
 
     if EventRegistry.RegisterCallback then
         pcall(function()
             EventRegistry:RegisterCallback("EditMode.Exit", function()
-                QueueStyle("editmode:exit")
+                QueueStyle()
             end, cdManager)
         end)
     end
@@ -1562,7 +1545,7 @@ local function RegisterCooldownCallbacks()
     if EditModeManagerFrame and EditModeManagerFrame.HookScript then
         pcall(function()
             EditModeManagerFrame:HookScript("OnHide", function()
-                QueueStyle("editmode:hide")
+                QueueStyle()
             end)
         end)
     end
@@ -1587,13 +1570,13 @@ cdManager:RegisterEvent("PLAYER_TARGET_CHANGED")
 
 cdManager:SetScript("OnEvent", function(self, event, addon)
     if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
-        QueueStyle("uiscale")
+        QueueStyle()
         return
     end
     if event == "PLAYER_TARGET_CHANGED" then
-        QueueStyle("targetchanged")
-        C_Timer.After(0.1, function() QueueStyle("targetchanged+0.1") end)
-        C_Timer.After(0.3, function() QueueStyle("targetchanged+0.3") end)
+        QueueStyle()
+        C_Timer.After(0.1, QueueStyle)
+        C_Timer.After(0.3, QueueStyle)
         return
     end
     if event == "ADDON_LOADED" and addon == "Blizzard_CooldownViewer" then

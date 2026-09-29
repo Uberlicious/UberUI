@@ -49,6 +49,5 @@ core\minimap.lua
 core\buffsandauras.lua
 core\playerdebuffs.lua
 core\cooldownmanager.lua
-core\cdmdebug.lua
 core\damagemeter.lua
 core\personalresource.lua
