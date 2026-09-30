@@ -177,8 +177,11 @@ local defaults = {
         namehealthstyle              = "off",
         namehealthhidefull           = true,
         namehealthunderlinethickness = 1,
+        namehealthunderlineside      = "BELOW",
+        namehealthunderlineoffset    = 0,
         namehealthdotsize            = 5,
         namehealthdotside            = "LEFT",
+        namehealthdotoffset          = 0,
         darkenaddonminimapbuttons    = true,
     },
     damagemeters = {

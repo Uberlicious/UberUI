@@ -39,6 +39,45 @@ local function Style()
     return (s == "underline" or s == "dot" or s == "name") and s or nil
 end
 
+local function UnderlineAbove()
+    local g = Settings()
+    return g and g.namehealthunderlineside == "ABOVE"
+end
+
+-- Gap between name and bar: the base gap plus the Underline Offset setting
+-- (screen pixels; negative tucks the bar into the text's outline).
+local function UnderlineGap(px)
+    local g = Settings()
+    return UNDERLINE_GAP + (tonumber(g and g.namehealthunderlineoffset) or 0) * px
+end
+
+local function DotSide()
+    local g = Settings()
+    local v = g and g.namehealthdotside
+    return (v == "RIGHT" or v == "TOP" or v == "BOTTOM") and v or "LEFT"
+end
+
+-- Gap between name and dot: the base gap plus the Dot Offset setting.
+local function DotGap(px)
+    local g = Settings()
+    return DOT_GAP + (tonumber(g and g.namehealthdotoffset) or 0) * px
+end
+
+-- Anchors a dot on `side` of `anchor` (the name's text box).
+local function PlaceDot(dot, anchor, px)
+    local side, gap = DotSide(), DotGap(px)
+    dot:ClearAllPoints()
+    if side == "RIGHT" then
+        dot:SetPoint("LEFT", anchor, "RIGHT", gap, 0)
+    elseif side == "TOP" then
+        dot:SetPoint("BOTTOM", anchor, "TOP", 0, gap)
+    elseif side == "BOTTOM" then
+        dot:SetPoint("TOP", anchor, "BOTTOM", 0, -gap)
+    else
+        dot:SetPoint("RIGHT", anchor, "LEFT", -gap, 0)
+    end
+end
+
 local function HideAtFull()
     local g = Settings()
     return not g or g.namehealthhidefull ~= false
@@ -158,20 +197,20 @@ local function Layout(w, fs, style)
         -- the last letter, so pull each end in to match the visible text.
         local inset = UNDERLINE_INSET * px
         local bar = w.underline
+        local gap = UnderlineGap(px)
         bar:ClearAllPoints()
-        bar:SetPoint("TOPLEFT", w.box, "BOTTOMLEFT", inset, -UNDERLINE_GAP)
-        bar:SetPoint("TOPRIGHT", w.box, "BOTTOMRIGHT", -inset, -UNDERLINE_GAP)
+        if UnderlineAbove() then
+            bar:SetPoint("BOTTOMLEFT", w.box, "TOPLEFT", inset, gap)
+            bar:SetPoint("BOTTOMRIGHT", w.box, "TOPRIGHT", -inset, gap)
+        else
+            bar:SetPoint("TOPLEFT", w.box, "BOTTOMLEFT", inset, -gap)
+            bar:SetPoint("TOPRIGHT", w.box, "BOTTOMRIGHT", -inset, -gap)
+        end
         bar:SetHeight((tonumber(g.namehealthunderlinethickness) or 1) * px)
     elseif style == "dot" then
         local size = tonumber(g.namehealthdotsize) or 5
-        local dot = w.dot
-        dot:ClearAllPoints()
-        dot:SetSize(size, size)
-        if g.namehealthdotside == "RIGHT" then
-            dot:SetPoint("LEFT", w.box, "RIGHT", DOT_GAP, 0)
-        else
-            dot:SetPoint("RIGHT", w.box, "LEFT", -DOT_GAP, 0)
-        end
+        w.dot:SetSize(size, size)
+        PlaceDot(w.dot, w.box, px)
     end
     w.underline:SetShown(style == "underline")
     w.dot:SetShown(style == "dot")
@@ -389,38 +428,71 @@ local function SampleColor(pct, classFile, style)
     return r, g, b, alpha
 end
 
+local LABEL_GAP = 3
+local LABEL_HEIGHT = 10
+local PREVIEW_EDGE = 8 -- left margin before the first name's decorations
+
 local function UpdatePreview(preview)
     local style = Style()
     local g = Settings()
-    for _, s in ipairs(preview.samples) do
+    local px = OnePixel(preview)
+    local thick = (tonumber(g.namehealthunderlinethickness) or 1) * px
+    local size = tonumber(g.namehealthdotsize) or 5
+    local side = DotSide()
+
+    -- How far the decoration reaches past the name on each side, so the names
+    -- can be spaced and centered to fit it.
+    local left, right, above, below = 0, 0, 0, 0
+    if style == "underline" then
+        local reach = math.max(0, UnderlineGap(px) + thick)
+        if UnderlineAbove() then above = reach else below = reach end
+    elseif style == "dot" then
+        local reach = math.max(0, DotGap(px) + size)
+        if side == "LEFT" then left = reach
+        elseif side == "RIGHT" then right = reach
+        elseif side == "TOP" then above = reach
+        else below = reach end
+    end
+
+    for i, s in ipairs(preview.samples) do
         local fs, pct, classFile = s.fs, s.pct, s.classFile
         if style == "name" then
             fs:SetTextColor(SampleColor(pct, classFile, style))
         else
             fs:SetTextColor(ClassRGB(classFile))
         end
-        local width = fs:GetStringWidth()
-        local px = OnePixel(fs)
+
+        s.holder:ClearAllPoints()
+        if i == 1 then
+            -- Vertically centered on name + decoration + label as a group.
+            local y = ((below + LABEL_GAP + LABEL_HEIGHT) - above) / 2
+            s.holder:SetPoint("LEFT", preview, "LEFT", PREVIEW_EDGE + left, y)
+        else
+            s.holder:SetPoint("LEFT", preview.samples[i - 1].fs, "RIGHT", SAMPLE_SPACING + left + right, 0)
+        end
+
         if style == "underline" then
             local inset = UNDERLINE_INSET * px
-            local full = math.max(width - 2 * inset, px)
+            local full = math.max(fs:GetStringWidth() - 2 * inset, px)
             s.bar:ClearAllPoints()
-            s.bar:SetPoint("TOPLEFT", fs, "BOTTOMLEFT", inset, -UNDERLINE_GAP)
-            s.bar:SetSize(math.max(full * pct, px), (tonumber(g.namehealthunderlinethickness) or 1) * px)
+            if UnderlineAbove() then
+                s.bar:SetPoint("BOTTOMLEFT", fs, "TOPLEFT", inset, UnderlineGap(px))
+            else
+                s.bar:SetPoint("TOPLEFT", fs, "BOTTOMLEFT", inset, -UnderlineGap(px))
+            end
+            s.bar:SetSize(math.max(full * pct, px), thick)
             s.bar:SetVertexColor(SampleColor(pct, classFile, style))
         elseif style == "dot" then
-            local size = tonumber(g.namehealthdotsize) or 5
-            s.dot:ClearAllPoints()
             s.dot:SetSize(size, size)
-            if g.namehealthdotside == "RIGHT" then
-                s.dot:SetPoint("LEFT", fs, "RIGHT", DOT_GAP, 0)
-            else
-                s.dot:SetPoint("RIGHT", fs, "LEFT", -DOT_GAP, 0)
-            end
+            PlaceDot(s.dot, fs, px)
             s.dot:SetVertexColor(SampleColor(pct, classFile, style))
         end
         s.bar:SetShown(style == "underline")
         s.dot:SetShown(style == "dot")
+
+        -- Health label kept clear of anything under the name.
+        s.label:ClearAllPoints()
+        s.label:SetPoint("TOP", fs, "BOTTOM", 0, -(below + LABEL_GAP))
     end
 end
 
@@ -428,32 +500,26 @@ end
 -- redraws it from the current settings.
 function namehealth.CreatePreview(parent)
     local preview = CreateFrame("Frame", nil, parent)
-    preview:SetSize(300, 52)
+    preview:SetSize(300, 84)
     local bg = preview:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(0, 0, 0, 0.55)
 
     local font = _G.SystemFont_NamePlate or GameFontHighlightSmall
     preview.samples = {}
-    local prev
     for i, info in ipairs(SAMPLES) do
         local s = { classFile = info[2], pct = info[3] }
-        -- Room on the left for a dot on the first name.
+        -- Positioned in UpdatePreview.
         local holder = CreateFrame("Frame", nil, preview)
         holder:SetSize(1, 1)
-        if prev then
-            holder:SetPoint("LEFT", prev, "RIGHT", SAMPLE_SPACING, 0)
-        else
-            holder:SetPoint("LEFT", preview, "LEFT", 22, 7)
-        end
+        s.holder = holder
         s.fs = holder:CreateFontString(nil, "OVERLAY")
         s.fs:SetFontObject(font)
         s.fs:SetText(info[1])
         s.fs:SetPoint("LEFT", holder, "LEFT", 0, 0)
-        -- Health label under each name, clear of the thickest underline.
+        -- Health label under each name (placed in UpdatePreview).
         s.label = holder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         s.label:SetText(math.floor(info[3] * 100 + 0.5) .. "%")
-        s.label:SetPoint("TOP", s.fs, "BOTTOM", 0, -9)
         s.bar = holder:CreateTexture(nil, "OVERLAY")
         s.bar:SetTexture(WHITE)
         s.dot = holder:CreateTexture(nil, "OVERLAY")
@@ -462,7 +528,6 @@ function namehealth.CreatePreview(parent)
         mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
         mask:SetAllPoints(s.dot)
         s.dot:AddMaskTexture(mask)
-        prev = s.fs
         preview.samples[i] = s
     end
 

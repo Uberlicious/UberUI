@@ -193,7 +193,7 @@ function opt.BuildNameplates(page)
 
     local nameHealthInit = opt.AddDropdown(page, {
         variable = "NameHealthStyle", name = "Friendly Name Health",
-        tooltip = "Show friendly players' health on name-only nameplates, colored from red (low) through orange and yellow to green (full).\n\nUnderline: a thin health bar under the name.\n\nDot: a small dot beside the name.\n\nName Color: tints the name itself; at full health it's the class color.\n\nOnly works outside instances -- Blizzard locks friendly nameplates in dungeons and raids.",
+        tooltip = "Show friendly players' health on name-only nameplates, colored from red (low) through orange and yellow to green (full).\n\nUnderline: a thin health bar under (or above) the name.\n\nDot: a small dot beside the name.\n\nName Color: tints the name itself; at full health it's the class color.\n\nOnly works outside instances -- Blizzard locks friendly nameplates in dungeons and raids.",
         default = "off",
         values = { { "off", "Off" }, { "underline", "Underline" }, { "dot", "Dot" }, { "name", "Name Color" } },
         get = NameHealthStyle,
@@ -204,7 +204,7 @@ function opt.BuildNameplates(page)
     opt.AddPreview(page, {
         name = "Preview",
         tooltip = "Sample names at full, half and low health, drawn with the settings in this section.",
-        height = 62,
+        height = 94,
         create = function(parent)
             local nh = UberUI.namehealth
             if not nh then return nil end
@@ -228,6 +228,24 @@ function opt.BuildNameplates(page)
         onChange = RefreshNameHealth,
     }), nameHealthInit, function() return NameHealthStyle() == "underline" end);
 
+    opt.DependsOn(opt.AddDropdown(page, {
+        variable = "NameHealthUnderlineSide", name = "Underline Position",
+        tooltip = "Whether the health bar sits under or above the name.",
+        default = "BELOW",
+        values = { { "BELOW", "Under Name" }, { "ABOVE", "Above Name" } },
+        get = function() return uuidb.general and uuidb.general.namehealthunderlineside == "ABOVE" and "ABOVE" or "BELOW" end,
+        set = function(value) uuidb.general.namehealthunderlineside = value end,
+        onChange = RefreshNameHealth,
+    }), nameHealthInit, function() return NameHealthStyle() == "underline" end);
+
+    opt.DependsOn(opt.AddSlider(page, {
+        variable = "NameHealthUnderlineOffset", name = "Underline Offset",
+        tooltip = "Extra space between the name and the health bar, in screen pixels. Negative values tuck the bar into the name's outline.",
+        db = "general", field = "namehealthunderlineoffset", default = 0,
+        min = -2, max = 8, step = 1,
+        onChange = RefreshNameHealth,
+    }), nameHealthInit, function() return NameHealthStyle() == "underline" end);
+
     opt.DependsOn(opt.AddSlider(page, {
         variable = "NameHealthDotSize", name = "Dot Size",
         tooltip = "Size of the health dot.",
@@ -237,12 +255,23 @@ function opt.BuildNameplates(page)
     }), nameHealthInit, function() return NameHealthStyle() == "dot" end);
 
     opt.DependsOn(opt.AddDropdown(page, {
-        variable = "NameHealthDotSide", name = "Dot Side",
-        tooltip = "Which side of the name the health dot sits on.",
+        variable = "NameHealthDotSide", name = "Dot Position",
+        tooltip = "Which side of the name the health dot sits on. Above and Below center it over or under the name.",
         default = "LEFT",
-        values = { { "LEFT", "Left" }, { "RIGHT", "Right" } },
-        get = function() return uuidb.general and uuidb.general.namehealthdotside == "RIGHT" and "RIGHT" or "LEFT" end,
+        values = { { "LEFT", "Left" }, { "RIGHT", "Right" }, { "TOP", "Above" }, { "BOTTOM", "Below" } },
+        get = function()
+            local v = uuidb.general and uuidb.general.namehealthdotside
+            return (v == "RIGHT" or v == "TOP" or v == "BOTTOM") and v or "LEFT"
+        end,
         set = function(value) uuidb.general.namehealthdotside = value end,
+        onChange = RefreshNameHealth,
+    }), nameHealthInit, function() return NameHealthStyle() == "dot" end);
+
+    opt.DependsOn(opt.AddSlider(page, {
+        variable = "NameHealthDotOffset", name = "Dot Offset",
+        tooltip = "Extra space between the name and the health dot, in screen pixels. Negative values pull the dot in toward the name.",
+        db = "general", field = "namehealthdotoffset", default = 0,
+        min = -3, max = 8, step = 1,
         onChange = RefreshNameHealth,
     }), nameHealthInit, function() return NameHealthStyle() == "dot" end);
 
