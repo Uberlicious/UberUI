@@ -39,6 +39,7 @@ core\miscframes.lua
 core\swingtimers.lua
 core\nameplates.lua
 core\nameplateauras.lua
+core\namehealth.lua
 core\compactunitframe.lua
 core\compactauras.lua
 core\partyframes.lua

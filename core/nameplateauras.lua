@@ -27,7 +27,6 @@ local nameplateauras = {}
 
 local SQUARE_LOC = "nameplate"
 local ICON_SIZE = 22
-local BLIZZARD_AURA_SIZE = NamePlateConstants and NamePlateConstants.AURA_ITEM_HEIGHT or 25
 local SPACING = 3                         -- 22 + 3 = Blizzard's 25px pitch
 -- Extra gap from the health bar: our borders draw outside the icon.
 local SIDE_GAP = 3
@@ -345,7 +344,6 @@ local function NewContainer(holder)
     -- Nameplates put the stack count further out than the other locations
     -- (Blizzard_NamePlateAuras.xml: BOTTOMRIGHT x=3 y=-2).
     c._uberCountOffset = { 3, -2 }
-    c._uberCountScale = ICON_SIZE / BLIZZARD_AURA_SIZE
     return c
 end
 

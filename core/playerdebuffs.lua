@@ -213,6 +213,7 @@ local function Build()
     if not ok or not c then return end
     container = c
     container:SetSize(1, 1)
+    container._uberCountRefSize = ICON_SIZE
     container:SetFrameLevel(DebuffFrame:GetFrameLevel() + 2)
     container:SetFlowLayoutPadding(0, 0, 0, 0)
 

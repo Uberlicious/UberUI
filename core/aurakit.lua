@@ -18,6 +18,27 @@ aurakit.IsSecret = IsSecret
 aurakit.SafeBool = SafeBool
 aurakit.SafeIsForbidden = SafeIsForbidden
 
+-- Blizzard's nameplate aura size. The duration text scales against it
+-- everywhere (its font is the nameplate countdown font); it's also the
+-- default stack count reference.
+local TEXT_REF_SIZE = NamePlateConstants and NamePlateConstants.AURA_ITEM_HEIGHT or 25
+
+-- Sizes the stack count to the button's icon size, against the container's
+-- _uberCountRefSize: the location's stock icon size, where Blizzard draws
+-- NumberFontNormalSmall unscaled. Sized from the font object, not the current
+-- font, so repeated calls don't compound; re-sized only when the size changes.
+local function UpdateCountSize(button)
+    local count = button.count
+    if not count or not NumberFontNormalSmall then return end
+    local iconSize = button.elementSize or TEXT_REF_SIZE
+    if button.uuCountSize == iconSize then return end
+    local font, fsize, flags = NumberFontNormalSmall:GetFont()
+    if not font then return end
+    local refSize = button.container and button.container._uberCountRefSize or TEXT_REF_SIZE
+    count:SetFont(font, math.max(6, math.floor(fsize * iconSize / refSize + 0.5)), flags)
+    button.uuCountSize = iconSize
+end
+
 -- When a unit is in another zone the engine can fail to resolve an aura's
 -- source, and the aura then matches both "|PLAYER" and "|!PLAYER". Detected
 -- so the "mine" group can be hidden and the aura shows once, in "other".
@@ -575,15 +596,8 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     local count = button.count or textHolder:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     count:ClearAllPoints()
     count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", countX, countY)
-    -- Containers whose icons are smaller than Blizzard's shrink the count to
-    -- match via _uberCountScale. Sized from the font object, not the current
-    -- font, so re-initialising a button doesn't compound it.
-    local countScale = container and container._uberCountScale
-    if countScale and NumberFontNormalSmall then
-        local font, fsize, flags = NumberFontNormalSmall:GetFont()
-        if font then count:SetFont(font, math.max(6, math.floor(fsize * countScale + 0.5)), flags) end
-    end
     button.count = count
+    UpdateCountSize(button)
     if button.SetApplicationCount then
         pcall(button.SetApplicationCount, button, count, {})
     end
@@ -689,8 +703,6 @@ end
 -- color up to the threshold, normal up to 60 s, transparent above (Blizzard
 -- shows no number over a minute). The curve is copied at registration, so
 -- settings changes re-register. Colors and threshold are the nameplate ones.
-local DURATION_REF_SIZE = NamePlateConstants and NamePlateConstants.AURA_ITEM_HEIGHT or 25
-
 local function DurationSettings()
     local g = uuidb and uuidb.general or {}
     local threshold = tonumber(g.nameplatedurationthreshold) or 5
@@ -756,11 +768,11 @@ function aurakit.UpdateDurationText(button, enabled)
         button.uuDuration = text
     end
 
-    local iconSize = button.elementSize or DURATION_REF_SIZE
+    local iconSize = button.elementSize or TEXT_REF_SIZE
     if button.uuDurationSize ~= iconSize then
         local f = button.uuDurationFont
         if f then
-            text:SetFont(f[1], math.max(6, math.floor(f[2] * iconSize / DURATION_REF_SIZE + 0.5)), f[3])
+            text:SetFont(f[1], math.max(6, math.floor(f[2] * iconSize / TEXT_REF_SIZE + 0.5)), f[3])
         else
             text:SetFontObject(NumberFontNormal)
         end
@@ -793,6 +805,8 @@ function aurakit.BuildAuraContainer(opts)
     if not okC or not container then return nil end
 
     container:SetSize(1, 1)
+    -- Blizzard draws the count unscaled on the large ("mine") icons.
+    container._uberCountRefSize = opts.largeSize
     if opts.parentFrame and opts.parentFrame.GetFrameLevel then
         container:SetFrameLevel(opts.parentFrame:GetFrameLevel() + opts.frameLevelBonus)
     end
@@ -854,7 +868,8 @@ end
 -- isBuff is explicit: Blizzard's ProcessAura can put a HELPFUL aura (boss
 -- buffs) in a debuff-styled group.
 -- opts: { name, parentFrame, frameLevelBonus, spacing, maxLineSize,
---         processAura, groups, updateStyleFn(button) }
+--         processAura, groups, countRefSize, updateStyleFn(button) }
+-- countRefSize: the location's stock icon size (see UpdateCountSize).
 -- The unit starts unset; callers SetUnit() a real unit (never a "player"
 -- placeholder, or an unassigned container shows the player's auras).
 function aurakit.BuildGroupedAuraContainer(opts)
@@ -864,6 +879,7 @@ function aurakit.BuildGroupedAuraContainer(opts)
     if not okC or not container then return nil end
 
     container:SetSize(1, 1)
+    container._uberCountRefSize = opts.countRefSize
     if opts.parentFrame and opts.parentFrame.GetFrameLevel then
         container:SetFrameLevel(opts.parentFrame:GetFrameLevel() + (opts.frameLevelBonus or 0))
     end
@@ -943,6 +959,7 @@ function aurakit.SetGroupedContainerSizes(container, sizes, updateStyleFn)
                     if btn.groupKey == key then
                         btn.elementSize = size
                         pcall(btn.SetSize, btn, size, size)
+                        UpdateCountSize(btn)
                         if updateStyleFn then pcall(updateStyleFn, btn) end
                     end
                 end

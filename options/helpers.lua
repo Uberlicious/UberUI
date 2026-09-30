@@ -80,6 +80,49 @@ function opt.DependsOn(childInitializer, parentInitializer, isEnabled)
     end
 end
 
+-- Preview row ----------------------------------------------------------------
+
+-- A list row with a label and a custom preview frame in the control column.
+-- o: name, tooltip, height, create(parent) -> frame (made once, reused; it
+-- should redraw itself OnShow). The settings list pools its rows, so the
+-- frame moves to whichever row is showing this entry and is hidden when that
+-- row is recycled.
+function opt.AddPreview(page, o)
+    local initializer = Settings.CreateElementInitializer("SettingsListElementTemplate",
+        { name = o.name, tooltip = o.tooltip });
+    local preview
+    initializer.GetExtent = function() return o.height or 45 end
+    -- The bare template never runs SettingsListElementMixin's OnLoad (only
+    -- its subclasses call it), so its Init/Release can't be used; the label
+    -- and tooltip are set up here instead.
+    initializer.InitFrame = function(self, frame)
+        frame.Text:SetFontObject("GameFontNormal");
+        frame.Text:SetText(o.name);
+        frame.Text:ClearAllPoints();
+        frame.Text:SetPoint("LEFT", 37, 0);
+        frame.Text:SetPoint("RIGHT", frame, "CENTER", -85, 0);
+        frame.Text:Show();
+        if frame.NewFeature then frame.NewFeature:Hide() end
+        if frame.Tooltip and DefaultTooltipMixin then
+            DefaultTooltipMixin.SetTooltipFunc(frame.Tooltip, function()
+                Settings.InitTooltip(o.name, o.tooltip);
+            end);
+        end
+        preview = preview or o.create(frame);
+        if not preview then return end
+        preview:SetParent(frame);
+        preview:ClearAllPoints();
+        preview:SetPoint("LEFT", frame, "CENTER", -80, 0);
+        preview:Hide();
+        preview:Show();
+    end
+    initializer.Resetter = function(self, frame)
+        if preview and preview:GetParent() == frame then preview:Hide() end
+    end
+    page.layout:AddInitializer(initializer);
+    return initializer;
+end
+
 -- Generic dropdown -----------------------------------------------------------
 
 -- o: variable, name, tooltip, default, values = { {value, label}, ... },

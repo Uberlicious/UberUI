@@ -181,6 +181,71 @@ function opt.BuildNameplates(page)
         return PandemicOn() and not (uuidb.general and uuidb.general.nameplatepandemicclasscolor)
     end);
 
+    opt.Header(page, "Friendly Name Health");
+
+    local function RefreshNameHealth()
+        if UberUI.namehealth then UberUI.namehealth:Refresh() end
+    end
+    local function NameHealthStyle()
+        local v = uuidb.general and uuidb.general.namehealthstyle
+        return (v == "underline" or v == "dot" or v == "name") and v or "off"
+    end
+
+    local nameHealthInit = opt.AddDropdown(page, {
+        variable = "NameHealthStyle", name = "Friendly Name Health",
+        tooltip = "Show friendly players' health on name-only nameplates, colored from red (low) through orange and yellow to green (full).\n\nUnderline: a thin health bar under the name.\n\nDot: a small dot beside the name.\n\nName Color: tints the name itself; at full health it's the class color.\n\nOnly works outside instances -- Blizzard locks friendly nameplates in dungeons and raids.",
+        default = "off",
+        values = { { "off", "Off" }, { "underline", "Underline" }, { "dot", "Dot" }, { "name", "Name Color" } },
+        get = NameHealthStyle,
+        set = function(value) uuidb.general.namehealthstyle = value end,
+        onChange = RefreshNameHealth,
+    });
+
+    opt.AddPreview(page, {
+        name = "Preview",
+        tooltip = "Sample names at full, half and low health, drawn with the settings in this section.",
+        height = 62,
+        create = function(parent)
+            local nh = UberUI.namehealth
+            if not nh then return nil end
+            nh.preview = nh.preview or nh.CreatePreview(parent)
+            return nh.preview
+        end,
+    });
+
+    opt.DependsOn(opt.AddCheckbox(page, {
+        variable = "NameHealthHideFull", name = "Hide at Full Health",
+        tooltip = "Hide the underline or dot while the player is at full health.",
+        db = "general", field = "namehealthhidefull", default = true,
+        onChange = RefreshNameHealth,
+    }), nameHealthInit, function() local s = NameHealthStyle() return s == "underline" or s == "dot" end);
+
+    opt.DependsOn(opt.AddSlider(page, {
+        variable = "NameHealthUnderlineThickness", name = "Underline Thickness",
+        tooltip = "Thickness of the health underline, in screen pixels.",
+        db = "general", field = "namehealthunderlinethickness", default = 1,
+        min = 1, max = 6, step = 1,
+        onChange = RefreshNameHealth,
+    }), nameHealthInit, function() return NameHealthStyle() == "underline" end);
+
+    opt.DependsOn(opt.AddSlider(page, {
+        variable = "NameHealthDotSize", name = "Dot Size",
+        tooltip = "Size of the health dot.",
+        db = "general", field = "namehealthdotsize", default = 5,
+        min = 2, max = 16, step = 1,
+        onChange = RefreshNameHealth,
+    }), nameHealthInit, function() return NameHealthStyle() == "dot" end);
+
+    opt.DependsOn(opt.AddDropdown(page, {
+        variable = "NameHealthDotSide", name = "Dot Side",
+        tooltip = "Which side of the name the health dot sits on.",
+        default = "LEFT",
+        values = { { "LEFT", "Left" }, { "RIGHT", "Right" } },
+        get = function() return uuidb.general and uuidb.general.namehealthdotside == "RIGHT" and "RIGHT" or "LEFT" end,
+        set = function(value) uuidb.general.namehealthdotside = value end,
+        onChange = RefreshNameHealth,
+    }), nameHealthInit, function() return NameHealthStyle() == "dot" end);
+
     opt.Header(page, "Friendly Raid Target Icons");
 
     opt.AddSlider(page, {

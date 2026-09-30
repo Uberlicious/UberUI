@@ -1,6 +1,7 @@
 -- Swing timers (WoW Forever).
 local swingtimers = {}
 local retextured = setmetatable({}, { __mode = "k" })
+local tinted = setmetatable({}, { __mode = "k" }) -- Blizzard atlas fills we desaturated + tinted
 
 local FRAMES = {
     { name = "SwingTimerMainHandFrame", colorField = "swingtimermainhandcolor", default = "ffffc21a" },
@@ -11,6 +12,21 @@ swingtimers.FRAMES = FRAMES
 
 local function HexColor(hex, fallbackHex)
     return UberUI.util.HexColor(hex) or UberUI.util.HexColor(fallbackHex)
+end
+
+-- Fill tint for one bar per the Swing Timer Bar Color dropdown, or nil for
+-- "none" (no tint).
+local function BarColor(g, def)
+    local mode = g.swingtimerbarcolor
+    if mode == "class" then
+        local c = UberUI.util.ClassColor(select(2, UnitClass("player")))
+        if c then return c end
+        mode = "custom"
+    end
+    if mode == "custom" then
+        return HexColor(g[def.colorField], def.default)
+    end
+    return nil
 end
 
 local function GetSwingTexture()
@@ -40,11 +56,35 @@ local function NewPart(owner, layer, sublevel)
     return t
 end
 
+-- Blizzard insets the bar inside the Edit Mode frame to leave room for the
+-- rounded art (Blizzard_SwingTimer.xml). Square mode instead has the bar fill
+-- the frame minus the border, so the Edit Mode box matches what's drawn and
+-- snapped bars sit flush.
+local BLIZZ_INSET_X, BLIZZ_INSET_Y = 5, 4
+local barReanchored = setmetatable({}, { __mode = "k" }) -- statusBar -> true
+
+local function AnchorBar(frame, bar, insetX, insetY)
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", frame, "TOPLEFT", insetX, -insetY)
+    bar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -insetX, insetY)
+end
+
+local function UpdateBarInset(frame, bar, square, w)
+    if square then
+        AnchorBar(frame, bar, w, w)
+        barReanchored[bar] = true
+    elseif barReanchored[bar] then
+        barReanchored[bar] = nil
+        AnchorBar(frame, bar, BLIZZ_INSET_X, BLIZZ_INSET_Y)
+    end
+end
+
 local function UpdateSquareBorder(frame, square, darken, dc)
     local bar = frame.StatusBar
     if not bar then return end
     local parts = squareParts[bar]
     if not square then
+        UpdateBarInset(frame, bar, false)
         if parts then
             for _, t in pairs(parts) do t:Hide() end
         end
@@ -79,6 +119,7 @@ local function UpdateSquareBorder(frame, square, darken, dc)
     local px = tonumber(uuidb.general.swingtimersquareborder_thickness) or 1
     local SB = UberUI.squareborders
     local w = SB and SB.PixelsToUIUnits(bar, px) or px
+    UpdateBarInset(frame, bar, true, w)
     parts.bg:ClearAllPoints()
     parts.bg:SetAllPoints(bar)
     parts.top:ClearAllPoints()
@@ -181,63 +222,123 @@ function swingtimers:Apply()
     for _, def in ipairs(FRAMES) do
         local frame = _G[def.name]
         if frame and not frame:IsForbidden() then
-            HookFrame(frame)
+            -- Per frame, so one bar failing can't leave the others unstyled.
+            local ok, err = pcall(function()
+                HookFrame(frame)
 
-            UpdateSquareBorder(frame, g.swingtimersquareborder == true, darken, dc)
+                UpdateSquareBorder(frame, g.swingtimersquareborder == true, darken, dc)
 
-            if not g.swingtimersquareborder then
-                local border = frame.Border or (frame.GetBorder and frame:GetBorder())
-                if not border and frame.GetRegions then
-                    for _, region in ipairs({ frame:GetRegions() }) do
-                        if region:IsObjectType("Texture") and region:GetAtlas() == "ui-swingtimerbar-frame" then
-                            border = region
-                            break
+                if not g.swingtimersquareborder then
+                    local border = frame.Border or (frame.GetBorder and frame:GetBorder())
+                    if not border and frame.GetRegions then
+                        for _, region in ipairs({ frame:GetRegions() }) do
+                            if region:IsObjectType("Texture") and region:GetAtlas() == "ui-swingtimerbar-frame" then
+                                border = region
+                                break
+                            end
                         end
                     end
-                end
-                local cr, cg, cb = 1, 1, 1
-                if darken and dc then cr, cg, cb = dc.r, dc.g, dc.b end
+                    local cr, cg, cb = 1, 1, 1
+                    if darken and dc then cr, cg, cb = dc.r, dc.g, dc.b end
 
-                if border and border.SetVertexColor then
-                    border:SetVertexColor(cr, cg, cb, 1)
-                end
+                    if border and border.SetVertexColor then
+                        border:SetVertexColor(cr, cg, cb, 1)
+                    end
 
-                local bg = frame.Background or (frame.GetBackground and frame:GetBackground())
-                if not bg and frame.GetRegions then
-                    for _, region in ipairs({ frame:GetRegions() }) do
-                        if region:IsObjectType("Texture") and region:GetAtlas() == "ui-swingtimerbar-background" then
-                            bg = region
-                            break
+                    local bg = frame.Background or (frame.GetBackground and frame:GetBackground())
+                    if not bg and frame.GetRegions then
+                        for _, region in ipairs({ frame:GetRegions() }) do
+                            if region:IsObjectType("Texture") and region:GetAtlas() == "ui-swingtimerbar-background" then
+                                bg = region
+                                break
+                            end
                         end
                     end
+                    if bg and bg.SetVertexColor then
+                        bg:SetVertexColor(cr, cg, cb, 1)
+                    end
                 end
-                if bg and bg.SetVertexColor then
-                    bg:SetVertexColor(cr, cg, cb, 1)
-                end
-            end
 
-            local bar = frame.StatusBar
-            -- Label shadow behind MAIN HAND / OFF HAND / RANGED; Blizzard
-            -- never touches it after load.
-            local shadow = bar and bar.TypeLabelShadow
-            if shadow then shadow:SetShown(g.swingtimerlabelshadow ~= false) end
+                local bar = frame.StatusBar
+                -- Label shadow behind MAIN HAND / OFF HAND / RANGED; Blizzard
+                -- never touches it after load.
+                local shadow = bar and bar.TypeLabelShadow
+                if shadow then shadow:SetShown(g.swingtimerlabelshadow ~= false) end
 
-            local fill = bar and bar:GetStatusBarTexture()
-            if fill then
-                if tex then
-                    fill:SetTexture(tex)
-                    local c = HexColor(g[def.colorField], def.default)
-                    fill:SetVertexColor(c.r, c.g, c.b, 1)
-                    retextured[fill] = true
-                elseif retextured[fill] then
-                    -- Back to Blizzard's own per-hand atlas.
-                    retextured[fill] = nil
-                    if frame.barTexture then fill:SetAtlas(frame.barTexture) end
-                    fill:SetVertexColor(1, 1, 1, 1)
+                local fill = bar and bar:GetStatusBarTexture()
+                local c = fill and BarColor(g, def)
+                if fill then
+                    if tex then
+                        if tinted[fill] then
+                            tinted[fill] = nil
+                            fill:SetDesaturated(false)
+                        end
+                        fill:SetTexture(tex)
+                        if c then
+                            fill:SetVertexColor(c.r, c.g, c.b, 1)
+                        else
+                            fill:SetVertexColor(1, 1, 1, 1)
+                        end
+                        retextured[fill] = true
+                    elseif c then
+                        -- Keep Blizzard's per-hand atlas (its shading/gloss), but
+                        -- desaturate it so the vertex color tints it cleanly to
+                        -- any hue instead of multiplying against the built-in one.
+                        retextured[fill] = nil
+                        if frame.barTexture then fill:SetAtlas(frame.barTexture) end
+                        fill:SetDesaturated(true)
+                        fill:SetVertexColor(c.r, c.g, c.b, 1)
+                        tinted[fill] = true
+                    elseif retextured[fill] or tinted[fill] then
+                        -- Back to Blizzard's own per-hand atlas.
+                        retextured[fill] = nil
+                        tinted[fill] = nil
+                        if frame.barTexture then fill:SetAtlas(frame.barTexture) end
+                        fill:SetDesaturated(false)
+                        fill:SetVertexColor(1, 1, 1, 1)
+                    end
                 end
+            end)
+            if not ok then UberUI:ReportError("swing timer styling (" .. def.name .. ")", err) end
+        end
+    end
+end
+
+-- Temporary: /uuidebugswing reports each swing timer's layout state.
+SLASH_UUIDEBUGSWING1 = "/uuidebugswing"
+SlashCmdList.UUIDEBUGSWING = function()
+    local function pts(region)
+        local out = {}
+        for i = 1, region:GetNumPoints() do
+            local p, rel, rp, x, y = region:GetPoint(i)
+            out[#out + 1] = ("%s->%s:%s (%.2f, %.2f)"):format(p, rel and (rel:GetName() or tostring(rel)) or "nil", rp, x or 0, y or 0)
+        end
+        return table.concat(out, "; ")
+    end
+    local g = uuidb and uuidb.general or {}
+    local lines = { ("squareborder=%s thickness=%s"):format(tostring(g.swingtimersquareborder), tostring(g.swingtimersquareborder_thickness)) }
+    for _, def in ipairs(FRAMES) do
+        local f = _G[def.name]
+        lines[#lines + 1] = ""
+        if not f then
+            lines[#lines + 1] = def.name .. ": missing"
+        else
+            local bar = f.StatusBar
+            local ok, inDefault = pcall(function() return f.IsInDefaultPosition and f:IsInDefaultPosition() end)
+            lines[#lines + 1] = ("%s: shown=%s forbidden=%s managed=%s inDefault=%s scale=%.3f size=%.1fx%.1f"):format(
+                def.name, tostring(f:IsShown()), tostring(f:IsForbidden()), tostring(f.isManagedFrame),
+                ok and tostring(inDefault) or ("ERR " .. tostring(inDefault)), f:GetScale(), f:GetWidth(), f:GetHeight())
+            lines[#lines + 1] = "  frame points: " .. pts(f)
+            if bar then
+                lines[#lines + 1] = ("  bar size=%.1fx%.1f reanchored=%s squareParts=%s"):format(
+                    bar:GetWidth(), bar:GetHeight(), tostring(barReanchored[bar]), tostring(squareParts[bar] ~= nil))
+                lines[#lines + 1] = "  bar points: " .. pts(bar)
+            else
+                lines[#lines + 1] = "  no StatusBar"
             end
         end
     end
+    UberUI.ShowDebugReport(table.concat(lines, "\n"))
 end
 
 local events = CreateFrame("Frame")

@@ -127,17 +127,25 @@ function opt.BuildOtherUI(page)
             ddOnChange = RefreshSwingTimers,
         });
 
+        local swingColorInit = opt.AddDropdown(page, {
+            variable = "SwingTimerBarColor", name = "Swing Timer Bar Color",
+            tooltip = "None keeps Blizzard's built-in bar colors (a custom bar texture is left untinted). Custom tints each bar with the colors below; Class tints all bars with your class color. Tinting keeps Blizzard's bar art unless Swing Timer Bar Textures is on.",
+            db = "general", field = "swingtimerbarcolor", default = "none",
+            values = { { "none", "None" }, { "custom", "Custom" }, { "class", "Class" } },
+            onChange = RefreshSwingTimers,
+        });
+
         for _, c in ipairs({
             { "swingtimermainhandcolor", "SwingTimerMainHandColor", "Main Hand Swing Timer Color", "ffffc21a" },
             { "swingtimeroffhandcolor",  "SwingTimerOffHandColor",  "Off Hand Swing Timer Color",  "ff3d9eff" },
             { "swingtimerrangedcolor",   "SwingTimerRangedColor",   "Ranged Swing Timer Color",    "ff5cd65c" },
         }) do
-            opt.AddColorSwatch(page, {
+            opt.DependsOn(opt.AddColorSwatch(page, {
                 variable = c[2], name = c[3],
-                tooltip = "Fill color of this swing timer bar when it uses a custom bar texture (Blizzard's own bar art has its color built in).",
+                tooltip = "Fill color of this swing timer bar when Swing Timer Bar Color is Custom.",
                 db = "general", field = c[1], default = c[4],
                 onChange = RefreshSwingTimers,
-            });
+            }), swingColorInit, function() return uuidb.general and uuidb.general.swingtimerbarcolor == "custom" end);
         end
     end
 

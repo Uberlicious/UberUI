@@ -69,6 +69,7 @@ local defaults = {
         personalresourcebartexture   = "Blizzard",
         swingtimerbartexture         = "Blizzard",
         swingtimerbartextures        = false,
+        swingtimerbarcolor           = "none",
         darkenswingtimers            = true,
         swingtimerlabelshadow        = true,
         swingtimersquareborder       = false,
@@ -173,6 +174,11 @@ local defaults = {
         smallfriendlynameplate       = false,
         nameplatesquareborder        = false,
         nameplatesquareborder_thickness = 1,
+        namehealthstyle              = "off",
+        namehealthhidefull           = true,
+        namehealthunderlinethickness = 1,
+        namehealthdotsize            = 5,
+        namehealthdotside            = "LEFT",
         darkenaddonminimapbuttons    = true,
     },
     damagemeters = {
@@ -273,6 +279,11 @@ local function ShowErrors(text)
     errorFrame:Show()
 end
 
+-- Copyable popup for /uuidebug* reports (never chat).
+function UberUI.ShowDebugReport(text)
+    ShowErrors(text)
+end
+
 function UberUI:ReportError(where, err)
     local msg = tostring(where) .. ": " .. tostring(err)
     if reportedErrors[msg] then return end
@@ -356,6 +367,16 @@ function UberUI:Init()
             g.NameplateHealthBorderShape = nil
             g._defaults_version = 2
         end
+        -- Swing timer bar color became one dropdown. Custom textures always
+        -- used the per-hand colors, so keep them colored.
+        if g.swingtimerbarcolor == nil then
+            if g.swingtimerclasscolor then
+                g.swingtimerbarcolor = "class"
+            elseif g.swingtimerbartint or g.swingtimerbartextures then
+                g.swingtimerbarcolor = "custom"
+            end
+        end
+        g.swingtimerbartint, g.swingtimerclasscolor = nil, nil
     end
 
     mergeDefaults(defaults, UberuiDB)

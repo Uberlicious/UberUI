@@ -244,6 +244,7 @@ local function BuildDebuffs(frame, metrics)
         frameLevelBonus = 22,
         spacing = AURA_SPACING,
         maxLineSize = LineSize(metrics.debuffSize, 3),
+        countRefSize = NATIVE_AURA_SIZE,
         processAura = DebuffProcessOptions(),
         updateStyleFn = StyleFn,
         groups = {
@@ -270,6 +271,7 @@ local function BuildBuffs(frame, metrics)
         frameLevelBonus = 20,
         spacing = AURA_SPACING,
         maxLineSize = LineSize(metrics.buffSize, 3),
+        countRefSize = NATIVE_AURA_SIZE,
         processAura = BuffProcessOptions(),
         updateStyleFn = StyleFn,
         groups = {
@@ -292,6 +294,7 @@ local function BuildBigDefensive(frame, metrics)
         frameLevelBonus = 21,
         spacing = 0,
         maxLineSize = metrics.bigDefensiveSize + 0.5,
+        countRefSize = NATIVE_BIG_DEFENSIVE_SIZE,
         updateStyleFn = StyleFn,
         groups = {
             {
