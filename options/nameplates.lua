@@ -204,7 +204,7 @@ function opt.BuildNameplates(page)
     opt.AddPreview(page, {
         name = "Preview",
         tooltip = "Sample names at full, half and low health, drawn with the settings in this section.",
-        height = 94,
+        height = 88,
         create = function(parent)
             local nh = UberUI.namehealth
             if not nh then return nil end
@@ -248,8 +248,8 @@ function opt.BuildNameplates(page)
 
     opt.DependsOn(opt.AddSlider(page, {
         variable = "NameHealthDotSize", name = "Dot Size",
-        tooltip = "Size of the health dot.",
-        db = "general", field = "namehealthdotsize", default = 5,
+        tooltip = "Size of the health dot, in screen pixels.",
+        db = "general", field = "namehealthdotsize", default = 8,
         min = 2, max = 16, step = 1,
         onChange = RefreshNameHealth,
     }), nameHealthInit, function() return NameHealthStyle() == "dot" end);

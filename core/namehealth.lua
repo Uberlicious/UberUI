@@ -16,6 +16,7 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FULL_STEP = 0.995 -- above this counts as "full" when hiding at full
 
+-- All in screen pixels.
 local UNDERLINE_GAP = 1   -- space between name and bar
 local UNDERLINE_INSET = 2 -- screen pixels trimmed off each end
 local DOT_GAP = 3
@@ -48,7 +49,7 @@ end
 -- (screen pixels; negative tucks the bar into the text's outline).
 local function UnderlineGap(px)
     local g = Settings()
-    return UNDERLINE_GAP + (tonumber(g and g.namehealthunderlineoffset) or 0) * px
+    return (UNDERLINE_GAP + (tonumber(g and g.namehealthunderlineoffset) or 0)) * px
 end
 
 local function DotSide()
@@ -60,7 +61,7 @@ end
 -- Gap between name and dot: the base gap plus the Dot Offset setting.
 local function DotGap(px)
     local g = Settings()
-    return DOT_GAP + (tonumber(g and g.namehealthdotoffset) or 0) * px
+    return (DOT_GAP + (tonumber(g and g.namehealthdotoffset) or 0)) * px
 end
 
 -- Anchors a dot on `side` of `anchor` (the name's text box).
@@ -135,30 +136,58 @@ end
 ---------------------------------------------------------------------------
 local widgets = setmetatable({}, { __mode = "k" })
 
+-- Pixel-perfect: sizes and gaps are whole screen pixels, and the textures
+-- snap to the pixel grid, so an N px line is N px wherever it lands (both
+-- edges share the same fractional position and round together).
+local function Snap(region)
+    if region and region.SetSnapToPixelGrid then pcall(region.SetSnapToPixelGrid, region, true) end
+end
+
+-- Frames anchored into a nameplate need this template in 12.x.
+local function PlateFrame(parent)
+    local ok, f = pcall(CreateFrame, "Frame", nil, parent, "DisableUntrustedLayoutScriptsTemplate")
+    if not ok or not f then f = CreateFrame("Frame", nil, parent) end
+    return f
+end
+
+local function NewDot(owner)
+    local dot = owner:CreateTexture(nil, "OVERLAY")
+    dot:SetTexture(WHITE)
+    Snap(dot)
+    local mask = owner:CreateMaskTexture()
+    mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    -- Both on the same layer; guarded anyway, since anchoring onto a
+    -- scale-free layer's regions can be refused (a square dot beats none).
+    if pcall(mask.SetAllPoints, mask, dot) then
+        Snap(mask)
+        dot:AddMaskTexture(mask)
+    end
+    return dot
+end
+
 local function GetWidgets(uf)
     local w = widgets[uf]
     if w then return w end
 
-    -- Frames anchored into a nameplate need this template in 12.x.
-    local ok, f = pcall(CreateFrame, "Frame", nil, uf, "DisableUntrustedLayoutScriptsTemplate")
-    if not ok or not f then f = CreateFrame("Frame", nil, uf) end
-    w = f
+    -- Drawn on a layer fixed at scale 1, independent of the plate's (which
+    -- Blizzard animates and distance-scales), so a pixel stays one pixel.
+    w = PlateFrame(uf)
+    if w.SetIgnoreParentScale then
+        pcall(w.SetIgnoreParentScale, w, true)
+        pcall(w.SetScale, w, 1)
+    end
     w:SetAllPoints(uf)
     w:SetFrameLevel(uf:GetFrameLevel() + 10)
 
     -- Invisible box that hugs the actual text, so everything anchors to it.
-    w.box = CreateFrame("Frame", nil, w)
+    -- On the plate's own scale, so it can be sized in the text's units.
+    w.box = PlateFrame(uf)
 
-    local dot = w:CreateTexture(nil, "OVERLAY")
-    dot:SetTexture(WHITE)
-    local mask = w:CreateMaskTexture()
-    mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    mask:SetAllPoints(dot)
-    dot:AddMaskTexture(mask)
-    w.dot = dot
+    w.dot = NewDot(w)
 
     local bar = CreateFrame("StatusBar", nil, w)
     bar:SetStatusBarTexture(WHITE)
+    Snap(bar:GetStatusBarTexture())
     w.underline = bar
 
     widgets[uf] = w
@@ -191,7 +220,8 @@ local function Layout(w, fs, style)
     w.box:SetPoint(p, fs, p)
     w.box:SetSize(width, height)
 
-    local px = OnePixel(fs)
+    -- Pixels in the drawing layer's space (where the offsets apply).
+    local px = OnePixel(w)
     if style == "underline" then
         -- Measured text width includes the outline and a little spacing after
         -- the last letter, so pull each end in to match the visible text.
@@ -208,7 +238,7 @@ local function Layout(w, fs, style)
         end
         bar:SetHeight((tonumber(g.namehealthunderlinethickness) or 1) * px)
     elseif style == "dot" then
-        local size = tonumber(g.namehealthdotsize) or 5
+        local size = (tonumber(g.namehealthdotsize) or 8) * px
         w.dot:SetSize(size, size)
         PlaceDot(w.dot, w.box, px)
     end
@@ -399,7 +429,7 @@ local SAMPLES = {
     { "Jaina", "MAGE", 0.55 },
     { "Thrall", "SHAMAN", 0.20 },
 }
-local SAMPLE_SPACING = 22
+local SAMPLE_SPACING = 18
 
 local function ClassRGB(classFile)
     local cc = C_ClassColor.GetClassColor(classFile)
@@ -428,16 +458,55 @@ local function SampleColor(pct, classFile, style)
     return r, g, b, alpha
 end
 
-local LABEL_GAP = 3
-local LABEL_HEIGHT = 10
-local PREVIEW_EDGE = 8 -- left margin before the first name's decorations
+-- Nameplate name font as it appears on screen: file, height in screen units
+-- (font size x effective scale), flags. Read off a live plate when one is
+-- up -- friendly players first, the plates this feature draws on -- since
+-- plates ignore UI Scale and have their own scale; otherwise Blizzard's
+-- nameplate font at the world frame's scale.
+local function NameplateFont()
+    local best
+    for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+        local uf = not plate:IsForbidden() and plate.UnitFrame
+        local fs = uf and not uf:IsForbidden() and uf.name
+        if fs and fs:IsVisible() then
+            local file, size, flags = fs:GetFont()
+            local eff = Plain(fs:GetEffectiveScale())
+            if file and size and eff and eff > 0 then
+                local found = { file, size * eff, flags }
+                if IsFriendlyPlayer(uf.unit) then return found end
+                best = best or found
+            end
+        end
+    end
+    if best then return best end
+    local fo = _G.SystemFont_NamePlate
+    local file, size, flags
+    if fo then file, size, flags = fo:GetFont() end
+    if not file then return nil end
+    local eff = WorldFrame and Plain(WorldFrame:GetEffectiveScale()) or 1
+    return { file, size * (eff or 1), flags }
+end
+
+local PREVIEW_EDGE = 8     -- left margin before the first name's decorations
+local STAGE_HEIGHT = 64    -- the dark "in the world" strip
+local CAPTION_HEIGHT = 14  -- health captions under the strip, on the panel
 
 local function UpdatePreview(preview)
     local style = Style()
     local g = Settings()
     local px = OnePixel(preview)
+
+    -- Same on-screen text size as the real plates (the options panel is
+    -- UI-scaled, plates aren't).
+    local font = NameplateFont()
+    local eff = preview:GetEffectiveScale()
+    if font and eff and eff > 0 then
+        for _, s in ipairs(preview.samples) do
+            s.fs:SetFont(font[1], font[2] / eff, font[3])
+        end
+    end
     local thick = (tonumber(g.namehealthunderlinethickness) or 1) * px
-    local size = tonumber(g.namehealthdotsize) or 5
+    local size = (tonumber(g.namehealthdotsize) or 8) * px
     local side = DotSide()
 
     -- How far the decoration reaches past the name on each side, so the names
@@ -464,9 +533,8 @@ local function UpdatePreview(preview)
 
         s.holder:ClearAllPoints()
         if i == 1 then
-            -- Vertically centered on name + decoration + label as a group.
-            local y = ((below + LABEL_GAP + LABEL_HEIGHT) - above) / 2
-            s.holder:SetPoint("LEFT", preview, "LEFT", PREVIEW_EDGE + left, y)
+            -- Name + decoration vertically centered in the strip.
+            s.holder:SetPoint("LEFT", preview.stage, "LEFT", PREVIEW_EDGE + left, (below - above) / 2)
         else
             s.holder:SetPoint("LEFT", preview.samples[i - 1].fs, "RIGHT", SAMPLE_SPACING + left + right, 0)
         end
@@ -490,9 +558,12 @@ local function UpdatePreview(preview)
         s.bar:SetShown(style == "underline")
         s.dot:SetShown(style == "dot")
 
-        -- Health label kept clear of anything under the name.
+        -- Caption centered under the name but below the strip, so it reads
+        -- as a label, not part of the look: fs bottom -> strip bottom.
+        local y = (below - above) / 2
+        local toStripBottom = (y - fs:GetStringHeight() / 2) + STAGE_HEIGHT / 2
         s.label:ClearAllPoints()
-        s.label:SetPoint("TOP", fs, "BOTTOM", 0, -(below + LABEL_GAP))
+        s.label:SetPoint("TOP", fs, "BOTTOM", 0, -(toStripBottom + 2))
     end
 end
 
@@ -500,17 +571,22 @@ end
 -- redraws it from the current settings.
 function namehealth.CreatePreview(parent)
     local preview = CreateFrame("Frame", nil, parent)
-    preview:SetSize(300, 84)
-    local bg = preview:CreateTexture(nil, "BACKGROUND")
+    preview:SetSize(330, STAGE_HEIGHT + CAPTION_HEIGHT)
+    local stage = CreateFrame("Frame", nil, preview)
+    stage:SetPoint("TOPLEFT")
+    stage:SetPoint("TOPRIGHT")
+    stage:SetHeight(STAGE_HEIGHT)
+    local bg = stage:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(0, 0, 0, 0.55)
+    preview.stage = stage
 
     local font = _G.SystemFont_NamePlate or GameFontHighlightSmall
     preview.samples = {}
     for i, info in ipairs(SAMPLES) do
         local s = { classFile = info[2], pct = info[3] }
         -- Positioned in UpdatePreview.
-        local holder = CreateFrame("Frame", nil, preview)
+        local holder = CreateFrame("Frame", nil, stage)
         holder:SetSize(1, 1)
         s.holder = holder
         s.fs = holder:CreateFontString(nil, "OVERLAY")
@@ -518,16 +594,12 @@ function namehealth.CreatePreview(parent)
         s.fs:SetText(info[1])
         s.fs:SetPoint("LEFT", holder, "LEFT", 0, 0)
         -- Health label under each name (placed in UpdatePreview).
-        s.label = holder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        s.label = preview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         s.label:SetText(math.floor(info[3] * 100 + 0.5) .. "%")
         s.bar = holder:CreateTexture(nil, "OVERLAY")
         s.bar:SetTexture(WHITE)
-        s.dot = holder:CreateTexture(nil, "OVERLAY")
-        s.dot:SetTexture(WHITE)
-        local mask = holder:CreateMaskTexture()
-        mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        mask:SetAllPoints(s.dot)
-        s.dot:AddMaskTexture(mask)
+        Snap(s.bar)
+        s.dot = NewDot(holder)
         preview.samples[i] = s
     end
 

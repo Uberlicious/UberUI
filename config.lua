@@ -179,7 +179,7 @@ local defaults = {
         namehealthunderlinethickness = 1,
         namehealthunderlineside      = "BELOW",
         namehealthunderlineoffset    = 0,
-        namehealthdotsize            = 5,
+        namehealthdotsize            = 8,
         namehealthdotside            = "LEFT",
         namehealthdotoffset          = 0,
         darkenaddonminimapbuttons    = true,
@@ -380,6 +380,12 @@ function UberUI:Init()
             end
         end
         g.swingtimerbartint, g.swingtimerclasscolor = nil, nil
+        -- Friendly name health dot went from plate-scaled units to screen
+        -- pixels; the old default of 5 becomes the new default of 8.
+        if (g._namehealth_version or 0) < 1 then
+            if g.namehealthdotsize == 5 then g.namehealthdotsize = nil end
+            g._namehealth_version = 1
+        end
     end
 
     mergeDefaults(defaults, UberuiDB)
