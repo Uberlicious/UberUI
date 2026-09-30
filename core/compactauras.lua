@@ -18,6 +18,13 @@ local NATIVE_UNIT_FRAME_HEIGHT = 36
 local NATIVE_UNIT_FRAME_WIDTH = 72
 local NATIVE_AURA_SIZE = 11
 local NATIVE_BIG_DEFENSIVE_SIZE = NATIVE_AURA_SIZE * 2
+-- Stack count reference: Blizzard's compact aura template is 17x17
+-- (CompactUnitFrame.xml) and NumberFontNormalSmall was sized for that; the
+-- 11px native icon is a shrink the font never followed, which drew the count
+-- as tall as the icon. So the count scales against 17 (34 for the doubled
+-- big defensive).
+local COUNT_REF_SIZE = 17
+local COUNT_REF_BIG_DEFENSIVE = COUNT_REF_SIZE * 2
 local AURA_SCALE_MIN, AURA_SCALE_MAX = 0.5, 2
 local BIG_DEFENSIVE_SCALE_MIN, BIG_DEFENSIVE_SCALE_MAX = 0.5, 1
 local AURA_BOTTOM_OFFSET = 2
@@ -244,7 +251,7 @@ local function BuildDebuffs(frame, metrics)
         frameLevelBonus = 22,
         spacing = AURA_SPACING,
         maxLineSize = LineSize(metrics.debuffSize, 3),
-        countRefSize = NATIVE_AURA_SIZE,
+        countRefSize = COUNT_REF_SIZE,
         processAura = DebuffProcessOptions(),
         updateStyleFn = StyleFn,
         groups = {
@@ -271,7 +278,7 @@ local function BuildBuffs(frame, metrics)
         frameLevelBonus = 20,
         spacing = AURA_SPACING,
         maxLineSize = LineSize(metrics.buffSize, 3),
-        countRefSize = NATIVE_AURA_SIZE,
+        countRefSize = COUNT_REF_SIZE,
         processAura = BuffProcessOptions(),
         updateStyleFn = StyleFn,
         groups = {
@@ -294,7 +301,7 @@ local function BuildBigDefensive(frame, metrics)
         frameLevelBonus = 21,
         spacing = 0,
         maxLineSize = metrics.bigDefensiveSize + 0.5,
-        countRefSize = NATIVE_BIG_DEFENSIVE_SIZE,
+        countRefSize = COUNT_REF_BIG_DEFENSIVE,
         updateStyleFn = StyleFn,
         groups = {
             {
@@ -424,6 +431,22 @@ local function ForEachExistingCompactFrame(callback)
             if f then callback(f) end
         end
     end
+end
+
+-- For the options preview: buff and debuff icon sizes (in the frame's units),
+-- the count font's reference size, and that frame's effective scale, from
+-- the first existing compact frame (shown ones first). nil when there's none.
+function compactauras:GetPreviewSizes()
+    local found, fallback
+    ForEachExistingCompactFrame(function(f)
+        if found or not f.groupType or f:IsForbidden() then return end
+        if f:IsVisible() then found = f else fallback = fallback or f end
+    end)
+    local frame = found or fallback
+    if not frame then return nil end
+    local ok, m = pcall(GetFrameMetrics, frame)
+    if not ok or not m then return nil end
+    return m.buffSize, m.debuffSize, COUNT_REF_SIZE, frame:GetEffectiveScale()
 end
 
 -- Called from the options panel whenever a compact aura setting changes.

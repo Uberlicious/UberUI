@@ -378,12 +378,15 @@ function buffsandauras:StyleAuraButton(button)
             borderFrame:SetFrameLevel(100)
         end
 
-        local pad = isPlayer and 5 or 4
+        -- Same rule as the dispel-colored DebuffBorder below: Blizzard's
+        -- 5px at 30px, grown slightly while zoomed.
+        local pad = (isPlayer and 5 or 4) + UberUI.general:ZoomBorderGrow(zoomEnabled)
         pcall(function()
             local iconWidth = iconTexture.GetWidth and iconTexture:GetWidth()
             if IsSecret(iconWidth) then return end
             if type(iconWidth) == "number" and iconWidth > 0 then
                 pad = math.max(2, math.floor(iconWidth * (5 / 30) + 0.5))
+                    + UberUI.general:ZoomBorderGrow(zoomEnabled, iconWidth)
             end
         end)
         borderFrame:ClearAllPoints()
@@ -504,13 +507,15 @@ function buffsandauras:StyleAuraButton(button)
         OffsetDurationText(button, iconTexture, 0)
 
         if borderObj and not IsSecret(borderObj) and not isTempEnchant then
-            local pad = zoomEnabled and (isPlayer and 5 or 4) or 0
+            -- Same size as the dark ring above (same art family): Blizzard's
+            -- 5px at 30px, grown slightly while zoomed.
+            local pad = (isPlayer and 5 or 4) + UberUI.general:ZoomBorderGrow(zoomEnabled)
             pcall(function()
                 local iconWidth = iconTexture.GetWidth and iconTexture:GetWidth()
                 if IsSecret(iconWidth) then return end
                 if type(iconWidth) == "number" and iconWidth > 0 then
-                    local basePad = math.max(2, math.floor(iconWidth * (5 / 30) + 0.5))
-                    pad = zoomEnabled and basePad or 0
+                    pad = math.max(2, math.floor(iconWidth * (5 / 30) + 0.5))
+                        + UberUI.general:ZoomBorderGrow(zoomEnabled, iconWidth)
                 end
             end)
             borderObj:SetAlpha(1)

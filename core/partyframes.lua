@@ -145,6 +145,13 @@ function partyframes:StyleAuraButton(button, isBuff)
     end
     if SB then SB.Hide(button) end
 
+    -- Blizzard's DebuffBorder, 1px out (PartyAuraFrameTemplate), for both the
+    -- dark and dispel looks; grown slightly while zoomed.
+    local pad = 1 + UberUI.general:ZoomBorderGrow(zoomEnabled)
+    button.DebuffBorder:ClearAllPoints()
+    button.DebuffBorder:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
+    button.DebuffBorder:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
+
     if darkBorderEnabled then
         local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
         button.DebuffBorder:SetDesaturated(true)

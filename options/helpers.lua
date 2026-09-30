@@ -39,6 +39,7 @@ local function RegisterSetting(page, o, varType)
             uuidb[o.db][o.field] = value;
         end
         if o.onChange then o.onChange(value) end
+        opt.RefreshPreviews();
         -- Replacing SetValue skips its value-changed event, which dependent
         -- rows re-check their greyed-out state on, so fire it ourselves.
         if self and self.TriggerValueChanged then
@@ -82,6 +83,15 @@ end
 
 -- Preview row ----------------------------------------------------------------
 
+-- Every preview frame made so far; redrawn after any setting changes (a
+-- preview can depend on settings from other sections or pages).
+opt.previews = {};
+function opt.RefreshPreviews()
+    for _, p in ipairs(opt.previews) do
+        if p:IsVisible() and p.Update then pcall(p.Update, p) end
+    end
+end
+
 -- A list row with a label and a custom preview frame in the control column.
 -- o: name, tooltip, height, create(parent) -> frame (made once, reused; it
 -- should redraw itself OnShow). The settings list pools its rows, so the
@@ -108,8 +118,11 @@ function opt.AddPreview(page, o)
                 Settings.InitTooltip(o.name, o.tooltip);
             end);
         end
-        preview = preview or o.create(frame);
-        if not preview then return end
+        if not preview then
+            preview = o.create(frame);
+            if not preview then return end
+            opt.previews[#opt.previews + 1] = preview;
+        end
         preview:SetParent(frame);
         preview:ClearAllPoints();
         preview:SetPoint("LEFT", frame, "CENTER", -80, 0);
@@ -242,6 +255,8 @@ function opt.AddAuraOptions(page, o)
     local SBkeys = UberUI.squareborders.Keys(o.loc);
     local refresh = o.refresh;
     local BUFF_DEFAULT, DEBUFF_DEFAULT = "both", "zoom";
+
+    if opt.AddAuraPreview then opt.AddAuraPreview(page, o) end
 
     local handBackNote = "\n\nWith Zoom off and the Blizzard border choice, Uber UI leaves these auras entirely to Blizzard.";
 
@@ -382,6 +397,7 @@ function opt.ApplyAuraParts(parts)
     for _, L in ipairs(AURA_LOCATIONS) do
         pcall(L.refresh);
     end
+    opt.RefreshPreviews();
     UberUI:Save();
 end
 

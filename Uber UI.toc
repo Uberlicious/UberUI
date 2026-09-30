@@ -19,6 +19,7 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 config.lua
 core\util.lua
 options\helpers.lua
+options\aurapreview.lua
 options\general.lua
 options\unitframes.lua
 options\groupframes.lua

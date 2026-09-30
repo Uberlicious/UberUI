@@ -330,7 +330,10 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
 
     if button.borderHost then
         pcall(function()
-            local pad = (button.elementSize and button.elementSize >= 20) and 3 or 2
+            -- Every rounded border (dark, dispel, stealable) follows
+            -- borderHost, so they're one size, grown slightly while zoomed.
+            local pad = ((button.elementSize and button.elementSize >= 20) and 3 or 2)
+                + UberUI.general:ZoomBorderGrow(zoomEnabled)
             button.borderHost:ClearAllPoints()
             button.borderHost:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
             button.borderHost:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)

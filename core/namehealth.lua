@@ -463,7 +463,11 @@ end
 -- up -- friendly players first, the plates this feature draws on -- since
 -- plates ignore UI Scale and have their own scale; otherwise Blizzard's
 -- nameplate font at the world frame's scale.
+local lastNameplateFont
 local function NameplateFont()
+    -- Each plate is also scaled on its own by Blizzard (target, distance),
+    -- constantly, so that scale is taken back out: the text size at full
+    -- plate scale. The last reading is kept for when no plate is up.
     local best
     for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
         local uf = not plate:IsForbidden() and plate.UnitFrame
@@ -471,14 +475,21 @@ local function NameplateFont()
         if fs and fs:IsVisible() then
             local file, size, flags = fs:GetFont()
             local eff = Plain(fs:GetEffectiveScale())
-            if file and size and eff and eff > 0 then
-                local found = { file, size * eff, flags }
-                if IsFriendlyPlayer(uf.unit) then return found end
+            local pe = Plain(plate:GetEffectiveScale())
+            local parent = plate:GetParent() or WorldFrame
+            local base = parent and Plain(parent:GetEffectiveScale())
+            if file and size and eff and eff > 0 and pe and pe > 0 and base then
+                local found = { file, size * eff / pe * base, flags }
+                if IsFriendlyPlayer(uf.unit) then best = found break end
                 best = best or found
             end
         end
     end
-    if best then return best end
+    if best then
+        lastNameplateFont = best
+        return best
+    end
+    if lastNameplateFont then return lastNameplateFont end
     local fo = _G.SystemFont_NamePlate
     local file, size, flags
     if fo then file, size, flags = fo:GetFont() end
@@ -576,9 +587,6 @@ function namehealth.CreatePreview(parent)
     stage:SetPoint("TOPLEFT")
     stage:SetPoint("TOPRIGHT")
     stage:SetHeight(STAGE_HEIGHT)
-    local bg = stage:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, 0.55)
     preview.stage = stage
 
     local font = _G.SystemFont_NamePlate or GameFontHighlightSmall

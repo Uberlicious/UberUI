@@ -183,6 +183,7 @@ function arenaframes:StyleDebuffFrame(debuffFrame)
     end
 
     if debuffFrame.Border and not square then
+        UberUI.general:GrowRegion(debuffFrame.Border, UberUI.general:ZoomBorderGrow(zoomEnabled))
         if darkBorderEnabled then
             local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
             debuffFrame.Border:SetDesaturated(true)
@@ -218,6 +219,10 @@ function arenaframes:StyleCcRemoverFrame(ccRemoverFrame)
     UberUI.general:ApplyIconZoom(ccRemoverFrame.Icon, zoomEnabled)
 
     local border = EnsureCcRemoverBorder(ccRemoverFrame)
+    local pad = 1 + UberUI.general:ZoomBorderGrow(zoomEnabled)
+    border:ClearAllPoints()
+    border:SetPoint("TOPLEFT", ccRemoverFrame, "TOPLEFT", -pad, pad)
+    border:SetPoint("BOTTOMRIGHT", ccRemoverFrame, "BOTTOMRIGHT", pad, -pad)
     if ApplyArenaSquareBorder(ccRemoverFrame, ccRemoverFrame.Icon, style, darkBorderEnabled) then
         border:Hide()
     elseif darkBorderEnabled then
@@ -253,6 +258,10 @@ function arenaframes:StyleDiminishTrayItem(trayItem)
     UberUI.general:ApplyIconZoom(trayItem.Icon, zoomEnabled)
 
     local border = EnsureDiminishTrayItemBorder(trayItem)
+    local pad = 1 + UberUI.general:ZoomBorderGrow(zoomEnabled)
+    border:ClearAllPoints()
+    border:SetPoint("TOPLEFT", trayItem, "TOPLEFT", -pad, pad)
+    border:SetPoint("BOTTOMRIGHT", trayItem, "BOTTOMRIGHT", pad, -pad)
     if ApplyArenaSquareBorder(trayItem, trayItem.Icon, style, darkBorderEnabled) then
         border:Hide()
     elseif darkBorderEnabled then
