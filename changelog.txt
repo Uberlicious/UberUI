@@ -1,5 +1,4 @@
-1.0.0:
-New Since the Beta:
+1.0.1:
     - Friendly Name Health (Nameplates): See friendly players' health at a glance on name-only nameplates in the open world. Pick an Underline (under or above the name), a Dot (left, right, above or below), or tint the Name itself from red to green (class color at full health). Adjustable underline thickness, dot size and offsets, optional hide-at-full-health, and pixel-perfect drawing that stays crisp as nameplates scale.
     - Live Settings Previews: Aura sections, the Cooldown Manager (icons and Tracked Bars), nameplate health bars, nameplate pandemic highlights and Friendly Name Health each show a live preview that updates as you change settings, at the size things really appear on screen (including WoW Forever's nameplate level box).
     - Aura Text Options: Every aura location except Arena can resize its duration text and stack count and move the stack count to any corner or edge with fine offsets. Player auras can show their timer inside the icon, outlined, with tighter rows. Defaults stay true to Blizzard's own layout, and counts and timers always draw above borders.
@@ -7,6 +6,7 @@ New Since the Beta:
     - Tracked Bars & Duration Text: Cooldown Manager Tracked Bars gain texture, square shape, darkening and their own pandemic styles (including Bar Fill Color). Target, Focus and Compact Raid/Party auras can show duration text, and enemy nameplates get buff limits with important and purgeable filters.
     - Fixes: Rounded aura borders no longer slip under icons, zoomed Player aura borders match their dispel-colored ones, Player timers sit just under the border, compact raid stack counts are sized properly, and WoW Forever is now detected correctly (its Forever-only styling like copper square borders and the nameplate level box applies). Swing timer bar color is now one None / Custom / Class choice.
 
+1.0.0:
 Highlights & Architecture:
     - Independent Versioning & Multi-Client: The addon version is now decoupled from the WoW patch number, using a single package covering both modern Retail and WoW Forever (build 1.60.1).
     - Settings Redesign: Options are reorganized into dedicated pages (Uber UI, Unit Frames, Raid & Group Frames, Arena, Nameplates, Other UI). Most settings now apply live without requiring a UI reload, and /uberui works alongside /uui.
