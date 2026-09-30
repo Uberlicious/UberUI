@@ -344,10 +344,9 @@ function general:ApplyIconZoom(textureObject, enable)
     end
 end
 
--- Rounded aura borders (dark and dispel colored alike) grow this much on
--- each side while icons are zoomed, so the zoomed icon's square corners sit
--- under the ring. In the border's frame units; Player's 30px buttons scale it
--- by icon width (1 per 30).
+-- Player buff/debuff rounded borders (dark and dispel colored alike) grow
+-- this much on each side while icons are zoomed (buffsandauras.lua). In the
+-- border's frame units, scaled by icon width (1 per 30).
 general.ZOOM_BORDER_GROW = 1
 
 function general:ZoomBorderGrow(zoomEnabled, iconWidth)
@@ -356,35 +355,6 @@ function general:ZoomBorderGrow(zoomEnabled, iconWidth)
         return math.max(1, math.floor(iconWidth / 30 + 0.5)) * general.ZOOM_BORDER_GROW
     end
     return general.ZOOM_BORDER_GROW
-end
-
--- Grows a Blizzard-anchored border region by `grow` on each side from its
--- original anchors/size (captured on first use), or restores them at 0.
-local originalAnchors = setmetatable({}, { __mode = "k" })
-function general:GrowRegion(region, grow)
-    if not region or not region.GetNumPoints then return end
-    local orig = originalAnchors[region]
-    if not orig then
-        if grow == 0 then return end
-        orig = { points = {}, w = region:GetWidth(), h = region:GetHeight() }
-        for i = 1, region:GetNumPoints() do
-            local ok, p, rel, rp, x, y = pcall(region.GetPoint, region, i)
-            if ok and p then orig.points[#orig.points + 1] = { p, rel, rp, x or 0, y or 0 } end
-        end
-        if #orig.points == 0 then return end
-        originalAnchors[region] = orig
-    end
-    region:ClearAllPoints()
-    for _, pt in ipairs(orig.points) do
-        local p = pt[1]
-        local dx = (p:find("LEFT") and -grow) or (p:find("RIGHT") and grow) or 0
-        local dy = (p:find("TOP") and grow) or (p:find("BOTTOM") and -grow) or 0
-        region:SetPoint(p, pt[2], pt[3], pt[4] + dx, pt[5] + dy)
-    end
-    -- A single CENTER-style anchor sizes the region itself.
-    if #orig.points == 1 and type(orig.w) == "number" and type(orig.h) == "number" then
-        region:SetSize(orig.w + 2 * grow, orig.h + 2 * grow)
-    end
 end
 
 -- With zoom or a border, the icon insets 1px inside its parent so crop and

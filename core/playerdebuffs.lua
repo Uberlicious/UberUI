@@ -83,8 +83,24 @@ local function LayoutDuration(button)
         relPoint = layout.right and "RIGHT" or "LEFT"
         dx, dy = layout.right and push or -push, 0
     end
+    -- Player's text settings: size, and optionally centered on the icon.
+    local t = aurakit.TextSettings("player")
+    -- Blizzard's GameFontNormalSmall (with its shadow) at the chosen size;
+    -- outlined instead when centered on the icon art.
+    if GameFontNormalSmall then
+        text:SetFontObject(GameFontNormalSmall)
+        local font, size, flags = GameFontNormalSmall:GetFont()
+        if font then text:SetFont(font, math.max(4, size * t.duration), t.center and "OUTLINE" or flags) end
+        if t.center then text:SetShadowOffset(0, 0) end
+    end
     text:ClearAllPoints()
-    text:SetPoint(point, button.icon, relPoint, dx, dy)
+    if t.center then
+        text:SetPoint("CENTER", button.icon, "CENTER", 0, 0)
+    else
+        text:SetPoint(point, button.icon, relPoint, dx, dy)
+    end
+    -- With the other text, above the borders (aurakit re-levels them each pass).
+    if button.textHolder then button.uuDurationHolder:SetFrameLevel(button.textHolder:GetFrameLevel()) end
     button.uuDurationHolder:SetShown(ShowDurations())
 end
 
@@ -106,12 +122,8 @@ local function InitButton(button)
     if button.ClearDurationCooldown then pcall(button.ClearDurationCooldown, button) end
     if button.cooldown then button.cooldown:Hide() end
 
-    -- Stack count: Blizzard's font and offset.
-    if button.count then
-        button.count:SetFontObject(NumberFontNormal)
-        button.count:ClearAllPoints()
-        button.count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
-    end
+    -- Stack count: Blizzard's font and offset (container._uberCountFont /
+    -- _uberCountOffset, sized and placed by aurakit with Player's settings).
 
     -- Own holder so the buffDurations CVar can hide it (the engine owns the
     -- fontstring's alpha).
@@ -214,6 +226,8 @@ local function Build()
     container = c
     container:SetSize(1, 1)
     container._uberCountRefSize = ICON_SIZE
+    container._uberCountFont = NumberFontNormal
+    container._uberCountOffset = { -2, 2 }
     container:SetFrameLevel(DebuffFrame:GetFrameLevel() + 2)
     container:SetFlowLayoutPadding(0, 0, 0, 0)
 

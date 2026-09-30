@@ -32,47 +32,63 @@ local function GetSquareBorder(button) return SB.Get(button) end
 local function FindSquareBorder(button) return SB.Find(button) end
 local function SetSquareBorderColor(sb, r, g, b, a) SB.SetColor(sb, r, g, b, a) end
 
--- Pushes duration text outward for outset borders.
+-- Duration text sits where Blizzard puts it (its top on the icon's bottom,
+-- or above / beside the icon per the buff frame's grow direction), pushed
+-- outward past any border we draw outside the icon: the rounded ring, or a
+-- square border drawn outside. The anchor is worked out the way Blizzard's
+-- UpdateGridLayout sets it -- reading it back returns secret values in
+-- combat.
 local DURATION_PUSH = { TOP = { 0, 1 }, BOTTOM = { 0, -1 }, LEFT = { -1, 0 }, RIGHT = { 1, 0 } }
-local movedDurations = setmetatable({}, {__mode = "k"})
+-- The rounded ring's pad includes transparent margin in Blizzard's art, and
+-- Blizzard's text already sits a little below its anchor, so the push is this
+-- much less than the full pad: the text lands just under the ring (measured
+-- in game: zoomed ring 6 -> push 1; unzoomed 5 -> 0, Blizzard's own spot).
+local RING_TEXT_TUCK = 5
+local movedDurations = setmetatable({}, {__mode = "k"}) -- button -> push amount
+
+local function StockDurationAnchor(button)
+    local parent = button:GetParent()
+    local info = parent and parent.currentGridLayoutInfo
+    local point, relPoint = "TOP", "BOTTOM"
+    if type(info) == "table" and not IsSecret(info) then
+        if info.isHorizontal == false then
+            point = info.addIconsToRight and "LEFT" or "RIGHT"
+            relPoint = info.addIconsToRight and "RIGHT" or "LEFT"
+        elseif info.addIconsToTop then
+            point, relPoint = "BOTTOM", "TOP"
+        end
+    end
+    return point, relPoint, DURATION_PUSH[relPoint]
+end
+
+local EnsureSquareBorderLayoutHooks
 
 local function OffsetDurationText(button, iconTexture, amount)
     if amount == 0 and not movedDurations[button] then return end
     local duration = button.Duration
-    if not duration or IsSecret(duration) or not duration.GetPoint or not duration.GetNumPoints then return end
-    local okN, numPoints = pcall(duration.GetNumPoints, duration)
-    if not okN or IsSecret(numPoints) or numPoints ~= 1 then return end
-    local ok, point, relTo, relPoint = pcall(duration.GetPoint, duration, 1)
-    if not ok or IsSecret(relTo) or relTo ~= iconTexture or IsSecret(point) or IsSecret(relPoint) then return end
-    local dir = DURATION_PUSH[relPoint]
-    if not dir then return end
-    duration:SetPoint(point, relTo, relPoint, dir[1] * amount, dir[2] * amount)
-    movedDurations[button] = (amount ~= 0) or nil
+    if not duration or IsSecret(duration) or not iconTexture then return end
+    local point, relPoint, dir = StockDurationAnchor(button)
+    duration:ClearAllPoints()
+    duration:SetPoint(point, iconTexture, relPoint, dir[1] * amount, dir[2] * amount)
+    movedDurations[button] = (amount ~= 0) and amount or nil
+    if amount ~= 0 then EnsureSquareBorderLayoutHooks() end
 end
 
--- Re-applies duration text offset after Blizzard's UpdateGridLayout.
+-- Re-applies the pushes after Blizzard's UpdateGridLayout re-anchors the text.
 local squareLayoutHooksInstalled = false
 
 local function ReapplyDurationOffsets(auraFrame)
-    if not SquareBordersEnabled() or SquareBorderInset() then return end
     local buttons = auraFrame and auraFrame.auraFrames
     if type(buttons) ~= "table" then return end
-    local px = SquareBorderThickness()
-    if auraFrame == DebuffFrame then
-        local style = uuidb.general.aurastyle_playerdebuffs or "zoom"
-        if not (style == "both" or style == "border") then
-            px = SB.DispelThickness(SQUARE_LOC)
-        end
-    end
     for _, button in ipairs(buttons) do
-        local sb = button and FindSquareBorder(button)
-        if sb and sb:IsShown() and button.Icon then
-            OffsetDurationText(button, button.Icon, PixelsToUIUnits(button, px))
+        local amount = button and movedDurations[button]
+        if amount and button.Icon then
+            OffsetDurationText(button, button.Icon, amount)
         end
     end
 end
 
-local function EnsureSquareBorderLayoutHooks()
+function EnsureSquareBorderLayoutHooks()
     if squareLayoutHooksInstalled then return end
     squareLayoutHooksInstalled = true
     for _, auraFrame in ipairs({ BuffFrame, DebuffFrame }) do
@@ -81,6 +97,182 @@ local function EnsureSquareBorderLayoutHooks()
             hooksecurefunc(container, "UpdateGridLayout", function()
                 C_Timer.After(0, function() ReapplyDurationOffsets(auraFrame) end)
             end)
+        end
+    end
+end
+
+-------------------------------------------------------------------------------
+-- Player aura text (auratext_player_*): Blizzard's own buttons, restyled in
+-- place -- no container needed.
+--  * Stack count: Blizzard's Count (NumberFontNormal, BOTTOMRIGHT of the icon
+--    at -2, 2), resized and moved.
+--  * Duration: while its size is changed or Centered is on, Blizzard's
+--    Duration text is faded out and mirrored into our own font string (same
+--    text, e.g. "1 m", and color) at the chosen size -- under the icon like
+--    Blizzard's, or centered on it. Blizzard re-sets its font and anchor on
+--    its own schedule, so it's never resized directly. The mirror follows
+--    Blizzard's UpdateDuration / Show / Hide, hooked per button only once the
+--    feature is on.
+--  * Centered: the row space Blizzard reserves for the text under (or beside)
+--    each icon is dropped -- the buttons shrink to the icon and Blizzard's own
+--    grid layout is re-applied to them after each of its passes.
+-------------------------------------------------------------------------------
+local function PlayerText() return UberUI.aurakit.TextSettings("player") end
+
+local function PlayerDurationActive(t)
+    return t.center or t.duration ~= 1
+end
+
+local mirrors = setmetatable({}, { __mode = "k" })       -- button -> font string
+local mirrorHooked = setmetatable({}, { __mode = "k" })  -- button -> true
+
+local function UpdateDurationMirror(button)
+    local blizz = button and button.Duration
+    if not blizz or IsSecret(blizz) then return end
+    local t = PlayerText()
+    local own = mirrors[button]
+    if not PlayerDurationActive(t) then
+        if own then
+            own:Hide()
+            blizz:SetAlpha(1)
+        end
+        return
+    end
+    if not own then
+        local holder = CreateFrame("Frame", nil, button)
+        holder:SetAllPoints(button)
+        holder:SetFrameLevel(button:GetFrameLevel() + 6)
+        holder:EnableMouse(false)
+        own = holder:CreateFontString(nil, "OVERLAY")
+        mirrors[button] = own
+    end
+    blizz:SetAlpha(0)
+    -- Above the border ring (button + 5), re-set each time: the button's
+    -- own level can change after the holder was made.
+    own:GetParent():SetFrameLevel(button:GetFrameLevel() + 10)
+    if not blizz:IsShown() then
+        own:Hide()
+        return
+    end
+    -- Blizzard's font object first (its shadow and color), then its size
+    -- scaled; outlined when centered, since it sits on the icon art.
+    own:SetFontObject(blizz:GetFontObject() or GameFontNormalSmall)
+    local font, size, flags = blizz:GetFont()
+    if font and size then
+        own:SetFont(font, math.max(4, size * t.duration), t.center and "OUTLINE" or flags)
+    end
+    if t.center then own:SetShadowOffset(0, 0) end
+    own:SetTextColor(blizz:GetTextColor())
+    own:ClearAllPoints()
+    local icon = button.Icon
+    if t.center and icon then
+        own:SetPoint("CENTER", icon, "CENTER", 0, 0)
+    else
+        -- Blizzard's anchor, worked out the way its UpdateGridLayout sets it
+        -- (reading it back returns secret values in combat): under the icon,
+        -- or above / beside it per the container's grow direction, plus our
+        -- square-border push (OffsetDurationText).
+        local point, relPoint, dir = StockDurationAnchor(button)
+        local push = movedDurations[button] or 0
+        if icon then
+            own:SetPoint(point, icon, relPoint, dir[1] * push, dir[2] * push)
+        end
+    end
+    -- Blizzard's own text (possibly secret in combat; SetText accepts it).
+    own:SetText(blizz:GetText())
+    own:Show()
+end
+
+local function EnsureDurationMirror(button)
+    if mirrorHooked[button] or not button.Duration or not button.UpdateDuration then return end
+    mirrorHooked[button] = true
+    hooksecurefunc(button, "UpdateDuration", UpdateDurationMirror)
+    local blizz = button.Duration
+    hooksecurefunc(blizz, "Hide", function() local own = mirrors[button] if own then own:Hide() end end)
+    hooksecurefunc(blizz, "Show", function() UpdateDurationMirror(button) end)
+    hooksecurefunc(blizz, "SetShown", function() UpdateDurationMirror(button) end)
+end
+
+-- Stack count and duration text for one player aura button. At the default
+-- settings Blizzard's Count is left exactly as its template made it
+-- (NumberFontNormal, BOTTOMRIGHT of the icon at -2, 2); if we changed it,
+-- that's restored.
+local countTouched = setmetatable({}, { __mode = "k" }) -- button -> true
+
+local function StylePlayerText(button, iconTexture)
+    local t = PlayerText()
+    local count = button.Count
+    if count and not IsSecret(count) and NumberFontNormal then
+        local stock = t.stack == 1 and t.anchor == "BOTTOMRIGHT" and t.x == 0 and t.y == 0
+        if stock then
+            if countTouched[button] then
+                count:SetFontObject(NumberFontNormal)
+                count:ClearAllPoints()
+                count:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", -2, 2)
+                count:SetJustifyH("CENTER")
+                countTouched[button] = nil
+            end
+        else
+            local font, fsize, flags = NumberFontNormal:GetFont()
+            if font then count:SetFont(font, math.max(4, fsize * t.stack), flags) end
+            UberUI.aurakit.PlaceCount(count, iconTexture, t, -2, 2)
+            countTouched[button] = true
+        end
+    end
+    if PlayerDurationActive(t) then EnsureDurationMirror(button) end
+    if mirrorHooked[button] then UpdateDurationMirror(button) end
+end
+
+-- Centered: shrink the buttons to the icon and re-apply Blizzard's grid.
+local STOCK_SIZE = { horizontal = { 30, 40 }, vertical = { 60, 30 } }
+local compacted = setmetatable({}, { __mode = "k" }) -- container -> true
+
+local function ApplyPlayerRows(container, auras, doNotAnchorDisabledFrames)
+    local info = container and container.currentGridLayoutInfo
+    if not (info and info.layout and info.anchor and type(auras) == "table") then return end
+    local center = PlayerText().center
+    if not center and not compacted[container] then return end
+    local list = auras
+    if doNotAnchorDisabledFrames then
+        list = {}
+        for _, f in ipairs(auras) do
+            if f.hasValidInfo or f.isExample or f.isAuraAnchor then list[#list + 1] = f end
+        end
+    end
+    if #list == 0 then return end
+    -- Never resize protected buttons in combat (they aren't today; guarded
+    -- in case Blizzard makes them secure).
+    if InCombatLockdown() and list[1].IsProtected and list[1]:IsProtected() then return end
+    local stock = info.isHorizontal and STOCK_SIZE.horizontal or STOCK_SIZE.vertical
+    local w, h = stock[1], stock[2]
+    if center then w, h = 30, 30 end
+    for _, aura in ipairs(list) do
+        if not IsSecret(aura) then aura:SetSize(w, h) end
+    end
+    GridLayoutUtil.ApplyGridLayout(list, info.anchor, info.layout)
+    compacted[container] = center or nil
+end
+
+local rowHooks = setmetatable({}, { __mode = "k" }) -- container -> true
+local function EnsurePlayerRowHooks()
+    if not PlayerText().center then return end
+    for _, auraFrame in ipairs({ BuffFrame, DebuffFrame }) do
+        local container = auraFrame and auraFrame.AuraContainer
+        if container and container.UpdateGridLayout and not rowHooks[container] then
+            rowHooks[container] = true
+            hooksecurefunc(container, "UpdateGridLayout", ApplyPlayerRows)
+        end
+    end
+end
+
+-- From the options (via Refresh): re-apply rows to the current buttons.
+local function RefreshPlayerRows()
+    EnsurePlayerRowHooks()
+    if not (GridLayoutUtil and GridLayoutUtil.ApplyGridLayout) then return end
+    for _, auraFrame in ipairs({ BuffFrame, DebuffFrame }) do
+        local container = auraFrame and auraFrame.AuraContainer
+        if container and auraFrame.auraFrames then
+            pcall(ApplyPlayerRows, container, auraFrame.auraFrames, auraFrame.doNotAnchorDisabledFrames)
         end
     end
 end
@@ -292,6 +484,7 @@ function buffsandauras:StyleAuraButton(button)
     if not iconTexture or IsSecret(iconTexture) then return end
 
     local isPlayer, isDebuff, isTempEnchant = GetAuraInfo(button)
+    if isPlayer then pcall(StylePlayerText, button, iconTexture) end
 
     -- In combat these fields (e.g. debuffType) are secret: IsSecret comes
     -- first everywhere, and a secret dtype only goes to the secret-safe
@@ -486,7 +679,7 @@ function buffsandauras:StyleAuraButton(button)
             teBorder:Show()
         elseif showCustomBorder then
             if squareBorder then squareBorder:Hide() end
-            OffsetDurationText(button, iconTexture, 0)
+            OffsetDurationText(button, iconTexture, math.max(0, pad - RING_TEXT_TUCK))
             borderFrame.texture:SetVertexColor(r, g, b, a)
             borderFrame:Show()
         else
@@ -523,6 +716,7 @@ function buffsandauras:StyleAuraButton(button)
             borderObj:SetPoint("TOPLEFT", iconTexture, "TOPLEFT", -pad, pad)
             borderObj:SetPoint("BOTTOMRIGHT", iconTexture, "BOTTOMRIGHT", pad, -pad)
             borderObj:Show()
+            if isDebuff then OffsetDurationText(button, iconTexture, math.max(0, pad - RING_TEXT_TUCK)) end
         end
 
         if isTempEnchant and not enchantColor and teBorder and not IsSecret(teBorder) then
@@ -559,6 +753,7 @@ function buffsandauras:Refresh()
     -- (playerdebuffs.lua).
     if UberUI.playerdebuffs then UberUI.playerdebuffs:Update() end
     if InCombatLockdown() then return end
+    RefreshPlayerRows()
 
     if BuffFrame then
         if BuffFrame.auraFrames then

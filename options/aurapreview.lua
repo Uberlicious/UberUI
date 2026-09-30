@@ -40,6 +40,7 @@ local SAMPLES = {
 -- Locations that can show duration text: the setting that turns it on, or
 -- true for always on.
 local DURATION = {
+    player = true, -- Blizzard's own "12 s" text, under the icon or centered
     target = "targetauraduration",
     focus = "focusauraduration",
     compact = "compactauraduration",
@@ -52,19 +53,18 @@ local function G() return uuidb and uuidb.general or {} end
 -- (sizes in the frame's units). Default: the shared aura buttons
 -- (aurakit.ApplyAuraButtonStyle): icon inset 1 when zoomed or bordered,
 -- ring padded 3 (2 under 20px) around the button.
--- Base pad of the rounded ring around the button, in frame units. Dark and
--- dispel-colored rings share it, and it grows while zoomed
--- (general:ZoomBorderGrow) so the zoomed icon's corners sit under the ring.
-local function ZoomGrow(zoom, size, perWidth)
+-- Pad of the rounded ring around the button, in frame units; dark and
+-- dispel-colored rings share it. Player's grows while zoomed
+-- (general:ZoomBorderGrow, 1 per 30px of icon).
+local function ZoomGrow(zoom, size)
     if not zoom then return 0 end
-    if perWidth then return math.max(1, math.floor(size / 30 + 0.5)) end
-    return 1
+    return math.max(1, math.floor(size / 30 + 0.5))
 end
 
 local ROUND_GEOMETRY = {
     default = {
         inset = function() return 1 end,
-        pad = function(size, zoom) return (size >= 20 and 3 or 2) + ZoomGrow(zoom) end,
+        pad = function(size) return size >= 20 and 3 or 2 end,
         countX = 1, countY = 0,
     },
     -- Player buffs/debuffs (buffsandauras.lua): Blizzard's own buttons, the
@@ -72,30 +72,30 @@ local ROUND_GEOMETRY = {
     -- 40px DebuffBorder on a 30px icon).
     player = {
         inset = function() return 0 end,
-        pad = function(size, zoom) return math.max(2, math.floor(size * 5 / 30 + 0.5)) + ZoomGrow(zoom, size, true) end,
-        countX = 1, countY = 0,
+        pad = function(size, zoom) return math.max(2, math.floor(size * 5 / 30 + 0.5)) + ZoomGrow(zoom, size) end,
+        countX = -2, countY = 2, countFont = "NumberFontNormal",
     },
     -- Party (partyframes.lua): Blizzard's DebuffBorder from
     -- PartyAuraFrameTemplate, 1px out, recolored for dark / dispel.
     party = {
         inset = function() return 0 end,
-        pad = function(_, zoom) return 1 + ZoomGrow(zoom) end,
+        pad = function() return 1 end,
         file = "Interface\\Buttons\\UI-Debuff-Overlays",
         texCoords = { 0.296875, 0.5703125, 0, 0.515625 },
-        countX = 5, countY = 0,
+        countX = 5, countY = 0, countJustify = "RIGHT", -- PartyAuraFrameTemplate
     },
     -- Arena trackers (arenaframes.lua): the DR tray / CC remover borders are
     -- that same overlay art 1px out.
     arena = {
         inset = function() return 1 end,
-        pad = function(_, zoom) return 1 + ZoomGrow(zoom) end,
+        pad = function() return 1 end,
         file = "Interface\\Buttons\\UI-Debuff-Overlays",
         texCoords = { 0.296875, 0.5703125, 0, 0.515625 },
         countX = 1, countY = 0,
     },
     nameplate = {
         inset = function() return 1 end,
-        pad = function(size, zoom) return (size >= 20 and 3 or 2) + ZoomGrow(zoom) end,
+        pad = function(size) return size >= 20 and 3 or 2 end,
         countX = 3, countY = -2, -- Blizzard_NamePlateAuras.xml
     },
 }
@@ -246,16 +246,42 @@ local function ShowsDuration(loc)
     return d and G()[d] == true or false
 end
 
-local function NewIcon(stage, info)
-    local b = CreateFrame("Frame", nil, stage)
+-- A sample aura button. Player's are built from Blizzard's own player aura
+-- template (AuraButtonArtTemplate: 30x40 with the icon at the top, Count
+-- and Duration where Blizzard puts them), so their stock text placement is
+-- Blizzard's own. The others mirror the shared aura buttons (aurakit).
+--
+-- Buttons work in their frame's own units and are scaled as a whole
+-- (SetScale) to the on-screen size, so offsets and fonts scale exactly like
+-- the real frames'.
+local function NewIcon(stage, info, loc)
+    local b
+    if loc == "player" then
+        local ok, f = pcall(CreateFrame, "Frame", nil, stage, "AuraButtonArtTemplate")
+        if ok and f and f.Icon and f.Count and f.Duration then
+            b = f
+            b.isTemplate = true
+            b.icon, b.count, b.duration = f.Icon, f.Count, f.Duration
+            for _, key in ipairs({ "DebuffBorder", "TempEnchantBorder", "Symbol" }) do
+                if f[key] then f[key]:Hide() end
+            end
+        end
+    end
+    if not b then
+        b = CreateFrame("Frame", nil, stage)
+        b.icon = b:CreateTexture(nil, "ARTWORK")
+        b.text = CreateFrame("Frame", nil, b)
+        b.text:SetAllPoints()
+        b.text:SetFrameLevel(b:GetFrameLevel() + 5)
+        b.count = b.text:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        b.duration = b.text:CreateFontString(nil, "OVERLAY")
+    end
     b.info = info
-
-    b.icon = b:CreateTexture(nil, "ARTWORK")
     b.icon:SetTexture(info.icon)
     Unsnap(b.icon)
 
     -- Rounded border: Blizzard's art, darkened (dark) or tinted through a
-    -- mask (dispel color), on a host padded out like aurakit's borderHost.
+    -- mask (dispel color), on a host padded out around the icon's box.
     b.round = CreateFrame("Frame", nil, b)
     b.round:SetFrameLevel(b:GetFrameLevel() + 2)
     b.roundDark = b.round:CreateTexture(nil, "OVERLAY")
@@ -274,13 +300,6 @@ local function NewIcon(stage, info)
 
     b.square = UberUI.squareborders.CreateBorder(b)
     b.square:SetFrameLevel(b:GetFrameLevel() + 3)
-
-    b.text = CreateFrame("Frame", nil, b)
-    b.text:SetAllPoints()
-    b.text:SetFrameLevel(b:GetFrameLevel() + 5)
-    b.count = b.text:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-    b.duration = b.text:CreateFontString(nil, "OVERLAY")
-    b.duration:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
     return b
 end
 
@@ -290,9 +309,9 @@ local function StyleFor(o, isBuff)
     return g[o.debuffKey] or "zoom"
 end
 
--- frameSize: the icon's size in its frame's units; r: frame units -> preview
--- units (effective scale ratio, times any fit-to-strip shrink).
-local function UpdateIcon(b, o, frameSize, r, sizes)
+-- frameSize: the icon's size in its frame's own units. The button is scaled
+-- to the screen by the caller, so everything here is in frame units.
+local function UpdateIcon(b, o, frameSize, sizes)
     local SB = UberUI.squareborders
     local info = b.info
     local isBuff = info.buff
@@ -300,19 +319,39 @@ local function UpdateIcon(b, o, frameSize, r, sizes)
     local zoom = style == "both" or style == "zoom"
     local dark = style == "both" or style == "border"
     local square = style ~= "none" and SB.IsEnabled(o.loc)
-    local size = frameSize * r
-    b:SetSize(size, size)
-
-    -- Icon: square borders sit on/outside the edge, so the icon fills the
-    -- button; the rounded look keeps a 1px inset (aurakit.ApplyAuraButtonStyle).
     local geo = ROUND_GEOMETRY[o.loc] or ROUND_GEOMETRY.default
-    b.icon:ClearAllPoints()
-    local inset = geo.inset() * r
-    if (dark or zoom) and not square and inset > 0 then
-        b.icon:SetPoint("TOPLEFT", b, "TOPLEFT", inset, -inset)
-        b.icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -inset, inset)
+
+    -- Layers relative to the button, every redraw: explicit frame levels
+    -- don't follow when the settings list moves the preview to another row
+    -- (a different level), which left the borders under the icon.
+    local level = b:GetFrameLevel()
+    b.round:SetFrameLevel(level + 2)
+    b.square:SetFrameLevel(level + 3)
+    if b.text then b.text:SetFrameLevel(level + 5) end
+
+    local t = UberUI.aurakit and UberUI.aurakit.TextSettings(o.loc)
+        or { duration = 1, stack = 1, anchor = "BOTTOMRIGHT", x = 0, y = 0 }
+
+    -- The box the borders go around: Blizzard's icon texture on the player
+    -- template (its own anchor, TOP of the button, is left alone), else the
+    -- button, with the icon inset inside it like aurakit.ApplyAuraButtonStyle.
+    local box
+    if b.isTemplate then
+        -- Duration Inside Icon drops the row space under the icon.
+        b:SetSize(frameSize, t.center and frameSize or frameSize * 40 / 30)
+        b.icon:SetSize(frameSize, frameSize)
+        box = b.icon
     else
-        b.icon:SetAllPoints(b)
+        b:SetSize(frameSize, frameSize)
+        b.icon:ClearAllPoints()
+        local inset = geo.inset()
+        if (dark or zoom) and not square and inset > 0 then
+            b.icon:SetPoint("TOPLEFT", b, "TOPLEFT", inset, -inset)
+            b.icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -inset, inset)
+        else
+            b.icon:SetAllPoints(b)
+        end
+        box = b
     end
     if zoom then
         b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -325,25 +364,32 @@ local function UpdateIcon(b, o, frameSize, r, sizes)
 
     b.round:Hide()
     b.square:Hide()
+    -- How far a border reaches past the icon (Player's duration text is
+    -- pushed out past it, as buffsandauras.lua does).
+    local borderReach = 0
     if square then
         -- Buffs: dark or none. Debuffs: dark or dispel colored (optionally
-        -- 1px thicker). Thickness is in screen pixels, so it isn't scaled.
+        -- 1px thicker). Thickness is in screen pixels (squareborders reads
+        -- the effective scale).
         if dark then
-            SB.LayoutFor(b.square, b.icon, o.loc)
+            local th = SB.LayoutFor(b.square, b.icon, o.loc)
             SB.SetDarkColor(b.square)
             b.square:Show()
+            if not SB.IsInset(o.loc) then borderReach = th end
         elseif not isBuff then
-            SB.LayoutDispelFor(b.square, b.icon, o.loc)
+            local th = SB.LayoutDispelFor(b.square, b.icon, o.loc)
             SB.SetColor(b.square, dr, dg, db, 1)
             b.square:Show()
+            if not SB.IsInset(o.loc) then borderReach = th end
         end
     elseif dark or not isBuff then
         -- Buffs without the dark border have none (Blizzard's look); debuffs
         -- are dark or dispel colored.
-        local pad = geo.pad(frameSize, zoom) * r
+        local pad = geo.pad(frameSize, zoom)
+        borderReach = math.max(0, pad - 5) -- buffsandauras.lua RING_TEXT_TUCK
         b.round:ClearAllPoints()
-        b.round:SetPoint("TOPLEFT", b, "TOPLEFT", -pad, pad)
-        b.round:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", pad, -pad)
+        b.round:SetPoint("TOPLEFT", box, "TOPLEFT", -pad, pad)
+        b.round:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", pad, -pad)
         if geo.file then
             -- Blizzard's own border texture, tinted in place for both looks.
             b.roundDark:SetTexture(geo.file)
@@ -370,39 +416,73 @@ local function UpdateIcon(b, o, frameSize, r, sizes)
         b.round:Show()
     end
 
-    -- Stack count: NumberFontNormalSmall, scaled with the icon against the
-    -- location's reference size (Blizzard's own buttons never scale it).
+    -- Stack count: the location's count font, scaled with the icon against
+    -- its reference size (Blizzard's own buttons never scale it), times
+    -- Stack Text Size, at the chosen anchor + offset (the stock offset only
+    -- in the stock bottom-right corner) -- as the real buttons apply it.
     if info.stack then
-        local font, fsize, flags = NumberFontNormalSmall:GetFont()
+        local fontObject = _G[geo.countFont or "NumberFontNormalSmall"] or NumberFontNormalSmall
+        b.count:SetFontObject(fontObject)
+        local font, fsize, flags = fontObject:GetFont()
         if font then
             local scale = sizes.fixedCount and 1 or (frameSize / sizes.countRef)
-            b.count:SetFont(font, math.max(4, fsize * scale * r), flags)
+            b.count:SetFont(font, math.max(4, fsize * scale * t.stack), flags)
         end
+        local bx, by = 0, 0
+        if t.anchor == "BOTTOMRIGHT" then bx, by = geo.countX, geo.countY end
         b.count:ClearAllPoints()
-        b.count:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", geo.countX * r, geo.countY * r)
+        b.count:SetPoint(t.anchor, box, t.anchor, bx + t.x, by + t.y)
+        if t.anchor == "BOTTOMRIGHT" and t.x == 0 and t.y == 0 then
+            b.count:SetJustifyH(geo.countJustify or "CENTER")
+        else
+            b.count:SetJustifyH((t.anchor:find("LEFT") and "LEFT") or (t.anchor:find("RIGHT") and "RIGHT") or "CENTER")
+        end
         b.count:SetText(tostring(info.stack))
         b.count:Show()
     else
         b.count:Hide()
     end
 
-    -- Duration: the countdown font scaled by icon size against Blizzard's
-    -- 25px nameplate aura (aurakit.UpdateDurationText).
-    if info.duration and ShowsDuration(o.loc) then
-        local f = CountdownFont(b)
-        if f then
-            b.duration:SetFont(f[1], math.max(4, f[2] * frameSize / DURATION_REF_SIZE * r), f[3])
-        else
-            b.duration:SetFontObject(NumberFontNormal)
-        end
-        local normal, expiring, threshold = DurationColors()
-        local c = info.duration <= threshold and expiring or normal
-        b.duration:SetTextColor(c.r, c.g, c.b, 1)
-        b.duration:SetText(tostring(info.duration))
-        b.duration:Show()
-    else
+    if not (info.duration and ShowsDuration(o.loc)) then
         b.duration:Hide()
+        return
     end
+    b.duration:ClearAllPoints()
+    if o.loc == "player" then
+        -- Blizzard's text ("12 s", GameFontNormalSmall with its shadow) with
+        -- its top on the icon's bottom, or centered on the icon and outlined;
+        -- only its size changes.
+        b.duration:SetFontObject(GameFontNormalSmall)
+        local font, fsize, flags = GameFontNormalSmall:GetFont()
+        if font and (t.duration ~= 1 or t.center) then
+            b.duration:SetFont(font, math.max(4, fsize * t.duration), t.center and "OUTLINE" or flags)
+        end
+        if t.center then
+            b.duration:SetShadowOffset(0, 0)
+            b.duration:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
+        else
+            b.duration:SetPoint("TOP", b.icon, "BOTTOM", 0, -borderReach)
+        end
+        b.duration:SetText(string.format(_G.SECOND_ONELETTER_ABBR or "%d s", info.duration))
+        b.duration:Show()
+        return
+    end
+    -- Elsewhere: the countdown font scaled by icon size against Blizzard's
+    -- 25px nameplate aura (aurakit.UpdateDurationText), times Duration Text
+    -- Size, centered, colored by the duration colors.
+    local f = CountdownFont(b)
+    b.duration:SetShadowOffset(0, 0)
+    if f then
+        b.duration:SetFont(f[1], math.max(4, f[2] * frameSize / DURATION_REF_SIZE * t.duration), f[3])
+    else
+        b.duration:SetFontObject(NumberFontNormal)
+    end
+    b.duration:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
+    local normal, expiring, threshold = DurationColors()
+    local c = info.duration <= threshold and expiring or normal
+    b.duration:SetTextColor(c.r, c.g, c.b, 1)
+    b.duration:SetText(tostring(info.duration))
+    b.duration:Show()
 end
 
 local function UpdatePreview(preview)
@@ -433,20 +513,29 @@ local function UpdatePreview(preview)
 
     local x = EDGE
     for i, b in ipairs(preview.icons) do
-        pcall(UpdateIcon, b, o, frameSizes[i], r, sizes)
+        local size = frameSizes[i]
+        b:SetScale(r)
+        pcall(UpdateIcon, b, o, size, sizes)
+        -- Anchor offsets are in the button's (scaled) units. The icon is
+        -- vertically centered in the strip; the player template's icon sits
+        -- at the top of its taller button.
         b:ClearAllPoints()
-        b:SetPoint("LEFT", preview.stage, "LEFT", x, 0)
-        -- Caption under the strip (b is centered in it).
+        if b.isTemplate then
+            b:SetPoint("TOPLEFT", preview.stage, "LEFT", x / r, size / 2)
+        else
+            b:SetPoint("LEFT", preview.stage, "LEFT", x / r, 0)
+        end
+        -- Caption under the strip, centered under the icon.
         b.cap:ClearAllPoints()
-        b.cap:SetPoint("TOP", b, "BOTTOM", 0, -((STAGE_HEIGHT - frameSizes[i] * r) / 2 + 2))
+        b.cap:SetWidth(80)
+        b.cap:SetPoint("TOPLEFT", preview.stage, "BOTTOMLEFT", x + size * r / 2 - 40, -2)
         -- Step to the next icon: the usual gap, or wider if the two
         -- captions would otherwise run into each other at small sizes.
         local nextB = preview.icons[i + 1]
-        local step = frameSizes[i] * r
-            + ((b.info.buff and nextB and not nextB.info.buff) and GROUP_GAP or SPACING)
+        local step = size * r + ((b.info.buff and nextB and not nextB.info.buff) and GROUP_GAP or SPACING)
         if nextB then
             local need = (b.cap:GetStringWidth() + nextB.cap:GetStringWidth()) / 2 + 6
-                - (frameSizes[i] * r + frameSizes[i + 1] * r) / 2 + frameSizes[i] * r
+                - (size * r + frameSizes[i + 1] * r) / 2 + size * r
             step = math.max(step, need)
         end
         x = x + step
@@ -471,9 +560,10 @@ local function CreateAuraPreview(parent, o)
 
     preview.icons = {}
     for i, info in ipairs(SAMPLES) do
-        local b = NewIcon(stage, info)
+        local b = NewIcon(stage, info, o.loc)
         -- Caption on the panel under the strip, so it reads as a label.
         local cap = preview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        cap:SetJustifyH("CENTER")
         cap:SetText(info.caption)
         b.cap = cap
         preview.icons[i] = b

@@ -80,6 +80,8 @@ function opt.BuildNameplates(page)
         loc = "nameplate", label = "Nameplate", suffix = "Nameplate",
         buffKey = "aurastyle_nameplatebuffs", debuffKey = "aurastyle_nameplatedebuffs",
         refresh = RefreshNameplateAuraStyle,
+        -- The text options only apply to Uber UI's nameplate auras.
+        textParent = nameplateAurasInit, textParentOn = NameplateAurasOn,
     });
 
     opt.DependsOn(opt.AddSlider(page, {

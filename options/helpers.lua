@@ -336,6 +336,107 @@ function opt.AddAuraOptions(page, o)
         set = function(value) uuidb.general[SBkeys[3]] = (value ~= "outside") end,
         onChange = refresh,
     }), shapeInit, IsSquare);
+
+    opt.AddAuraTextOptions(page, o);
+end
+
+-- Per-location aura text rows -------------------------------------------------
+
+-- Which aura text each location can style (auratext_<loc>_*, read by
+-- aurakit.TextSettings). Arena's trackers have no stack or duration text.
+local TEXT_CAPS = {
+    player = { duration = true, center = true },
+    target = { duration = true },
+    focus = { duration = true },
+    boss = {},
+    party = {},
+    compact = { duration = true },
+    nameplate = { duration = true },
+};
+
+local STACK_ANCHOR_VALUES = {
+    { "TOPLEFT", "Top Left" }, { "TOP", "Top" }, { "TOPRIGHT", "Top Right" },
+    { "LEFT", "Left" }, { "CENTER", "Center" }, { "RIGHT", "Right" },
+    { "BOTTOMLEFT", "Bottom Left" }, { "BOTTOM", "Bottom" }, { "BOTTOMRIGHT", "Bottom Right" },
+};
+
+local function Percent(value) return string.format("%d%%", value) end
+
+-- o: the AddAuraOptions table; o.textParent / o.textParentOn grey the rows
+-- out while the location's auras aren't Uber UI's (nameplates).
+function opt.AddAuraTextOptions(page, o)
+    local caps = TEXT_CAPS[o.loc];
+    if not caps then return end
+    local k = "auratext_" .. o.loc .. "_";
+    local refresh = o.refresh;
+    -- Only the initializer: the Add* helpers also return their setting.
+    local function Gate(init)
+        if o.textParent then
+            opt.DependsOn(init, o.textParent, o.textParentOn);
+        end
+        return init;
+    end
+
+    if caps.duration then
+        Gate(opt.AddSlider(page, {
+            variable = "auraDurationSize" .. o.suffix, name = o.label .. " Duration Text Size",
+            tooltip = "Size of the time-left text on " .. o.label .. " auras, relative to its normal size."
+                .. (o.loc == "player" and "\n\nThe text itself stays Blizzard's (e.g. \"1 m\")." or "")
+                .. ((o.loc == "target" or o.loc == "focus" or o.loc == "compact") and "\n\nOnly shown while " .. o.label .. " Aura Duration Text is on." or ""),
+            db = "general", field = k .. "durationsize", default = 100,
+            min = 50, max = 200, step = 5, format = Percent,
+            onChange = refresh,
+        }));
+    end
+
+    if caps.center then
+        Gate(opt.AddCheckbox(page, {
+            variable = "auraCenterDuration" .. o.suffix, name = o.label .. " Duration Inside Icon",
+            tooltip = "Show the time left in the middle of each " .. o.label .. " aura icon instead of under it (Blizzard's text, e.g. \"1 m\"), and pack the rows tighter, since the space under the icons isn't needed.\n\nBlizzard's buff frame box in Edit Mode keeps its usual size.",
+            db = "general", field = k .. "centerduration", default = false,
+            onChange = refresh,
+        }));
+    end
+
+    Gate(opt.AddSlider(page, {
+        variable = "auraStackSize" .. o.suffix, name = o.label .. " Stack Text Size",
+        tooltip = "Size of the stack count on " .. o.label .. " auras, relative to its normal size.",
+        db = "general", field = k .. "stacksize", default = 100,
+        min = 50, max = 200, step = 5, format = Percent,
+        onChange = refresh,
+    }));
+
+    Gate(opt.AddDropdown(page, {
+        variable = "auraStackAnchor" .. o.suffix, name = o.label .. " Stack Text Position",
+        tooltip = "Where the stack count sits on " .. o.label .. " auras. Bottom Right is Blizzard's spot.",
+        default = "BOTTOMRIGHT",
+        values = STACK_ANCHOR_VALUES,
+        get = function()
+            local v = uuidb.general and uuidb.general[k .. "stackanchor"];
+            for _, a in ipairs(STACK_ANCHOR_VALUES) do
+                if a[1] == v then return v end
+            end
+            return "BOTTOMRIGHT";
+        end,
+        set = function(value) uuidb.general[k .. "stackanchor"] = value end,
+        onChange = refresh,
+    }));
+
+    Gate(opt.AddSlider(page, {
+        variable = "auraStackX" .. o.suffix, name = o.label .. " Stack Text X Offset",
+        tooltip = "Moves the stack count left (negative) or right (positive) from its position.",
+        db = "general", field = k .. "stackx", default = 0,
+        min = -10, max = 10, step = 1,
+        onChange = refresh,
+    }));
+
+    Gate(opt.AddSlider(page, {
+        variable = "auraStackY" .. o.suffix, name = o.label .. " Stack Text Y Offset",
+        tooltip = "Moves the stack count down (negative) or up (positive) from its position.",
+        db = "general", field = k .. "stacky", default = 0,
+        min = -10, max = 10, step = 1,
+        onChange = refresh,
+    }));
 end
 
 -- All Auras: one-time apply to every location ---------------------------------

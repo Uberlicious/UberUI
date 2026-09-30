@@ -23,20 +23,66 @@ aurakit.SafeIsForbidden = SafeIsForbidden
 -- default stack count reference.
 local TEXT_REF_SIZE = NamePlateConstants and NamePlateConstants.AURA_ITEM_HEIGHT or 25
 
+-- Per-location aura text settings (auratext_<loc>_*): duration and stack
+-- text size as multipliers, the stack count's anchor and offset, and
+-- Player's centered duration. Shared by every aura location, including the
+-- Blizzard-drawn ones (Player, Party).
+local STACK_ANCHORS = {
+    TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true,
+    RIGHT = true, BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true,
+}
+function aurakit.TextSettings(loc)
+    local g = uuidb and uuidb.general or {}
+    local k = "auratext_" .. tostring(loc) .. "_"
+    local function Scale(v)
+        v = tonumber(v) or 100
+        return math.max(0.25, math.min(3, v / 100))
+    end
+    local anchor = g[k .. "stackanchor"]
+    return {
+        duration = Scale(g[k .. "durationsize"]),
+        stack = Scale(g[k .. "stacksize"]),
+        anchor = STACK_ANCHORS[anchor] and anchor or "BOTTOMRIGHT",
+        x = tonumber(g[k .. "stackx"]) or 0,
+        y = tonumber(g[k .. "stacky"]) or 0,
+        center = g[k .. "centerduration"] == true,
+    }
+end
+
+-- Places a stack count at the chosen anchor plus offset. The location's own
+-- stock offset (nativeX/Y) only applies in its stock bottom-right corner.
+function aurakit.PlaceCount(count, owner, t, nativeX, nativeY)
+    local bx, by = 0, 0
+    if t.anchor == "BOTTOMRIGHT" then bx, by = nativeX or 0, nativeY or 0 end
+    count:ClearAllPoints()
+    count:SetPoint(t.anchor, owner, t.anchor, bx + t.x, by + t.y)
+    local justify = (t.anchor:find("LEFT") and "LEFT") or (t.anchor:find("RIGHT") and "RIGHT") or "CENTER"
+    count:SetJustifyH(justify)
+end
+
 -- Sizes the stack count to the button's icon size, against the container's
 -- _uberCountRefSize: the location's stock icon size, where Blizzard draws
--- NumberFontNormalSmall unscaled. Sized from the font object, not the current
--- font, so repeated calls don't compound; re-sized only when the size changes.
+-- the count font unscaled; times the location's Stack Text Size. Sized from
+-- the font object, not the current font, so repeated calls don't compound;
+-- only re-applied when something it depends on changes.
 local function UpdateCountSize(button)
     local count = button.count
     if not count or not NumberFontNormalSmall then return end
     local iconSize = button.elementSize or TEXT_REF_SIZE
-    if button.uuCountSize == iconSize then return end
-    local font, fsize, flags = NumberFontNormalSmall:GetFont()
+    local t = aurakit.TextSettings(button._uberTextLoc)
+    local key = table.concat({ iconSize, t.stack, t.anchor, t.x, t.y }, "|")
+    if button.uuCountSize == key then return end
+    local container = button.container
+    local fontObject = container and container._uberCountFont or NumberFontNormalSmall
+    local font, fsize, flags = fontObject:GetFont()
     if not font then return end
-    local refSize = button.container and button.container._uberCountRefSize or TEXT_REF_SIZE
-    count:SetFont(font, math.max(6, math.floor(fsize * iconSize / refSize + 0.5)), flags)
-    button.uuCountSize = iconSize
+    local refSize = container and container._uberCountRefSize or TEXT_REF_SIZE
+    count:SetFont(font, math.max(4, math.floor(fsize * iconSize / refSize * t.stack + 0.5)), flags)
+    -- Blizzard's own count offsets differ per location (see InitAuraButton);
+    -- containers override via _uberCountOffset, default the target frame's.
+    local off = container and container._uberCountOffset
+    aurakit.PlaceCount(count, button, t, off and off[1] or 1, off and off[2] or 0)
+    button.uuCountSize = key
 end
 
 -- When a unit is in another zone the engine can fail to resolve an aura's
@@ -248,7 +294,6 @@ local function GetStealableRing(button)
         host = CreateFrame("Frame", nil, button)
         host:ClearAllPoints()
         host:SetAllPoints(button.borderHost)
-        host:SetFrameLevel(button.borderHost:GetFrameLevel() + 2)
         host:EnableMouse(false)
         host:Hide()
         local tex = host:CreateTexture(nil, "OVERLAY", nil, 2)
@@ -267,6 +312,7 @@ local function GetStealableRing(button)
         host.tex = tex
         ringHosts[button] = host
     end
+    host:SetFrameLevel(button.borderHost:GetFrameLevel() + 2)
     if not host.registered then
         local SB = UberUI.squareborders
         local o = SB and SB.StealableEngineOptions()
@@ -285,6 +331,22 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
     -- No SafeIsForbidden bail-out: a forbidden button still accepts border
     -- show/hide, and every widget call below is pcall-wrapped.
     aurakit.TryRegisterDispelBorder(button)
+
+    -- The location's text settings (stack count here, duration text in
+    -- UpdateDurationText) follow its square-border location key.
+    if opts and opts.squareLoc then button._uberTextLoc = opts.squareLoc end
+    UpdateCountSize(button)
+
+    -- Layers, relative to the button on every style pass: icon (the button),
+    -- cooldown swipe, borders, text. Levels set once at creation don't follow
+    -- when the container re-levels its pooled buttons, which left the borders
+    -- under the icon.
+    pcall(function()
+        local level = button:GetFrameLevel()
+        if button.cooldown then button.cooldown:SetFrameLevel(level + 1) end
+        if button.borderHost then button.borderHost:SetFrameLevel(level + 3) end
+        if button.textHolder then button.textHolder:SetFrameLevel(level + 8) end
+    end)
 
     local isBuff = button.isBuff
     local style = (opts and opts.style) or "both"
@@ -330,10 +392,7 @@ function aurakit.ApplyAuraButtonStyle(button, opts)
 
     if button.borderHost then
         pcall(function()
-            -- Every rounded border (dark, dispel, stealable) follows
-            -- borderHost, so they're one size, grown slightly while zoomed.
-            local pad = ((button.elementSize and button.elementSize >= 20) and 3 or 2)
-                + UberUI.general:ZoomBorderGrow(zoomEnabled)
+            local pad = (button.elementSize and button.elementSize >= 20) and 3 or 2
             button.borderHost:ClearAllPoints()
             button.borderHost:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
             button.borderHost:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
@@ -593,12 +652,7 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     -- inset we used before pushed the count into the centred duration text.
     -- Containers override via _uberCountOffset; the default is the target
     -- frame's, which is what most callers are.
-    local countOffset = container and container._uberCountOffset
-    local countX = countOffset and countOffset[1] or 1
-    local countY = countOffset and countOffset[2] or 0
     local count = button.count or textHolder:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-    count:ClearAllPoints()
-    count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", countX, countY)
     button.count = count
     UpdateCountSize(button)
     if button.SetApplicationCount then
@@ -772,14 +826,16 @@ function aurakit.UpdateDurationText(button, enabled)
     end
 
     local iconSize = button.elementSize or TEXT_REF_SIZE
-    if button.uuDurationSize ~= iconSize then
+    local scale = aurakit.TextSettings(button._uberTextLoc).duration
+    local sizeKey = iconSize .. "|" .. scale
+    if button.uuDurationSize ~= sizeKey then
         local f = button.uuDurationFont
         if f then
-            text:SetFont(f[1], math.max(6, math.floor(f[2] * iconSize / TEXT_REF_SIZE + 0.5)), f[3])
+            text:SetFont(f[1], math.max(4, math.floor(f[2] * iconSize / TEXT_REF_SIZE * scale + 0.5)), f[3])
         else
             text:SetFontObject(NumberFontNormal)
         end
-        button.uuDurationSize = iconSize
+        button.uuDurationSize = sizeKey
     end
 
     local opts, key = GetDurationTextOptions()

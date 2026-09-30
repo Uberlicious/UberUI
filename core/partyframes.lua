@@ -108,9 +108,34 @@ function partyframes:HealthManaBarTexture()
     end
 end
 
+local countTouched = setmetatable({}, { __mode = "k" }) -- aura button -> true
+
 -- Party member aura styling (on-frame debuffs, pet debuffs, and hover tooltip).
 function partyframes:StyleAuraButton(button, isBuff)
     if not button or not button.DebuffBorder then return end
+
+    -- Stack count: Blizzard's (PartyAuraFrameTemplate: NumberFontNormalSmall,
+    -- right-justified, BOTTOMRIGHT x=5) is left exactly as the template made
+    -- it at the default settings, and restored if we'd changed it.
+    local count = button.Count
+    local kit = UberUI.aurakit
+    if count and kit and NumberFontNormalSmall then
+        local t = kit.TextSettings("party")
+        if t.stack == 1 and t.anchor == "BOTTOMRIGHT" and t.x == 0 and t.y == 0 then
+            if countTouched[button] then
+                count:SetFontObject(NumberFontNormalSmall)
+                count:ClearAllPoints()
+                count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 5, 0)
+                count:SetJustifyH("RIGHT")
+                countTouched[button] = nil
+            end
+        else
+            local font, fsize, flags = NumberFontNormalSmall:GetFont()
+            if font then count:SetFont(font, math.max(4, fsize * t.stack), flags) end
+            kit.PlaceCount(count, button, t, 5, 0)
+            countTouched[button] = true
+        end
+    end
     local style = (isBuff and uuidb.general.aurastyle_partybuffs or uuidb.general.aurastyle_partydebuffs)
         or (isBuff and "both" or "zoom")
     local zoomEnabled = (style == "both" or style == "zoom")
@@ -144,13 +169,6 @@ function partyframes:StyleAuraButton(button, isBuff)
         return
     end
     if SB then SB.Hide(button) end
-
-    -- Blizzard's DebuffBorder, 1px out (PartyAuraFrameTemplate), for both the
-    -- dark and dispel looks; grown slightly while zoomed.
-    local pad = 1 + UberUI.general:ZoomBorderGrow(zoomEnabled)
-    button.DebuffBorder:ClearAllPoints()
-    button.DebuffBorder:SetPoint("TOPLEFT", button, "TOPLEFT", -pad, pad)
-    button.DebuffBorder:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", pad, -pad)
 
     if darkBorderEnabled then
         local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }

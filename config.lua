@@ -239,6 +239,18 @@ local defaults = {
     },
 }
 
+-- Aura text per location (aurakit.TextSettings): duration and stack text
+-- size (%), stack anchor and offset; Player can also center its duration.
+for _, loc in ipairs({ "player", "target", "focus", "boss", "party", "compact", "nameplate" }) do
+    local g, k = defaults.general, "auratext_" .. loc .. "_"
+    g[k .. "durationsize"] = 100
+    g[k .. "stacksize"] = 100
+    g[k .. "stackanchor"] = "BOTTOMRIGHT"
+    g[k .. "stackx"] = 0
+    g[k .. "stacky"] = 0
+end
+defaults.general.auratext_player_centerduration = false
+
 -- Copyable error popup.
 local reportedErrors, errorLog = {}, {}
 local errorFrame
