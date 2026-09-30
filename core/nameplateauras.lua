@@ -259,6 +259,8 @@ local function StylePandemic(button, style)
     if not host then
         host = GetPandemicHost(button)
     end
+    -- Over the dispel border, under the text (aurakit re-levels those).
+    if button.borderHost then host:SetFrameLevel(button.borderHost:GetFrameLevel() + 3) end
     if on and not host.registered and button.AddPandemicRegion then
         if pcall(button.AddPandemicRegion, button, host) then host.registered = true end
     end

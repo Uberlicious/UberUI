@@ -334,6 +334,10 @@ local function UpdateIcon(b, o, frameSize, sizes)
     b.round:SetFrameLevel(level + 2)
     b.square:SetFrameLevel(level + 3)
     if b.text then b.text:SetFrameLevel(level + 5) end
+    -- Blizzard's template keeps its text on the button, under the border
+    -- frames: moved onto a text layer above them, as on the real buttons.
+    if b.isTemplate then UberUI.general:LiftAuraText(b, 10, { "Count", "Duration" }) end
+    if b.pandemicHost then b.pandemicHost:SetFrameLevel(level + 4) end
 
     local t = UberUI.aurakit and UberUI.aurakit.TextSettings(o.loc)
         or { duration = 1, stack = 1, anchor = "BOTTOMRIGHT", x = 0, y = 0 }

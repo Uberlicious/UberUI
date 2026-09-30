@@ -357,6 +357,31 @@ function general:ZoomBorderGrow(zoomEnabled, iconWidth)
     return general.ZOOM_BORDER_GROW
 end
 
+-- Text drawn over our borders: Blizzard's aura buttons keep their count and
+-- duration on the button itself, under any border frame we add on top. The
+-- font strings are moved onto a text layer above the borders (their anchors
+-- and draw layers are unchanged; Blizzard only sets their text and shown
+-- state). Re-leveled on every call, since the button's own level can change.
+local textLayers = setmetatable({}, { __mode = "k" }) -- button -> frame
+function general:LiftAuraText(button, levelAbove, keys)
+    if not button then return nil end
+    local layer = textLayers[button]
+    if not layer then
+        layer = CreateFrame("Frame", nil, button)
+        layer:SetAllPoints(button)
+        layer:EnableMouse(false)
+        textLayers[button] = layer
+    end
+    for _, key in ipairs(keys) do
+        local region = button[key]
+        if region and region.SetParent and region:GetParent() ~= layer then
+            pcall(region.SetParent, region, layer)
+        end
+    end
+    pcall(layer.SetFrameLevel, layer, button:GetFrameLevel() + (levelAbove or 10))
+    return layer
+end
+
 -- With zoom or a border, the icon insets 1px inside its parent so crop and
 -- border read as one unit; otherwise it fills its anchor.
 function general:ApplyAuraIconInset(icon, insetEnabled)

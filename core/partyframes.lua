@@ -114,6 +114,9 @@ local countTouched = setmetatable({}, { __mode = "k" }) -- aura button -> true
 function partyframes:StyleAuraButton(button, isBuff)
     if not button or not button.DebuffBorder then return end
 
+    -- Stack count above our square border (button + 2).
+    UberUI.general:LiftAuraText(button, 5, { "Count" })
+
     -- Stack count: Blizzard's (PartyAuraFrameTemplate: NumberFontNormalSmall,
     -- right-justified, BOTTOMRIGHT x=5) is left exactly as the template made
     -- it at the default settings, and restored if we'd changed it.

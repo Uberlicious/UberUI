@@ -484,7 +484,11 @@ function buffsandauras:StyleAuraButton(button)
     if not iconTexture or IsSecret(iconTexture) then return end
 
     local isPlayer, isDebuff, isTempEnchant = GetAuraInfo(button)
-    if isPlayer then pcall(StylePlayerText, button, iconTexture) end
+    if isPlayer then
+        -- Stack count and duration above our border frames (button + 5).
+        UberUI.general:LiftAuraText(button, 10, { "Count", "Duration" })
+        pcall(StylePlayerText, button, iconTexture)
+    end
 
     -- In combat these fields (e.g. debuffType) are secret: IsSecret comes
     -- first everywhere, and a secret dtype only goes to the secret-safe

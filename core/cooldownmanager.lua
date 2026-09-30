@@ -332,6 +332,46 @@ end
 
 -- Blizzard shows/hides DebuffBorder itself, so it's faded by alpha.
 local PandemicKeepsBorder -- defined with the pandemic code
+local pandemicHosts = setmetatable({}, { __mode = "k" })  -- item frame -> host
+
+-- An item's layers, bottom to top: icon, cooldown swipe, square border,
+-- pandemic highlight, countdown numbers, stack/charge text. The countdown
+-- numbers belong to the Cooldown frame, so they're moved onto a text frame
+-- that's a child of it (they still show and hide with the cooldown) at a
+-- level above the border. A bar item's icon count is a font string on its
+-- Icon frame, so it's moved onto a text layer too. Re-set whenever the
+-- border is placed.
+local countdownLayers = setmetatable({}, { __mode = "k" }) -- Cooldown -> frame
+local function LayerItem(f, holder)
+    local base = holder:GetFrameLevel()
+    local cd = f.Cooldown
+    if cd then cd:SetFrameLevel(base + 1) end
+    local sb = SB.Find(f, 1)
+    if sb then sb:SetFrameLevel(base + 2) end
+    local host = pandemicHosts[f]
+    if host and not f.Bar then host:SetFrameLevel(base + 3) end
+    if cd and cd.GetCountdownFontString then
+        local text = cd:GetCountdownFontString()
+        if text then
+            local layer = countdownLayers[cd]
+            if not layer then
+                layer = CreateFrame("Frame", nil, cd)
+                layer:SetAllPoints(cd)
+                layer:EnableMouse(false)
+                countdownLayers[cd] = layer
+            end
+            if text:GetParent() ~= layer then text:SetParent(layer) end
+            layer:SetFrameLevel(base + 4)
+        end
+    end
+    for _, key in ipairs({ "ChargeCount", "Applications" }) do
+        local t = f[key]
+        if t and t.SetFrameLevel then t:SetFrameLevel(base + 5) end
+    end
+    if f.Bar and holder.Applications then
+        UberUI.general:LiftAuraText(holder, 5, { "Applications" })
+    end
+end
 
 -- The icon's border: dark, or black behind a pandemic glow (Proc Glow,
 -- Marching Ants, Pixel Glow); hidden under a pandemic Border, which replaces it.
@@ -361,8 +401,9 @@ local function UpdateSquareDebuffColor(f)
         local sb = SB.Get(f, 1)
         SB.LayoutFor(sb, tex, SQUARE_LOC)
         if behindGlow then SB.SetColor(sb, 0, 0, 0, 1) else SB.SetDarkColor(sb) end
-        SB.RaiseAbove(sb, f.DebuffBorder or f.Cooldown or f, 2)
         sb:Show()
+        local _, holder = GetIconParts(f)
+        if holder then LayerItem(f, holder) end
         RaiseProcGlow(f)
         if f.uberBorder then f.uberBorder:Hide() end
     else
@@ -591,9 +632,9 @@ local function ApplySquareIcon(f, square)
     else
         local sb = SB.Get(f, 1)
         SB.LayoutFor(sb, tex, SQUARE_LOC)
-        SB.RaiseAbove(sb, f.Cooldown or holder, 2)
         SB.SetDarkColor(sb)
         sb:Show()
+        LayerItem(f, holder)
         EnsureProcGlowHook()
         RaiseProcGlow(f)
     end
@@ -766,8 +807,6 @@ end
 -------------------------------------------------------------------------------
 local aurakit = UberUI.aurakit
 local PANDEMIC_DEFAULT_COLOR = "ffff3030"
-local pandemicHosts = setmetatable({}, { __mode = "k" })  -- item frame -> host
-
 -- Tracked Bars have their own pandemic settings (barpandemic*).
 local function PandemicStyle(f)
     local c = uuidb and uuidb.cooldown
@@ -925,10 +964,8 @@ local function StylePandemicHost(f)
     StyleBarPandemicFX(host, nil, false)
     host:ClearAllPoints()
     host:SetAllPoints(holder)
-    local level = (f.Cooldown or holder):GetFrameLevel()
-    local sb = SB.Find(f, 1)
-    if sb then level = math.max(level, sb:GetFrameLevel()) end
-    host:SetFrameLevel(level + 2)
+    -- Over the border, under the cooldown numbers and stack text.
+    LayerItem(f, holder)
     local w = IconWidth(holder)
     local iconStyle = PandemicStyle(f)
     aurakit.StyleHighlight(host, {

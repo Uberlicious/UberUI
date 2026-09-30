@@ -290,6 +290,7 @@ local function UpdateBarItem(f)
     bar:SetFrameLevel(level + 1)
     f.Icon:SetFrameLevel(level + 2)
     f.DebuffBorder:SetFrameLevel(level + 3)
+    -- The icon's layers (border, count) are set by cdManager's styling.
     bar:SetStatusBarColor(1.0, 0.5, 0.25)
     bar:SetValue(info.value)
     bar.Name:SetText(info.name)
