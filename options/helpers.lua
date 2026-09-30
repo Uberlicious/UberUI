@@ -88,8 +88,15 @@ end
 opt.previews = {};
 function opt.RefreshPreviews()
     for _, p in ipairs(opt.previews) do
-        if p:IsVisible() and p.Update then pcall(p.Update, p) end
+        if p:IsVisible() and p.Update then opt.RunPreview(p) end
     end
+end
+
+-- Redraws a preview; a failure goes to the error popup (once per message)
+-- rather than leaving a half-drawn preview with no explanation.
+function opt.RunPreview(p)
+    local ok, err = pcall(p.Update, p)
+    if not ok then UberUI:ReportError("Settings preview", err) end
 end
 
 -- A list row with a label and a custom preview frame in the control column.
@@ -126,8 +133,8 @@ function opt.AddPreview(page, o)
         preview:SetParent(frame);
         preview:ClearAllPoints();
         preview:SetPoint("LEFT", frame, "CENTER", -80, 0);
-        preview:Hide();
         preview:Show();
+        if preview.Update then opt.RunPreview(preview) end
     end
     initializer.Resetter = function(self, frame)
         if preview and preview:GetParent() == frame then preview:Hide() end
@@ -192,6 +199,7 @@ function opt.AddBarTextureSetting(page, opts)
     local function cbsetValue(self, value)
         dbTable[cbfield] = value;
         cbOnChange();
+        opt.RefreshPreviews();
     end
     local cbsetting = Settings.RegisterAddOnSetting(page.category, opts.cbVariable, cbfield, dbTable,
         Settings.VarType.Boolean, opts.cbName, cbdefaultValue)
@@ -210,6 +218,7 @@ function opt.AddBarTextureSetting(page, opts)
         value = gsub(value, " ", "_");
         dbTable[ddfield] = value;
         ddOnChange(value);
+        opt.RefreshPreviews();
     end
     local proxy = { [ddfield] = ddgetValue() }
     local ddsetting = Settings.RegisterAddOnSetting(page.category, opts.ddVariable, ddfield, proxy,

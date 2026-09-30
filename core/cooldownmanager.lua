@@ -331,13 +331,18 @@ local function EnsureRoundedBorder(f, dc)
 end
 
 -- Blizzard shows/hides DebuffBorder itself, so it's faded by alpha.
+local PandemicKeepsBorder -- defined with the pandemic code
+
+-- The icon's border: dark, or black behind a pandemic glow (Proc Glow,
+-- Marching Ants, Pixel Glow); hidden under a pandemic Border, which replaces it.
 local function UpdateSquareDebuffColor(f)
     local tex = GetIconParts(f)
     if not tex then return end
 
     if f.DebuffBorder then f.DebuffBorder:SetAlpha(0) end
 
-    if f._uberInPandemic then
+    local behindGlow = f._uberInPandemic and PandemicKeepsBorder(f)
+    if f._uberInPandemic and not behindGlow then
         local sb = SB.Find(f, 1)
         if sb then sb:Hide() end
         if f.uberBorder then f.uberBorder:Hide() end
@@ -351,10 +356,11 @@ local function UpdateSquareDebuffColor(f)
         return
     end
 
+    local BLACK = { r = 0, g = 0, b = 0, a = 1 }
     if SquareOn() then
         local sb = SB.Get(f, 1)
         SB.LayoutFor(sb, tex, SQUARE_LOC)
-        SB.SetDarkColor(sb)
+        if behindGlow then SB.SetColor(sb, 0, 0, 0, 1) else SB.SetDarkColor(sb) end
         SB.RaiseAbove(sb, f.DebuffBorder or f.Cooldown or f, 2)
         sb:Show()
         RaiseProcGlow(f)
@@ -363,7 +369,7 @@ local function UpdateSquareDebuffColor(f)
         local sb = SB.Find(f, 1)
         if sb then sb:Hide() end
         local dc = (uuidb and uuidb.general and uuidb.general.darkencolor) or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
-        EnsureRoundedBorder(f, dc)
+        EnsureRoundedBorder(f, behindGlow and BLACK or dc)
     end
 end
 
@@ -392,7 +398,11 @@ function cdManager:Color()
             end
         end
 
-        if not bordersEnabled or f._uberInPandemic then
+        if f._uberInPandemic then
+            pcall(UpdateSquareDebuffColor, f)
+            return
+        end
+        if not bordersEnabled then
             if f.uberBorder then f.uberBorder:Hide() end
             if SB then SB.Hide(f, 1) end
             return
@@ -809,6 +819,14 @@ local function PandemicOnBar(f)
     return f.Bar ~= nil and (uuidb.cooldown.barpandemic or "bar") == "bar"
 end
 
+-- A glow-type pandemic highlight on the icon keeps the icon's border, in
+-- black, behind it (a Border highlight replaces it).
+function PandemicKeepsBorder(f)
+    if PandemicOnBar(f) then return false end
+    local style = PandemicStyle(f)
+    return style == "glow" or style == "ants" or style == "pixel"
+end
+
 -- Bar size in the item's own units; from Blizzard's fields when secret.
 local function BarSize(f)
     local ok, w, h = pcall(f.Bar.GetSize, f.Bar)
@@ -898,6 +916,7 @@ local function StylePandemicHost(f)
             r = r, g = g, b = b,
             square = true, loc = SQUARE_LOC, icon = bar,
             center = bar, size = bw, sizeH = bh, glowScale = CDM_GLOW_SCALE,
+            pixelGap = 2, pixelInside = uuidb.cooldown.barpixelposition == "inside",
         })
         if host.uuSquare then SB.LayoutDispelFor(host.uuSquare, bar, SQUARE_LOC) end
         return host
@@ -919,6 +938,7 @@ local function StylePandemicHost(f)
         loc = SQUARE_LOC, icon = tex,
         ringFrom = holder, ringX = -2,
         center = tex, size = w or 36, glowScale = CDM_GLOW_SCALE,
+        pixelInside = uuidb.cooldown.pixelposition == "inside",
     })
     return host
 end
@@ -1013,12 +1033,9 @@ local function UpdateItemPandemic(f, now)
             local ok, res = pcall(StylePandemicHost, f)
             if ok and res then
                 res:Show()
-                -- A highlight on the icon replaces the icon's own border.
-                if not PandemicOnBar(f) then
-                    if f.uberBorder then f.uberBorder:Hide() end
-                    local sb = SB and SB.Find(f, 1)
-                    if sb then sb:Hide() end
-                end
+                -- The icon's own border: black behind a glow, hidden under a
+                -- Border highlight.
+                if not PandemicOnBar(f) then pcall(UpdateSquareDebuffColor, f) end
             elseif not ok then
                 UberUI:ReportError("Cooldown Manager pandemic highlight", res)
             end
@@ -1622,6 +1639,70 @@ function cdManager:Refresh()
         if pandemicHosts[f] then pcall(StylePandemicHost, f) end
         pcall(UpdateSquareDebuffColor, f)
     end)
+end
+
+-------------------------------------------------------------------------------
+-- Options preview (options/cdmpreview.lua): the same styling as the real
+-- items, run on mock items built like Blizzard's item templates (the same
+-- keys: Icon, Cooldown, DebuffBorder, Bar, ...). inPandemic forces the
+-- pandemic look. Returns "blizzard" when Blizzard's own pandemic effect
+-- should show (the caller draws that one).
+-------------------------------------------------------------------------------
+cdManager.preview = {}
+
+function cdManager.preview.StyleItem(f, inPandemic)
+    if not (uuidb and uuidb.cooldown and SB) then return nil end
+    local dc = uuidb.general.darkencolor or { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    if f.Bar then
+        barState[f.Bar] = barState[f.Bar] or {}
+        pcall(SizeBarIcon, f)
+        pcall(StyleBarFill, f.Bar, GetBarTexture(), SquareBarsOn())
+        pcall(StyleBarBorder, f.Bar, SquareBarsOn())
+        -- cdManager:Color's "Darken Tracked Bars".
+        local darken = uuidb.cooldown.darkenbars ~= false and not SquareBarsOn()
+        for _, r in ipairs({ f.Bar:GetRegions() }) do
+            if r:IsObjectType("Texture") and r:GetDrawLayer() == "BACKGROUND" and not IsSquareBarBG(r) then
+                if darken then r:SetVertexColor(dc.r, dc.g, dc.b, dc.a) else r:SetVertexColor(1, 1, 1, 1) end
+            end
+        end
+    end
+    pcall(ApplySquareIcon, f, SquareOn())
+
+    -- Out of pandemic first (the item's normal borders), then into it.
+    f._uberInPandemic = nil
+    if pandemicHosts[f] then pandemicHosts[f]:Hide() end
+    SetBarPandemicFill(f, false)
+    pcall(UpdateSquareDebuffColor, f)
+    if not inPandemic then return nil end
+
+    local style = PandemicStyle(f)
+    if style == "none" then return nil end
+    if style == "blizzard" then return "blizzard" end
+    f._uberInPandemic = true
+    if style == "fill" then
+        SetBarPandemicFill(f, true)
+        return nil
+    end
+    local ok, host = pcall(StylePandemicHost, f)
+    if ok and host then
+        host:Show()
+        if not PandemicOnBar(f) then pcall(UpdateSquareDebuffColor, f) end
+    end
+    return nil
+end
+
+-- Countdown text color for `seconds` left, as the real countdowns show it
+-- ("Color Countdown Text" off: Blizzard's white).
+function cdManager.preview.CountdownColor(seconds)
+    if not CountdownColorsOn() then return 1, 1, 1 end
+    local normalHex, expiringHex, threshold = GetDurationColors()
+    if seconds <= math.min(threshold, 59) then return HexToRGB(expiringHex, 1, 0.2, 0.2) end
+    return HexToRGB(normalHex, 1, 1, 1)
+end
+
+-- Whether Tracked Bars highlight the bar (else their icon).
+function cdManager.preview.PandemicOnBar()
+    return (uuidb.cooldown.barpandemic or "bar") == "bar"
 end
 
 UberUI.cdManager = cdManager

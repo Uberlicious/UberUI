@@ -267,12 +267,12 @@ local function StylePandemic(button, style)
     local pr, pg, pb = PandemicColor()
     local kind = on and (g.nameplatepandemicstyle or "border") or "none"
     -- Border style already paints over the debuff's own border in the
-    -- pandemic color; Proc Glow and Marching Ants sit on top of it and would
-    -- leave the dispel color showing through, so those cover it in the same
-    -- pandemic color (class color included -- see PandemicColor).
+    -- pandemic color; Proc Glow, Marching Ants and Pixel Glow sit on top of
+    -- it and would leave the dispel color showing through, so those cover it
+    -- in black (the glow itself keeps the pandemic color).
     local occlude
     if on and kind ~= "border" then
-        occlude = { r = pr, g = pg, b = pb }
+        occlude = { r = 0, g = 0, b = 0 }
     end
     aurakit.StyleHighlight(host, {
         kind = kind,
@@ -282,6 +282,7 @@ local function StylePandemic(button, style)
         loc = SQUARE_LOC, icon = button.icon,
         ringFrom = button.borderHost,
         center = button, size = button.elementSize or ICON_SIZE,
+        pixelInside = g.nameplatepixelposition == "inside",
     })
 end
 

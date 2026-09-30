@@ -1390,7 +1390,7 @@ end
 
 -- Highlight visuals (nameplate aura and Cooldown Manager pandemic). Styles
 -- host's children only; the caller decides when host is shown.
--- opts: { kind = "border"|"glow"|"ants", r, g, b,
+-- opts: { kind = "border"|"glow"|"ants"|"pixel", r, g, b,
 --         square, loc, icon (square strips), ringFrom, ringTo, ringX (ring),
 --         center, size, sizeH (height, default size), glowScale (glows) }
 local HIGHLIGHT_GLOWS = {
@@ -1399,6 +1399,115 @@ local HIGHLIGHT_GLOWS = {
     ants = { atlas = "RotationHelper_Ants_Flipbook", pad = 1.6 },
 }
 local HIGHLIGHT_RING_ATLAS = "ui-debuff-border-default-noicon"
+
+-- Pixel Glow ("pixel"; what LibCustomGlow and EllesmereUI call it): thin
+-- dashes marching clockwise around the icon or bar, a whole number of pixels
+-- thick, just outside its edge. Dashes run on around the corners instead of
+-- being cut off. Also what bars get for "ants": Blizzard's ants art is a
+-- square ring for icons and stretches out of shape on a bar.
+local PIXEL_THICKNESS = 2   -- screen pixels
+local PIXEL_GAP = 1         -- screen pixels between the edge and the dashes
+local PIXEL_DASH = 8        -- UI units per dash (and per gap), about
+local PIXEL_SPEED = 30      -- UI units per second, whatever the size
+
+-- A point `pos` along the perimeter (clockwise from the top left corner):
+-- which edge (1 top, 2 right, 3 bottom, 4 left) and how far along it.
+local function PerimeterEdge(pos, w, h)
+    if pos < w then return 1, pos, w end
+    pos = pos - w
+    if pos < h then return 2, pos, h end
+    pos = pos - h
+    if pos < w then return 3, pos, w end
+    return 4, pos - w, h
+end
+
+-- One straight piece of a dash on edge `edge`, from `from` for `len`.
+local function PlacePiece(tex, frame, edge, from, len, t)
+    tex:ClearAllPoints()
+    if edge == 1 then
+        tex:SetPoint("TOPLEFT", frame, "TOPLEFT", from, 0)
+        tex:SetSize(len, t)
+    elseif edge == 2 then
+        tex:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -from)
+        tex:SetSize(t, len)
+    elseif edge == 3 then
+        tex:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -from, 0)
+        tex:SetSize(len, t)
+    else
+        tex:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, from)
+        tex:SetSize(t, len)
+    end
+    tex:Show()
+end
+
+local function PlacePixelDashes(st)
+    local w, h, t = st.w, st.h, st.thick
+    local per = 2 * (w + h)
+    for i = 1, st.count do
+        local a, b = st.pieces[2 * i - 1], st.pieces[2 * i]
+        local pos = ((i - 1) / st.count + st.progress) % 1 * per
+        local edge, along, edgeLen = PerimeterEdge(pos, w, h)
+        local first = math.min(st.len, edgeLen - along)
+        PlacePiece(a, st.frame, edge, along, first, t)
+        -- The rest runs on around the corner, onto the next edge.
+        local rest = st.len - first
+        if rest > 0.01 then
+            PlacePiece(b, st.frame, edge % 4 + 1, 0, rest, t)
+        else
+            b:Hide()
+        end
+    end
+end
+
+-- opts: center, size, sizeH (default size), pixelInside, pixelGap; the size
+-- comes from the caller because a bar's own size can read back secret.
+local function StylePixelGlow(host, show, opts, r, g, b)
+    local st = host.uuPixel
+    if not show then
+        if st then st.frame:Hide() end
+        return
+    end
+    if not st then
+        -- Anchored into nameplates too, which needs this template in 12.x.
+        local ok, f = pcall(CreateFrame, "Frame", nil, host, "DisableUntrustedLayoutScriptsTemplate")
+        if not ok or not f then f = CreateFrame("Frame", nil, host) end
+        st = { frame = f, pieces = {}, progress = 0, count = 0 }
+        f:EnableMouse(false)
+        f:SetScript("OnUpdate", function(_, elapsed)
+            local per = 2 * ((st.w or 1) + (st.h or 1))
+            st.progress = (st.progress + elapsed * PIXEL_SPEED / per) % 1
+            PlacePixelDashes(st)
+        end)
+        host.uuPixel = st
+    end
+    local SB = UberUI.squareborders
+    local function Px(n) return SB and SB.PixelsToUIUnits(st.frame, n) or n end
+    st.thick = Px(PIXEL_THICKNESS)
+    -- Outside (default): just past the edge. Inside: over the edge, like a
+    -- square border drawn inside the icon.
+    local out = opts.pixelInside and 0 or (Px(opts.pixelGap or PIXEL_GAP) + st.thick)
+    st.w = (opts.size or 24) + 2 * out
+    st.h = (opts.sizeH or opts.size or 24) + 2 * out
+    st.frame:ClearAllPoints()
+    st.frame:SetPoint("CENTER", opts.center or host, "CENTER")
+    st.frame:SetSize(st.w, st.h)
+    -- Dash and gap the same length, a whole number of them per lap.
+    local per = 2 * (st.w + st.h)
+    st.count = math.max(4, math.floor(per / (2 * PIXEL_DASH) + 0.5))
+    st.len = per / (2 * st.count)
+    for i = 1, 2 * st.count do
+        local tex = st.pieces[i]
+        if not tex then
+            tex = st.frame:CreateTexture(nil, "OVERLAY", nil, 7)
+            tex:SetColorTexture(1, 1, 1, 1)
+            st.pieces[i] = tex
+        end
+        tex:SetVertexColor(r, g, b, 1)
+    end
+    for i = 2 * st.count + 1, #st.pieces do st.pieces[i]:Hide() end
+    PlacePixelDashes(st)
+    st.frame:Show()
+end
 
 function aurakit.StyleHighlight(host, opts)
     local SB = UberUI.squareborders
@@ -1495,7 +1604,11 @@ function aurakit.StyleHighlight(host, opts)
         if host.uuCoverRing then host.uuCoverRing:Hide() end
     end
 
-    local glowDef = HIGHLIGHT_GLOWS[kind]
+    -- Pixel Glow, and bars' ants (a bar has its own height).
+    local pixel = kind == "pixel" or (kind == "ants" and opts.sizeH ~= nil)
+    StylePixelGlow(host, pixel, opts, r, g, b)
+
+    local glowDef = not pixel and HIGHLIGHT_GLOWS[kind] or nil
     if glowDef and not host.uuGlow then
         local tex = host:CreateTexture(nil, "OVERLAY", nil, 7)
         local ag = tex:CreateAnimationGroup()

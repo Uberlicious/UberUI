@@ -160,6 +160,7 @@ local defaults = {
         nameplatebuffspurgeable      = "group",
         nameplatepandemic            = true,
         nameplatepandemicstyle       = "border",
+        nameplatepixelposition       = "outside",
         nameplatepandemiccolor       = "ffff3030",
         nameplatepandemicclasscolor  = false,
         nameplatedurationcolor          = "ffffffff",
@@ -196,12 +197,14 @@ local defaults = {
         squarebars            = false,
         barpandemic           = "bar",
         barpandemicstyle      = "blizzard",
+        barpixelposition      = "outside",
         barpandemiccolor      = "ffff3030",
         barpandemicclasscolor = false,
         darkenbars            = true,
         baricontobar          = false,
         borders               = true,
         pandemicstyle         = "blizzard",
+        pixelposition         = "outside",
         pandemiccolor         = "ffff3030",
         pandemicclasscolor    = false,
         durationcolors        = false,
@@ -347,6 +350,9 @@ function UberUI:Init()
         if cd.barpandemicstyle == nil and cd.pandemicstyle ~= nil then
             cd.barpandemicstyle = cd.pandemicstyle
         end
+        -- Bars' "Marching Ants" was always drawn as marching dashes, now the
+        -- Pixel Glow style.
+        if cd.barpandemicstyle == "ants" then cd.barpandemicstyle = "pixel" end
         -- Pandemic colors default to Blizzard's pandemic red (255, 48, 48);
         -- the new bar color/class color start from their defaults.
         if (cd._pandemic_version or 0) < 1 then

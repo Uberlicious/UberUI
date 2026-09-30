@@ -20,6 +20,7 @@ config.lua
 core\util.lua
 options\helpers.lua
 options\aurapreview.lua
+options\cdmpreview.lua
 options\general.lua
 options\unitframes.lua
 options\groupframes.lua

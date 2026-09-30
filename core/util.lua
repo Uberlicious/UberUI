@@ -18,8 +18,17 @@ function util.SafeShown(region)
     return shown and true or false
 end
 
+-- WoW Forever runs as a "camelot" game type on the mainline project, so the
+-- project ID can't tell it apart from retail. Its client API can: only
+-- Forever has C_GameRules.GetForeverExperiencePreset -- no version numbers
+-- involved, so patches on either client don't affect it.
+local isForever
 function util.IsForeverClient()
-    return WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
+    if isForever == nil then
+        isForever = (C_GameRules and C_GameRules.GetForeverExperiencePreset ~= nil)
+            or WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
+    end
+    return isForever
 end
 
 function util.ClassColor(class)

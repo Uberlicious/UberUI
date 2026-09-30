@@ -260,6 +260,8 @@ local function UpdateLevelBox(unitFrame, on)
             if badge.playerLevelDiffIcon then
                 local dc = uuidb.general.darkencolor
                 badge.playerLevelDiffIcon:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+                -- Faded out in square mode; nothing else puts it back.
+                badge.playerLevelDiffIcon:SetAlpha(1)
             end
             if badge.selectedBorder then badge.selectedBorder:SetAlpha(1) end
             CenterLevelText(badge, nil)
@@ -787,6 +789,26 @@ function MaybeRegisterRaidTargetScaleHooks()
             end
         end)
     end
+end
+
+-- Options preview (options/cdmpreview.lua): the same health bar styling as
+-- the real plates, on a mock health bar built like Blizzard's (barTexture,
+-- bgTexture, selectedBorder, deselectedOverlay).
+-- unitFrame (optional): a mock with .healthBar and Forever's
+-- .PlayerLevelDiffFrame, for the level box.
+function nameplates.PreviewHealthBar(healthBar, unitFrame)
+    if not (uuidb and uuidb.general) then return end
+    local dc = uuidb.general.darkencolor
+    if healthBar.bgTexture and dc then
+        healthBar.bgTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+    end
+    -- OnNamePlateLoad's rounded-mode badge darkening.
+    local badge = unitFrame and unitFrame.PlayerLevelDiffFrame
+    if badge and badge.playerLevelDiffIcon and dc and not SquareBorderOn() then
+        badge.playerLevelDiffIcon:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        badge.playerLevelDiffIcon:SetAlpha(1)
+    end
+    ApplyBarLook(healthBar, unitFrame)
 end
 
 UberUI.nameplates = nameplates

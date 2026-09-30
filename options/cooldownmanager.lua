@@ -14,6 +14,8 @@ function opt.BuildCooldownManager(page)
 
     opt.Header(page, "Cooldown Manager Icons");
 
+    opt.AddCDMIconPreview(page);
+
     opt.AddCheckbox(page, {
         variable = "CooldownBorders", name = "Cooldown Manager Icon Borders",
         tooltip = "Enable borders on Cooldown Viewer icons",
@@ -54,13 +56,24 @@ function opt.BuildCooldownManager(page)
 
     local cdmPandemicInit = opt.AddDropdown(page, {
         variable = "CooldownPandemicStyle", name = "Cooldown Manager Pandemic Highlight",
-        tooltip = "Essential, Utility and Tracked Buffs icons (Tracked Bars have their own setting below). What an icon shows while its aura is in the pandemic window (refreshing it now keeps the remaining time -- the game decides).\n\nBlizzard: Blizzard's own rounded animation.\n\nBorder: the icon's border in the highlight color, square with Square icons.\n\nProc Glow / Marching Ants: Blizzard's animated glows, tinted.\n\nNone: no pandemic highlight at all (Blizzard's is hidden too).",
+        tooltip = "Essential, Utility and Tracked Buffs icons (Tracked Bars have their own setting below). What an icon shows while its aura is in the pandemic window (refreshing it now keeps the remaining time -- the game decides).\n\nBlizzard: Blizzard's own rounded animation.\n\nBorder: the icon's border in the highlight color, square with Square icons.\n\nProc Glow / Marching Ants: Blizzard's animated glows, tinted.\n\nPixel Glow: thin dashes marching around the icon.\n\nNone: no pandemic highlight at all (Blizzard's is hidden too).",
         default = "blizzard",
-        values = { { "blizzard", "Blizzard" }, { "border", "Border" }, { "glow", "Proc Glow" }, { "ants", "Marching Ants" }, { "none", "None" } },
+        values = { { "blizzard", "Blizzard" }, { "border", "Border" }, { "glow", "Proc Glow" }, { "ants", "Marching Ants" },
+                   { "pixel", "Pixel Glow" }, { "none", "None" } },
         get = function() return uuidb.cooldown.pandemicstyle or "blizzard" end,
         set = function(value) uuidb.cooldown.pandemicstyle = value end,
         onChange = RefreshCooldownManager,
     });
+
+    opt.DependsOn(opt.AddDropdown(page, {
+        variable = "CooldownPixelGlowPosition", name = "Pixel Glow Position",
+        tooltip = "Outside draws the Pixel Glow dashes just past the icon's edge. Inside draws them over the icon's edge.",
+        default = "outside",
+        values = { { "outside", "Outside" }, { "inside", "Inside" } },
+        get = function() return uuidb.cooldown.pixelposition == "inside" and "inside" or "outside" end,
+        set = function(value) uuidb.cooldown.pixelposition = value end,
+        onChange = RefreshCooldownManager,
+    }), cdmPandemicInit, function() return uuidb.cooldown.pandemicstyle == "pixel" end);
 
     -- One of our own highlights (not Blizzard's, not None).
     local function CustomPandemic()
@@ -70,7 +83,7 @@ function opt.BuildCooldownManager(page)
 
     local cdmPandemicClassInit = opt.AddCheckbox(page, {
         variable = "CooldownPandemicClassColor", name = "Pandemic Highlight: Use Class Color",
-        tooltip = "Color the pandemic highlight (Border, Proc Glow and Marching Ants) in your character's class color instead of the color below.",
+        tooltip = "Color the pandemic highlight (Border, Proc Glow, Marching Ants and Pixel Glow) in your character's class color instead of the color below.",
         db = "cooldown", field = "pandemicclasscolor", default = false,
         onChange = RefreshCooldownManager,
     });
@@ -78,7 +91,7 @@ function opt.BuildCooldownManager(page)
 
     opt.DependsOn(opt.AddColorSwatch(page, {
         variable = "CooldownPandemicColor", name = "Cooldown Manager Pandemic Color",
-        tooltip = "Color of the Cooldown Manager pandemic highlight (Border, Proc Glow and Marching Ants), unless Use Class Color is on.",
+        tooltip = "Color of the Cooldown Manager pandemic highlight (Border, Proc Glow, Marching Ants and Pixel Glow), unless Use Class Color is on.",
         db = "cooldown", field = "pandemiccolor", default = "ffff3030",
         get = function()
             local v = uuidb.cooldown.pandemiccolor
@@ -122,6 +135,8 @@ function opt.BuildCooldownManager(page)
 
     opt.Header(page, "Cooldown Manager Bars");
 
+    opt.AddCDMBarPreview(page);
+
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.cooldown,
         cbVariable = "CooldownBarTextures", cbName = "Cooldown Bar Textures", cbField = "bartextures",
@@ -151,15 +166,32 @@ function opt.BuildCooldownManager(page)
 
     local barPandemicInit = opt.AddDropdown(page, {
         variable = "CooldownBarPandemicStyle", name = "Tracked Bars Pandemic Highlight",
-        tooltip = "What a Tracked Bar shows while its aura is in the pandemic window.\n\nBlizzard: Blizzard's own bar animation.\n\nBorder: a border in the highlight color.\n\nBar Glow: Blizzard's bar glow, tinted.\n\nMarching Ants: Blizzard's animated border, tinted.\n\nBar Fill Color: the bar itself fills in the highlight color.\n\nNone: no pandemic highlight at all (Blizzard's is hidden too).",
+        tooltip = "What a Tracked Bar shows while its aura is in the pandemic window.\n\nBlizzard: Blizzard's own bar animation.\n\nBorder: a border in the highlight color.\n\nBar Glow: Blizzard's bar glow, tinted.\n\nPixel Glow: thin dashes marching around the bar.\n\nBar Fill Color: the bar itself fills in the highlight color.\n\nNone: no pandemic highlight at all (Blizzard's is hidden too).",
         default = "blizzard",
         values = { { "blizzard", "Blizzard" }, { "border", "Border" }, { "glow", "Bar Glow" },
-                   { "ants", "Marching Ants" }, { "fill", "Bar Fill Color" }, { "none", "None" } },
-        get = function() return uuidb.cooldown.barpandemicstyle or "blizzard" end,
+                   { "pixel", "Pixel Glow" }, { "fill", "Bar Fill Color" }, { "none", "None" } },
+        -- Bars' old "Marching Ants" was always drawn as these dashes.
+        get = function()
+            local v = uuidb.cooldown.barpandemicstyle or "blizzard"
+            return v == "ants" and "pixel" or v
+        end,
         set = function(value) uuidb.cooldown.barpandemicstyle = value end,
         onChange = RefreshCooldownManager,
     });
     local function BarPandemicStyle() return uuidb.cooldown.barpandemicstyle or "blizzard" end
+
+    opt.DependsOn(opt.AddDropdown(page, {
+        variable = "CooldownBarPixelGlowPosition", name = "Tracked Bars Pixel Glow Position",
+        tooltip = "Outside draws the Pixel Glow dashes just past the bar's (or its icon's) edge. Inside draws them over the edge.",
+        default = "outside",
+        values = { { "outside", "Outside" }, { "inside", "Inside" } },
+        get = function() return uuidb.cooldown.barpixelposition == "inside" and "inside" or "outside" end,
+        set = function(value) uuidb.cooldown.barpixelposition = value end,
+        onChange = RefreshCooldownManager,
+    }), barPandemicInit, function()
+        local style = BarPandemicStyle()
+        return style == "pixel" or style == "ants"
+    end);
     local function BarPandemicColored()
         local style = BarPandemicStyle()
         return style ~= "blizzard" and style ~= "none"
@@ -186,7 +218,7 @@ function opt.BuildCooldownManager(page)
 
     opt.DependsOn(opt.AddDropdown(page, {
         variable = "CooldownBarPandemicTarget", name = "Tracked Bars Pandemic Highlight On",
-        tooltip = "Where the Border, Bar Glow or Marching Ants highlight goes: around the bar (Blizzard's placement) or around the bar's icon.",
+        tooltip = "Where the Border, Bar Glow or Pixel Glow highlight goes: around the bar (Blizzard's placement) or around the bar's icon.",
         default = "bar",
         values = { { "bar", "Bar" }, { "icon", "Icon" } },
         get = function() return uuidb.cooldown.barpandemic or "bar" end,

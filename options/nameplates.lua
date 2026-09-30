@@ -8,6 +8,8 @@ local opt = ns.options
 function opt.BuildNameplates(page)
     opt.Header(page, "Nameplates");
 
+    opt.AddNameplateBarPreview(page);
+
     opt.AddCheckbox(page, {
         variable = "HideNPSelctionGlow", name = "Hide Nameplate Selection Glow",
         tooltip = "Hide the inner glow on selected nameplate",
@@ -152,13 +154,23 @@ function opt.BuildNameplates(page)
 
     opt.DependsOn(opt.AddDropdown(page, {
         variable = "nameplatePandemicStyle", name = "Pandemic Highlight Style",
-        tooltip = "Border: the debuff's border in the highlight color, in the Nameplate Border Shape (rounded or square).\n\nProc Glow: Blizzard's animated action button proc glow.\n\nMarching Ants: Blizzard's animated rotation-helper border.",
+        tooltip = "Border: the debuff's border in the highlight color, in the Nameplate Border Shape (rounded or square).\n\nProc Glow: Blizzard's animated action button proc glow.\n\nMarching Ants: Blizzard's animated rotation-helper border.\n\nPixel Glow: thin dashes marching around the icon.",
         default = "border",
-        values = { { "border", "Border" }, { "glow", "Proc Glow" }, { "ants", "Marching Ants" } },
+        values = { { "border", "Border" }, { "glow", "Proc Glow" }, { "ants", "Marching Ants" }, { "pixel", "Pixel Glow" } },
         get = function() return uuidb.general.nameplatepandemicstyle or "border" end,
         set = function(value) uuidb.general.nameplatepandemicstyle = value end,
         onChange = RefreshNameplateAuraStyle,
     }), pandemicInit, PandemicOn);
+
+    opt.DependsOn(opt.AddDropdown(page, {
+        variable = "nameplatePixelGlowPosition", name = "Pixel Glow Position",
+        tooltip = "Outside draws the Pixel Glow dashes just past the debuff icon's edge. Inside draws them over the icon's edge.",
+        default = "outside",
+        values = { { "outside", "Outside" }, { "inside", "Inside" } },
+        get = function() return uuidb.general.nameplatepixelposition == "inside" and "inside" or "outside" end,
+        set = function(value) uuidb.general.nameplatepixelposition = value end,
+        onChange = RefreshNameplateAuraStyle,
+    }), pandemicInit, function() return PandemicOn() and uuidb.general.nameplatepandemicstyle == "pixel" end);
 
     local nameplatePandemicClassInit = opt.AddCheckbox(page, {
         variable = "nameplatePandemicClassColor", name = "Nameplate Pandemic: Use Class Color",
@@ -182,6 +194,11 @@ function opt.BuildNameplates(page)
     }), nameplatePandemicClassInit, function()
         return PandemicOn() and not (uuidb.general and uuidb.general.nameplatepandemicclasscolor)
     end);
+
+    opt.AddNameplatePandemicPreview(page, {
+        loc = "nameplate", label = "Nameplate",
+        buffKey = "aurastyle_nameplatebuffs", debuffKey = "aurastyle_nameplatedebuffs",
+    });
 
     opt.Header(page, "Friendly Name Health");
 

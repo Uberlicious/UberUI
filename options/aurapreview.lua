@@ -33,7 +33,8 @@ local SAMPLES = {
     { buff = true, icon = "Interface\\Icons\\Spell_Nature_Riptide", duration = 14, caption = "Buff" },
     { dispel = "Magic", mine = true, icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain", duration = 12, caption = "Magic" },
     { dispel = "Curse", icon = "Interface\\Icons\\Spell_Shadow_CurseOfSargeras", stack = 8, duration = 16, caption = "Curse" }, -- Agony: ramps up to 10 stacks; both texts at once
-    { dispel = "Poison", mine = true, icon = "Interface\\Icons\\Spell_Nature_CorrosiveBreath", duration = 3, caption = "Poison" },
+    -- In its pandemic window on nameplates (the only location that highlights it).
+    { dispel = "Poison", mine = true, icon = "Interface\\Icons\\Spell_Nature_CorrosiveBreath", duration = 3, pandemic = true, caption = "Poison" },
     { dispel = "None", icon = "Interface\\Icons\\Ability_Gouge", caption = "Physical" },
 }
 
@@ -137,7 +138,27 @@ local function Fixed(frame, large, small, fallbackFrame)
     return { eff = eff, buffLarge = large, buffSmall = small, debuffLarge = large, debuffSmall = small, countRef = large }
 end
 
-local nameplateEff -- last per-plate-scale-free reading (see SIZES.nameplate)
+-- Nameplates ignore UI Scale and have their own scale, and each plate is
+-- also scaled on its own by Blizzard (target, distance) -- constantly. So
+-- that per-plate scale is taken back out of a live plate's scale (the size
+-- at full plate scale); the last reading is kept for when no plate is up.
+-- region(unitFrame) picks the part to measure (default the aura frame).
+local nameplateEff = {}
+function opt.NameplateBaseScale(key, region)
+    key = key or "auras"
+    for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+        local uf = not plate:IsForbidden() and plate.UnitFrame
+        local r = uf and (region and region(uf) or uf.AurasFrame or uf)
+        local e, pe = Eff(r), Eff(plate)
+        local base = Eff(plate:GetParent()) or Eff(WorldFrame)
+        if e and pe and base then
+            nameplateEff[key] = e / pe * base
+            break
+        end
+    end
+    return nameplateEff[key] or Eff(WorldFrame)
+end
+opt.PreviewEff = function(frame) return Eff(frame) end
 
 local SIZES = {
     player = function()
@@ -181,23 +202,8 @@ local SIZES = {
         return s
     end,
     nameplate = function()
-        -- Plates ignore UI Scale and have their own, and each plate is also
-        -- scaled on its own by Blizzard (target, distance) -- constantly. So
-        -- that per-plate scale is taken back out of a live plate's aura frame
-        -- scale (the size at full plate scale), and the last reading is kept
-        -- for when no plate is up.
-        for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-            local uf = not plate:IsForbidden() and plate.UnitFrame
-            local region = uf and (uf.AurasFrame or uf)
-            local e, pe = Eff(region), Eff(plate)
-            local base = Eff(plate:GetParent()) or Eff(WorldFrame)
-            if e and pe and base then
-                nameplateEff = e / pe * base
-                break
-            end
-        end
         local s = Fixed(nil, 22, 22, WorldFrame)
-        if nameplateEff then s.eff = nameplateEff end
+        s.eff = opt.NameplateBaseScale() or s.eff
         return s
     end,
 }
@@ -364,6 +370,14 @@ local function UpdateIcon(b, o, frameSize, sizes)
 
     b.round:Hide()
     b.square:Hide()
+    -- The rounded host always sits where it would (the pandemic ring
+    -- anchors to it, like nameplateauras.lua's borderHost).
+    do
+        local pad = geo.pad(frameSize, zoom)
+        b.round:ClearAllPoints()
+        b.round:SetPoint("TOPLEFT", box, "TOPLEFT", -pad, pad)
+        b.round:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", pad, -pad)
+    end
     -- How far a border reaches past the icon (Player's duration text is
     -- pushed out past it, as buffsandauras.lua does).
     local borderReach = 0
@@ -415,6 +429,46 @@ local function UpdateIcon(b, o, frameSize, sizes)
         end
         b.round:Show()
     end
+
+    -- Nameplate pandemic highlight (nameplateauras.lua StylePandemic): the
+    -- debuff's own border hidden, the highlight drawn by the same
+    -- aurakit.StyleHighlight, covering the border in the highlight color for
+    -- Proc Glow / Marching Ants.
+    local g = G()
+    local pandemic = o.loc == "nameplate" and info.pandemic and g.nameplatepandemic ~= false
+    if pandemic then
+        b.round:Hide()
+        b.square:Hide()
+        local pr, pg, pb
+        if g.nameplatepandemicclasscolor then
+            local _, class = UnitClass("player")
+            local cc = UberUI.util.ClassColor(class)
+            if cc then pr, pg, pb = cc.r, cc.g, cc.b end
+        end
+        if not pr then
+            local col = UberUI.util.HexColor(g.nameplatepandemiccolor) or UberUI.util.HexColor("ffff3030")
+            pr, pg, pb = col.r, col.g, col.b
+        end
+        local kind = g.nameplatepandemicstyle or "border"
+        b.pandemicHost = b.pandemicHost or CreateFrame("Frame", nil, b)
+        local host = b.pandemicHost
+        host:SetAllPoints(b)
+        host:SetFrameLevel(b:GetFrameLevel() + 4)
+        UberUI.aurakit.StyleHighlight(host, {
+            kind = kind,
+            r = pr, g = pg, b = pb,
+            occlude = kind ~= "border" and { r = 0, g = 0, b = 0 } or nil, -- black cover under a glow
+            square = style ~= "none" and SB.IsEnabled(o.loc),
+            loc = o.loc, icon = b.icon,
+            ringFrom = b.round,
+            center = b, size = frameSize,
+            pixelInside = g.nameplatepixelposition == "inside",
+        })
+        host:Show()
+    elseif b.pandemicHost then
+        b.pandemicHost:Hide()
+    end
+    if b.cap then b.cap:SetText(pandemic and "Pandemic" or info.caption) end
 
     -- Stack count: the location's count font, scaled with the icon against
     -- its reference size (Blizzard's own buttons never scale it), times
@@ -504,7 +558,10 @@ local function UpdatePreview(preview)
         total = total + s * r
         biggest = math.max(biggest, s * r)
     end
-    total = total + (#preview.icons - 2) * SPACING + GROUP_GAP
+    for i = 1, #preview.icons - 1 do
+        local a, b = preview.icons[i].info, preview.icons[i + 1].info
+        total = total + ((a.buff and not b.buff) and GROUP_GAP or SPACING)
+    end
 
     -- Shrink everything together if the real sizes don't fit the strip.
     local fit = math.min(1, MAX_ICON / math.max(biggest, 1), WIDTH / math.max(total, 1))
@@ -542,7 +599,7 @@ local function UpdatePreview(preview)
     end
 end
 
-local function CreateAuraPreview(parent, o)
+local function CreateAuraPreview(parent, o, samples)
     local preview = CreateFrame("Frame", nil, parent)
     preview.o = o
     preview:SetSize(WIDTH, STAGE_HEIGHT + CAPTION_HEIGHT)
@@ -559,7 +616,7 @@ local function CreateAuraPreview(parent, o)
     preview.fitNote:Hide()
 
     preview.icons = {}
-    for i, info in ipairs(SAMPLES) do
+    for i, info in ipairs(samples or SAMPLES) do
         local b = NewIcon(stage, info, o.loc)
         -- Caption on the panel under the strip, so it reads as a label.
         local cap = preview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -572,6 +629,27 @@ local function CreateAuraPreview(parent, o)
     preview.Update = UpdatePreview
     preview:SetScript("OnShow", UpdatePreview)
     return preview
+end
+
+-- Nameplate pandemic: one of your debuffs normally, then in its pandemic
+-- window, plus another dispel type in its window -- the black cover under a
+-- glow hides either border color.
+local PANDEMIC_SAMPLES = {
+    { dispel = "Magic", mine = true, icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain", duration = 12, caption = "Normal" },
+    { dispel = "Magic", mine = true, icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain", duration = 4, pandemic = true, caption = "Pandemic" },
+    { dispel = "Poison", mine = true, icon = "Interface\\Icons\\Spell_Nature_CorrosiveBreath", duration = 3, pandemic = true, caption = "Pandemic" },
+}
+
+function opt.AddNameplatePandemicPreview(page, o)
+    opt.AddPreview(page, {
+        name = "Pandemic Preview",
+        tooltip = "One of your nameplate debuffs normally and in its pandemic window, drawn with the pandemic settings above and your nameplate aura settings, at the size nameplates appear on screen.",
+        height = STAGE_HEIGHT + CAPTION_HEIGHT + 12,
+        create = function(parent)
+            if not (UberUI.squareborders and UberUI.squareborders.CreateBorder) then return nil end
+            return CreateAuraPreview(parent, o, PANDEMIC_SAMPLES)
+        end,
+    })
 end
 
 -- o: the AddAuraOptions table (loc, label, buffKey, debuffKey).
