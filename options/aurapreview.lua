@@ -466,7 +466,7 @@ local function UpdateIcon(b, o, frameSize, sizes)
             loc = o.loc, icon = b.icon,
             ringFrom = b.round,
             center = b, size = frameSize,
-            pixelInside = g.nameplatepixelposition == "inside",
+            pixelInside = g.nameplatepixelposition ~= "outside",
         })
         host:Show()
     elseif b.pandemicHost then

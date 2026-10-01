@@ -1,3 +1,7 @@
+1.0.2:
+    - Player Aura Timers: Fixed timers going invisible when Duration Inside Icon is on or the duration text size is changed.
+    - Pixel Glow: Now animates on real nameplate auras (it froze or vanished there) and no longer stops when you debuff another target. It defaults to Inside, and the nameplate Pixel Glow Position option now unlocks when Pixel Glow is picked.
+
 1.0.1:
     - Friendly Name Health (Nameplates): See friendly players' health at a glance on name-only nameplates in the open world. Pick an Underline (under or above the name), a Dot (left, right, above or below), or tint the Name itself from red to green (class color at full health). Adjustable underline thickness, dot size and offsets, optional hide-at-full-health, and pixel-perfect drawing that stays crisp as nameplates scale.
     - Live Settings Previews: Aura sections, the Cooldown Manager (icons and Tracked Bars), nameplate health bars, nameplate pandemic highlights and Friendly Name Health each show a live preview that updates as you change settings, at the size things really appear on screen (including WoW Forever's nameplate level box).

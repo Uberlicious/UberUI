@@ -1402,111 +1402,124 @@ local HIGHLIGHT_RING_ATLAS = "ui-debuff-border-default-noicon"
 
 -- Pixel Glow ("pixel"; what LibCustomGlow and EllesmereUI call it): thin
 -- dashes marching clockwise around the icon or bar, a whole number of pixels
--- thick, just outside its edge. Dashes run on around the corners instead of
--- being cut off. Also what bars get for "ants": Blizzard's ants art is a
--- square ring for icons and stretches out of shape on a bar.
+-- thick, running on around the corners. Also what bars get for "ants":
+-- Blizzard's ants art is a square ring for icons and stretches out of shape
+-- on a bar.
+--
+-- Animated by the engine, not Lua: each edge is a strip of a repeating
+-- dash texture one dash-cycle longer than the edge, clipped to the edge by a
+-- mask, sliding by one cycle on a looping Translation (the snap-back is
+-- invisible, so the march is seamless). It's built and started once and then
+-- runs with no per-frame Lua -- needed because an engine aura button's frame
+-- tree (12.1 nameplate auras) is forbidden to addon code outside its setup,
+-- so anything ticked from Lua there freezes. Texture coordinates carry the
+-- running perimeter phase, so dashes stay continuous around the corners.
+-- (After EllesmereUI's StartAnimatedAnts.)
 local PIXEL_THICKNESS = 2   -- screen pixels
 local PIXEL_GAP = 1         -- screen pixels between the edge and the dashes
 local PIXEL_DASH = 8        -- UI units per dash (and per gap), about
 local PIXEL_SPEED = 30      -- UI units per second, whatever the size
-
--- A point `pos` along the perimeter (clockwise from the top left corner):
--- which edge (1 top, 2 right, 3 bottom, 4 left) and how far along it.
-local function PerimeterEdge(pos, w, h)
-    if pos < w then return 1, pos, w end
-    pos = pos - w
-    if pos < h then return 2, pos, h end
-    pos = pos - h
-    if pos < w then return 3, pos, w end
-    return 4, pos - w, h
-end
-
--- One straight piece of a dash on edge `edge`, from `from` for `len`.
-local function PlacePiece(tex, frame, edge, from, len, t)
-    tex:ClearAllPoints()
-    if edge == 1 then
-        tex:SetPoint("TOPLEFT", frame, "TOPLEFT", from, 0)
-        tex:SetSize(len, t)
-    elseif edge == 2 then
-        tex:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -from)
-        tex:SetSize(t, len)
-    elseif edge == 3 then
-        tex:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -from, 0)
-        tex:SetSize(len, t)
-    else
-        tex:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, from)
-        tex:SetSize(t, len)
-    end
-    tex:Show()
-end
-
-local function PlacePixelDashes(st)
-    local w, h, t = st.w, st.h, st.thick
-    local per = 2 * (w + h)
-    for i = 1, st.count do
-        local a, b = st.pieces[2 * i - 1], st.pieces[2 * i]
-        local pos = ((i - 1) / st.count + st.progress) % 1 * per
-        local edge, along, edgeLen = PerimeterEdge(pos, w, h)
-        local first = math.min(st.len, edgeLen - along)
-        PlacePiece(a, st.frame, edge, along, first, t)
-        -- The rest runs on around the corner, onto the next edge.
-        local rest = st.len - first
-        if rest > 0.01 then
-            PlacePiece(b, st.frame, edge % 4 + 1, 0, rest, t)
-        else
-            b:Hide()
-        end
-    end
-end
+local PIXEL_DASH_H = "Interface\\AddOns\\Uber UI\\textures\\pixelglow-dash-h"
+local PIXEL_DASH_V = "Interface\\AddOns\\Uber UI\\textures\\pixelglow-dash-v"
+local PIXEL_MASK = "Interface\\Buttons\\WHITE8X8"
 
 -- opts: center, size, sizeH (default size), pixelInside, pixelGap; the size
 -- comes from the caller because a bar's own size can read back secret.
+-- Everything lives on the host itself, like the other highlights (a frame of
+-- our own inside a nameplate pandemic host would be forbidden to us).
 local function StylePixelGlow(host, show, opts, r, g, b)
     local st = host.uuPixel
     if not show then
-        if st then st.frame:Hide() end
+        if st then
+            for i = 1, 4 do
+                st.groups[i]:Stop()
+                st.strips[i]:Hide()
+            end
+            st.key = nil
+        end
         return
     end
     if not st then
-        -- Anchored into nameplates too, which needs this template in 12.x.
-        local ok, f = pcall(CreateFrame, "Frame", nil, host, "DisableUntrustedLayoutScriptsTemplate")
-        if not ok or not f then f = CreateFrame("Frame", nil, host) end
-        st = { frame = f, pieces = {}, progress = 0, count = 0 }
-        f:EnableMouse(false)
-        f:SetScript("OnUpdate", function(_, elapsed)
-            local per = 2 * ((st.w or 1) + (st.h or 1))
-            st.progress = (st.progress + elapsed * PIXEL_SPEED / per) % 1
-            PlacePixelDashes(st)
-        end)
+        st = { strips = {}, masks = {}, groups = {}, moves = {} }
+        for i = 1, 4 do
+            local mask = host:CreateMaskTexture()
+            mask:SetTexture(PIXEL_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            local strip = host:CreateTexture(nil, "OVERLAY", nil, 7)
+            strip:AddMaskTexture(mask)
+            local group = strip:CreateAnimationGroup()
+            group:SetLooping("REPEAT")
+            local move = group:CreateAnimation("Translation")
+            move:SetSmoothing("NONE")
+            st.masks[i], st.strips[i], st.groups[i], st.moves[i] = mask, strip, group, move
+        end
         host.uuPixel = st
     end
+
+    local anchor = opts.center or host
     local SB = UberUI.squareborders
-    local function Px(n) return SB and SB.PixelsToUIUnits(st.frame, n) or n end
-    st.thick = Px(PIXEL_THICKNESS)
-    -- Outside (default): just past the edge. Inside: over the edge, like a
-    -- square border drawn inside the icon.
-    local out = opts.pixelInside and 0 or (Px(opts.pixelGap or PIXEL_GAP) + st.thick)
-    st.w = (opts.size or 24) + 2 * out
-    st.h = (opts.sizeH or opts.size or 24) + 2 * out
-    st.frame:ClearAllPoints()
-    st.frame:SetPoint("CENTER", opts.center or host, "CENTER")
-    st.frame:SetSize(st.w, st.h)
-    -- Dash and gap the same length, a whole number of them per lap.
-    local per = 2 * (st.w + st.h)
-    st.count = math.max(4, math.floor(per / (2 * PIXEL_DASH) + 0.5))
-    st.len = per / (2 * st.count)
-    for i = 1, 2 * st.count do
-        local tex = st.pieces[i]
-        if not tex then
-            tex = st.frame:CreateTexture(nil, "OVERLAY", nil, 7)
-            tex:SetColorTexture(1, 1, 1, 1)
-            st.pieces[i] = tex
+    local function Px(n) return SB and SB.PixelsToUIUnits(anchor, n) or n end
+    local th = Px(PIXEL_THICKNESS)
+    -- Inside (default): over the edge, like a square border drawn inside the
+    -- icon. Outside: just past the edge.
+    local out = opts.pixelInside and 0 or (Px(opts.pixelGap or PIXEL_GAP) + th)
+    local w = (opts.size or 24) + 2 * out
+    local h = (opts.sizeH or opts.size or 24) + 2 * out
+    -- A whole number of dash cycles (dash + gap) per lap.
+    local count = math.max(4, math.floor(2 * (w + h) / (2 * PIXEL_DASH) + 0.5))
+    local P = 2 * (w + h) / count            -- one dash cycle, in UI units
+    local step = P / PIXEL_SPEED             -- seconds to slide one cycle
+
+    -- Restyled on every aura update: only rebuild (which restarts the march)
+    -- when something it's drawn from changed.
+    local key = table.concat({ tostring(anchor), w, h, th, out, r, g, b }, "|")
+    if st.key == key and st.groups[1]:IsPlaying() then return end
+    st.key = key
+
+    -- Clockwise: top slides right, right slides down, bottom slides left,
+    -- left slides up. base = the perimeter phase (in cycles) where each
+    -- edge's visible stretch starts.
+    local edges = {
+        { tex = PIXEL_DASH_H, len = w, dx = P,  dy = 0,  vert = false, base = 0 },
+        { tex = PIXEL_DASH_V, len = h, dx = 0,  dy = -P, vert = true,  base = w / P },
+        { tex = PIXEL_DASH_H, len = w, dx = -P, dy = 0,  vert = false, base = (w + h) / P },
+        { tex = PIXEL_DASH_V, len = h, dx = 0,  dy = P,  vert = true,  base = (2 * w + h) / P },
+    }
+    for i, e in ipairs(edges) do
+        local mask, strip, group, move = st.masks[i], st.strips[i], st.groups[i], st.moves[i]
+        group:Stop()
+        strip:SetTexture(e.tex, "REPEAT", "REPEAT")
+        strip:SetVertexColor(r, g, b, 1)
+        mask:ClearAllPoints()
+        strip:ClearAllPoints()
+        local cycles = (e.len + P) / P
+        if not e.vert then
+            mask:SetSize(e.len, th)
+            strip:SetSize(e.len + P, th)
+            if i == 1 then
+                mask:SetPoint("TOPLEFT", anchor, "TOPLEFT", -out, out)
+                strip:SetPoint("TOPLEFT", anchor, "TOPLEFT", -out - P, out)
+            else
+                mask:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", -out, -out)
+                strip:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", -out, -out)
+            end
+            strip:SetTexCoord(e.base, e.base + cycles, 0, 1)
+        else
+            mask:SetSize(th, e.len)
+            strip:SetSize(th, e.len + P)
+            if i == 2 then
+                mask:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", out, out)
+                strip:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", out, out + P)
+            else
+                mask:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", -out, -out)
+                strip:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", -out, -out - P)
+            end
+            strip:SetTexCoord(0, 1, e.base, e.base + cycles)
         end
-        tex:SetVertexColor(r, g, b, 1)
+        strip:Show()
+        move:SetOffset(e.dx, e.dy)
+        move:SetDuration(step)
+        group:Play()
     end
-    for i = 2 * st.count + 1, #st.pieces do st.pieces[i]:Hide() end
-    PlacePixelDashes(st)
-    st.frame:Show()
 end
 
 function aurakit.StyleHighlight(host, opts)

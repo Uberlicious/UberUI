@@ -160,7 +160,7 @@ local defaults = {
         nameplatebuffspurgeable      = "group",
         nameplatepandemic            = true,
         nameplatepandemicstyle       = "border",
-        nameplatepixelposition       = "outside",
+        nameplatepixelposition       = "inside",
         nameplatepandemiccolor       = "ffff3030",
         nameplatepandemicclasscolor  = false,
         nameplatedurationcolor          = "ffffffff",
@@ -197,14 +197,14 @@ local defaults = {
         squarebars            = false,
         barpandemic           = "bar",
         barpandemicstyle      = "blizzard",
-        barpixelposition      = "outside",
+        barpixelposition      = "inside",
         barpandemiccolor      = "ffff3030",
         barpandemicclasscolor = false,
         darkenbars            = true,
         baricontobar          = false,
         borders               = true,
         pandemicstyle         = "blizzard",
-        pixelposition         = "outside",
+        pixelposition         = "inside",
         pandemiccolor         = "ffff3030",
         pandemicclasscolor    = false,
         durationcolors        = false,
@@ -353,6 +353,12 @@ function UberUI:Init()
         -- Bars' "Marching Ants" was always drawn as marching dashes, now the
         -- Pixel Glow style.
         if cd.barpandemicstyle == "ants" then cd.barpandemicstyle = "pixel" end
+        -- Pixel Glow Position's default became Inside; the old Outside
+        -- default had been saved for everyone, so it's reset once.
+        if (cd._pixelpos_version or 0) < 1 then
+            cd.pixelposition, cd.barpixelposition = nil, nil
+            cd._pixelpos_version = 1
+        end
         -- Pandemic colors default to Blizzard's pandemic red (255, 48, 48);
         -- the new bar color/class color start from their defaults.
         if (cd._pandemic_version or 0) < 1 then
@@ -398,6 +404,11 @@ function UberUI:Init()
             end
         end
         g.swingtimerbartint, g.swingtimerclasscolor = nil, nil
+        -- Pixel Glow Position's default became Inside (see cooldown above).
+        if (g._pixelpos_version or 0) < 1 then
+            g.nameplatepixelposition = nil
+            g._pixelpos_version = 1
+        end
         -- Friendly name health dot went from plate-scaled units to screen
         -- pixels; the old default of 5 becomes the new default of 8.
         if (g._namehealth_version or 0) < 1 then

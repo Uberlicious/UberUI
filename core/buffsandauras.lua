@@ -162,7 +162,10 @@ local function UpdateDurationMirror(button)
         own:SetFont(font, math.max(4, size * t.duration), t.center and "OUTLINE" or flags)
     end
     if t.center then own:SetShadowOffset(0, 0) end
-    own:SetTextColor(blizz:GetTextColor())
+    -- Blizzard's color, but never its alpha: hiding Blizzard's text with
+    -- SetAlpha(0) shows up in its GetTextColor alpha too.
+    local cr, cg, cb = blizz:GetTextColor()
+    own:SetTextColor(cr, cg, cb, 1)
     own:ClearAllPoints()
     local icon = button.Icon
     if t.center and icon then

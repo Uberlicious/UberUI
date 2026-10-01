@@ -955,7 +955,7 @@ local function StylePandemicHost(f)
             r = r, g = g, b = b,
             square = true, loc = SQUARE_LOC, icon = bar,
             center = bar, size = bw, sizeH = bh, glowScale = CDM_GLOW_SCALE,
-            pixelGap = 2, pixelInside = uuidb.cooldown.barpixelposition == "inside",
+            pixelGap = 2, pixelInside = uuidb.cooldown.barpixelposition ~= "outside",
         })
         if host.uuSquare then SB.LayoutDispelFor(host.uuSquare, bar, SQUARE_LOC) end
         return host
@@ -975,7 +975,7 @@ local function StylePandemicHost(f)
         loc = SQUARE_LOC, icon = tex,
         ringFrom = holder, ringX = -2,
         center = tex, size = w or 36, glowScale = CDM_GLOW_SCALE,
-        pixelInside = uuidb.cooldown.pixelposition == "inside",
+        pixelInside = uuidb.cooldown.pixelposition ~= "outside",
     })
     return host
 end

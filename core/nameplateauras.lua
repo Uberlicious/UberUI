@@ -284,7 +284,7 @@ local function StylePandemic(button, style)
         loc = SQUARE_LOC, icon = button.icon,
         ringFrom = button.borderHost,
         center = button, size = button.elementSize or ICON_SIZE,
-        pixelInside = g.nameplatepixelposition == "inside",
+        pixelInside = g.nameplatepixelposition ~= "outside",
     })
 end
 

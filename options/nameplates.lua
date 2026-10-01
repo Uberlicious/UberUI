@@ -144,15 +144,22 @@ function opt.BuildNameplates(page)
         onChange = RefreshNameplateAuraStyle,
     });
 
+    local pandemicStyleSetting
     local pandemicInit = opt.AddCheckbox(page, {
         variable = "nameplatePandemic", name = "Nameplate Pandemic Highlight",
         tooltip = "Highlight your nameplate debuffs while they're in their pandemic window: the last stretch where recasting adds the remaining time onto the new one instead of losing it. Only auras that work that way light up (the game decides, so it's exact even in combat).",
         db = "general", field = "nameplatepandemic", default = true,
-        onChange = RefreshNameplateAuraStyle,
+        onChange = function()
+            RefreshNameplateAuraStyle()
+            -- Rows under the style dropdown re-check their greyed-out state
+            -- when it changes, not when this checkbox does.
+            if pandemicStyleSetting then pandemicStyleSetting:TriggerValueChanged(pandemicStyleSetting:GetValue()) end
+        end,
     });
     local function PandemicOn() return uuidb.general and uuidb.general.nameplatepandemic ~= false end
 
-    opt.DependsOn(opt.AddDropdown(page, {
+    local pandemicStyleInit
+    pandemicStyleInit, pandemicStyleSetting = opt.AddDropdown(page, {
         variable = "nameplatePandemicStyle", name = "Pandemic Highlight Style",
         tooltip = "Border: the debuff's border in the highlight color, in the Nameplate Border Shape (rounded or square).\n\nProc Glow: Blizzard's animated action button proc glow.\n\nMarching Ants: Blizzard's animated rotation-helper border.\n\nPixel Glow: thin dashes marching around the icon.",
         default = "border",
@@ -160,17 +167,19 @@ function opt.BuildNameplates(page)
         get = function() return uuidb.general.nameplatepandemicstyle or "border" end,
         set = function(value) uuidb.general.nameplatepandemicstyle = value end,
         onChange = RefreshNameplateAuraStyle,
-    }), pandemicInit, PandemicOn);
+    });
+    opt.DependsOn(pandemicStyleInit, pandemicInit, PandemicOn);
 
+    -- Under the style dropdown, so picking Pixel Glow enables it.
     opt.DependsOn(opt.AddDropdown(page, {
         variable = "nameplatePixelGlowPosition", name = "Pixel Glow Position",
-        tooltip = "Outside draws the Pixel Glow dashes just past the debuff icon's edge. Inside draws them over the icon's edge.",
-        default = "outside",
-        values = { { "outside", "Outside" }, { "inside", "Inside" } },
-        get = function() return uuidb.general.nameplatepixelposition == "inside" and "inside" or "outside" end,
+        tooltip = "Inside draws the Pixel Glow dashes over the debuff icon's edge. Outside draws them just past it.",
+        default = "inside",
+        values = { { "inside", "Inside" }, { "outside", "Outside" } },
+        get = function() return uuidb.general.nameplatepixelposition == "outside" and "outside" or "inside" end,
         set = function(value) uuidb.general.nameplatepixelposition = value end,
         onChange = RefreshNameplateAuraStyle,
-    }), pandemicInit, function() return PandemicOn() and uuidb.general.nameplatepandemicstyle == "pixel" end);
+    }), pandemicStyleInit, function() return PandemicOn() and uuidb.general.nameplatepandemicstyle == "pixel" end);
 
     local nameplatePandemicClassInit = opt.AddCheckbox(page, {
         variable = "nameplatePandemicClassColor", name = "Nameplate Pandemic: Use Class Color",

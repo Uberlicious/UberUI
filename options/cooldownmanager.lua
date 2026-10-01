@@ -67,10 +67,10 @@ function opt.BuildCooldownManager(page)
 
     opt.DependsOn(opt.AddDropdown(page, {
         variable = "CooldownPixelGlowPosition", name = "Pixel Glow Position",
-        tooltip = "Outside draws the Pixel Glow dashes just past the icon's edge. Inside draws them over the icon's edge.",
-        default = "outside",
-        values = { { "outside", "Outside" }, { "inside", "Inside" } },
-        get = function() return uuidb.cooldown.pixelposition == "inside" and "inside" or "outside" end,
+        tooltip = "Inside draws the Pixel Glow dashes over the icon's edge. Outside draws them just past it.",
+        default = "inside",
+        values = { { "inside", "Inside" }, { "outside", "Outside" } },
+        get = function() return uuidb.cooldown.pixelposition == "outside" and "outside" or "inside" end,
         set = function(value) uuidb.cooldown.pixelposition = value end,
         onChange = RefreshCooldownManager,
     }), cdmPandemicInit, function() return uuidb.cooldown.pandemicstyle == "pixel" end);
@@ -182,10 +182,10 @@ function opt.BuildCooldownManager(page)
 
     opt.DependsOn(opt.AddDropdown(page, {
         variable = "CooldownBarPixelGlowPosition", name = "Tracked Bars Pixel Glow Position",
-        tooltip = "Outside draws the Pixel Glow dashes just past the bar's (or its icon's) edge. Inside draws them over the edge.",
-        default = "outside",
-        values = { { "outside", "Outside" }, { "inside", "Inside" } },
-        get = function() return uuidb.cooldown.barpixelposition == "inside" and "inside" or "outside" end,
+        tooltip = "Inside draws the Pixel Glow dashes over the bar's (or its icon's) edge. Outside draws them just past it.",
+        default = "inside",
+        values = { { "inside", "Inside" }, { "outside", "Outside" } },
+        get = function() return uuidb.cooldown.barpixelposition == "outside" and "outside" or "inside" end,
         set = function(value) uuidb.cooldown.barpixelposition = value end,
         onChange = RefreshCooldownManager,
     }), barPandemicInit, function()
