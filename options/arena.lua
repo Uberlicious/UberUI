@@ -32,9 +32,9 @@ function opt.BuildArena(page)
         buffKey = "aurastyle_arenabuffs", debuffKey = "aurastyle_arenadebuffs",
         refresh = RefreshArenaAuraStyle,
         zoomTooltip = "Zoom the arena DR and CC tracker icons slightly to crop off Blizzard's built-in icon edge.",
-        buffName = "Arena DR Tracker Border",
+        buffName = "DR Tracker Border",
         buffTooltip = "Border on the Diminishing Returns tracker icons. \"None\" is Blizzard's look (no border).",
-        debuffName = "Arena CC Tracker Border",
+        debuffName = "CC Tracker Border",
         debuffNative = "Red",
         debuffTooltip = "Border on the Crowd Control tracker icon. \"Red\" is Blizzard's look.",
         shapeTooltip = "Rounded uses Blizzard's border art. Square draws a flat border of exact pixel thickness in the same colors.",
@@ -43,7 +43,7 @@ function opt.BuildArena(page)
     opt.Header(page, "Nameplates");
 
     opt.AddCheckbox(page, {
-        variable = "ArenaNameplateNumbers", name = "Arena Nameplate Numbers",
+        variable = "ArenaNameplateNumbers", name = "Nameplate Numbers",
         tooltip = "Change name on arena nameplate frames to target number",
         db = "general", field = "arenanumbers", default = true,
         onChange = function() UberUI.arenaframes:NameplateNumbers() end,

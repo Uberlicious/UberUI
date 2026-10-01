@@ -270,7 +270,7 @@ function opt.AddAuraOptions(page, o)
     local handBackNote = "\n\nWith Zoom off and the Blizzard border choice, Uber UI leaves these auras entirely to Blizzard.";
 
     opt.AddCheckbox(page, {
-        variable = "auraZoom" .. o.suffix, name = o.label .. " Zoom Icons",
+        variable = "auraZoom" .. o.suffix, name = "Zoom Icons",
         tooltip = o.zoomTooltip or ("Zoom " .. o.label .. " aura icons slightly to crop off Blizzard's built-in icon edge." .. handBackNote),
         default = true,
         regKey = "auraZoom" .. o.suffix, regTable = {},
@@ -287,7 +287,7 @@ function opt.AddAuraOptions(page, o)
     });
 
     opt.AddDropdown(page, {
-        variable = "auraBuffBorder" .. o.suffix, name = o.buffName or (o.label .. " Buff Border"),
+        variable = "auraBuffBorder" .. o.suffix, name = o.buffName or "Buff Border",
         tooltip = o.buffTooltip or ("Border on " .. o.label .. " buffs. Blizzard doesn't draw one on buffs, so \"" .. (o.buffNative or "None") .. "\" is its default look." .. handBackNote),
         default = "dark",
         values = { { "dark", "Dark" }, { "blizzard", o.buffNative or "None" } },
@@ -300,7 +300,7 @@ function opt.AddAuraOptions(page, o)
     });
 
     opt.AddDropdown(page, {
-        variable = "auraDebuffBorder" .. o.suffix, name = o.debuffName or (o.label .. " Debuff Border"),
+        variable = "auraDebuffBorder" .. o.suffix, name = o.debuffName or "Debuff Border",
         tooltip = o.debuffTooltip or ("Border on " .. o.label .. " debuffs: Blizzard's dispel-type color (Magic, Curse, Disease, Poison, Bleed; red when there's no type), or the darkness color." .. handBackNote),
         default = "blizzard",
         values = { { "dark", "Dark" }, { "blizzard", o.debuffNative or "Dispel Color" } },
@@ -313,7 +313,7 @@ function opt.AddAuraOptions(page, o)
     });
 
     local shapeInit = opt.AddDropdown(page, {
-        variable = "auraBorderShape" .. o.suffix, name = o.label .. " Border Shape",
+        variable = "auraBorderShape" .. o.suffix, name = "Border Shape",
         tooltip = o.shapeTooltip or ("Rounded uses Blizzard's border art. Square draws a flat border of exact pixel thickness in the same colors.\n\nHas no effect on auras Uber UI has handed back to Blizzard (Zoom off + Blizzard border)."),
         default = "rounded",
         values = { { "rounded", "Rounded" }, { "square", "Square" } },
@@ -327,7 +327,7 @@ function opt.AddAuraOptions(page, o)
 
     opt.DependsOn(opt.AddSlider(page, {
         variable = "squareAuraBorderThickness" .. (o.squareVarSuffix or o.suffix),
-        name = o.label .. " Border Thickness",
+        name = "Border Thickness",
         tooltip = "Thickness of the square " .. o.label .. " aura border, in screen pixels.",
         db = "general", field = SBkeys[2], default = 1,
         min = 1, max = 8, step = 1,
@@ -335,7 +335,7 @@ function opt.AddAuraOptions(page, o)
     }), shapeInit, IsSquare);
 
     opt.DependsOn(opt.AddDropdown(page, {
-        variable = "auraBorderPosition" .. o.suffix, name = o.label .. " Border Position",
+        variable = "auraBorderPosition" .. o.suffix, name = "Border Position",
         tooltip = "Inside Icon draws the square border over the icon's outer edge, so icons keep their size. Outside Icon draws it around the icon instead." .. (o.positionDetail or ""),
         default = "inside",
         values = { { "inside", "Inside Icon" }, { "outside", "Outside Icon" } },
@@ -388,10 +388,10 @@ function opt.AddAuraTextOptions(page, o)
 
     if caps.duration then
         Gate(opt.AddSlider(page, {
-            variable = "auraDurationSize" .. o.suffix, name = o.label .. " Duration Text Size",
+            variable = "auraDurationSize" .. o.suffix, name = "Duration Text Size",
             tooltip = "Size of the time-left text on " .. o.label .. " auras, relative to its normal size."
                 .. (o.loc == "player" and "\n\nThe text itself stays Blizzard's (e.g. \"1 m\")." or "")
-                .. ((o.loc == "target" or o.loc == "focus" or o.loc == "compact") and "\n\nOnly shown while " .. o.label .. " Aura Duration Text is on." or ""),
+                .. ((o.loc == "target" or o.loc == "focus" or o.loc == "compact") and "\n\nOnly shown while Aura Duration Text is on." or ""),
             db = "general", field = k .. "durationsize", default = 100,
             min = 50, max = 200, step = 5, format = Percent,
             onChange = refresh,
@@ -400,7 +400,7 @@ function opt.AddAuraTextOptions(page, o)
 
     if caps.center then
         Gate(opt.AddCheckbox(page, {
-            variable = "auraCenterDuration" .. o.suffix, name = o.label .. " Duration Inside Icon",
+            variable = "auraCenterDuration" .. o.suffix, name = "Duration Inside Icon",
             tooltip = "Show the time left in the middle of each " .. o.label .. " aura icon instead of under it (Blizzard's text, e.g. \"1 m\"), and pack the rows tighter, since the space under the icons isn't needed.\n\nBlizzard's buff frame box in Edit Mode keeps its usual size.",
             db = "general", field = k .. "centerduration", default = false,
             onChange = refresh,
@@ -408,7 +408,7 @@ function opt.AddAuraTextOptions(page, o)
     end
 
     Gate(opt.AddSlider(page, {
-        variable = "auraStackSize" .. o.suffix, name = o.label .. " Stack Text Size",
+        variable = "auraStackSize" .. o.suffix, name = "Stack Text Size",
         tooltip = "Size of the stack count on " .. o.label .. " auras, relative to its normal size.",
         db = "general", field = k .. "stacksize", default = 100,
         min = 50, max = 200, step = 5, format = Percent,
@@ -416,7 +416,7 @@ function opt.AddAuraTextOptions(page, o)
     }));
 
     Gate(opt.AddDropdown(page, {
-        variable = "auraStackAnchor" .. o.suffix, name = o.label .. " Stack Text Position",
+        variable = "auraStackAnchor" .. o.suffix, name = "Stack Text Position",
         tooltip = "Where the stack count sits on " .. o.label .. " auras. Bottom Right is Blizzard's spot.",
         default = "BOTTOMRIGHT",
         values = STACK_ANCHOR_VALUES,
@@ -432,7 +432,7 @@ function opt.AddAuraTextOptions(page, o)
     }));
 
     Gate(opt.AddSlider(page, {
-        variable = "auraStackX" .. o.suffix, name = o.label .. " Stack Text X Offset",
+        variable = "auraStackX" .. o.suffix, name = "Stack Text X Offset",
         tooltip = "Moves the stack count left (negative) or right (positive) from its position.",
         db = "general", field = k .. "stackx", default = 0,
         min = -10, max = 10, step = 1,
@@ -440,7 +440,7 @@ function opt.AddAuraTextOptions(page, o)
     }));
 
     Gate(opt.AddSlider(page, {
-        variable = "auraStackY" .. o.suffix, name = o.label .. " Stack Text Y Offset",
+        variable = "auraStackY" .. o.suffix, name = "Stack Text Y Offset",
         tooltip = "Moves the stack count down (negative) or up (positive) from its position.",
         db = "general", field = k .. "stacky", default = 0,
         min = -10, max = 10, step = 1,
@@ -531,7 +531,7 @@ function opt.AddAllAurasOptions(page)
             set = function(value)
                 if value == "none" then return end
                 opt.ApplyAuraParts({ [part] = value });
-                print("|cff33ff99Uber UI|r: " .. name:gsub("^All Auras: ", "") .. " set to "
+                print("|cff33ff99Uber UI|r: " .. name .. " set to "
                     .. (labels[value] or value) .. " on every aura location.");
                 -- Deferred: we're inside the setting's own SetValue.
                 C_Timer.After(0, function()
@@ -542,24 +542,24 @@ function opt.AddAllAurasOptions(page)
         setting = s;
     end
 
-    Action("zoom", "auraAllZoom", "All Auras: Zoom Icons",
+    Action("zoom", "auraAllZoom", "Zoom Icons",
         "Zoom every aura location's icons.",
         { { "on", "On" }, { "off", "Off" } });
-    Action("buffborder", "auraAllBuffBorder", "All Auras: Buff Border",
+    Action("buffborder", "auraAllBuffBorder", "Buff Border",
         "Buff border for every aura location. \"None\" is Blizzard's look (no border on buffs).",
         { { "dark", "Dark" }, { "blizzard", "None" } });
-    Action("debuffborder", "auraAllDebuffBorder", "All Auras: Debuff Border",
+    Action("debuffborder", "auraAllDebuffBorder", "Debuff Border",
         "Debuff border for every aura location. \"Dispel Color\" is Blizzard's look (red on the arena CC tracker).",
         { { "dark", "Dark" }, { "blizzard", "Dispel Color" } });
-    Action("shape", "auraAllShape", "All Auras: Border Shape",
+    Action("shape", "auraAllShape", "Border Shape",
         "Border shape for every aura location.",
         { { "rounded", "Rounded" }, { "square", "Square" } });
     local px = {};
     for i = 1, 8 do px[i] = { tostring(i), i .. " px" } end
-    Action("thickness", "auraAllThickness", "All Auras: Border Thickness",
+    Action("thickness", "auraAllThickness", "Border Thickness",
         "Square border thickness for every aura location.",
         px);
-    Action("position", "auraAllPosition", "All Auras: Border Position",
+    Action("position", "auraAllPosition", "Border Position",
         "Square border position for every aura location.",
         { { "inside", "Inside Icon" }, { "outside", "Outside Icon" } });
 end

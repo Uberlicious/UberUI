@@ -66,7 +66,7 @@ function opt.BuildGeneral(page)
     opt.Header(page, "Square Aura Borders");
 
     opt.AddCheckbox(page, {
-        variable = "squareDispelBorderThicker", name = "Thicker Dispel/Enchant Square Borders",
+        variable = "squareDispelBorderThicker", name = "Thicker Dispel/Enchant Borders",
         tooltip = "Draw the colored square border (dispel-type color on debuffs, purple on weapon enchants) 1px thicker than the regular square border, everywhere (Player, Target, Focus, Boss, Party, Compact Raid/Party, Arena, Nameplates, Cooldown Manager), so the color reads better at small sizes.\n\nOn (default): 1px thicker. Off: the colored border is the same thickness as the regular square border.",
         db = "general", field = "squaredispelborderthicker", default = true,
         onChange = function()

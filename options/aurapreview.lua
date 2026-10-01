@@ -660,7 +660,7 @@ end
 function opt.AddAuraPreview(page, o)
     local twoSizes = o.loc == "target" or o.loc == "focus" or o.loc == "boss"
     opt.AddPreview(page, {
-        name = o.label .. " Preview",
+        name = "Preview",
         tooltip = "Sample " .. o.label .. " buffs and debuffs drawn with the settings below, at the size they appear on screen"
             .. (twoSizes and " (your auras large, others' small)" or "")
             .. ". Earth Shield and Agony show stack counts"

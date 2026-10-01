@@ -39,14 +39,14 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "playerTempEnchantColor", name = "Player Weapon Enchant Border Color",
+        variable = "playerTempEnchantColor", name = "Weapon Enchant Border Color",
         tooltip = "Give weapon enchants (sharpening stones, oils, poisons, imbues) Blizzard's purple enchant border, whatever the Player Buff Border choice. With Square borders it's drawn as a purple square border. Off: weapon enchants get the same border as your other buffs, and no purple border at all when Buff Border is None.",
         db = "general", field = "playertempenchantcolor", default = true,
         onChange = opt.RefreshPlayerAuras,
     });
 
     opt.AddCheckbox(page, {
-        variable = "ccPlayerHealth", name = "Class Color Player",
+        variable = "ccPlayerHealth", name = "Class Color",
         tooltip = "Class color player health bar",
         db = "playerframes", field = "classcolor", default = true,
         onChange = function() UberUI.playerframes:HealthBarColor() end,
@@ -54,9 +54,9 @@ function opt.BuildUnitFrames(page)
 
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.general,
-        cbVariable = "PlayerBarTextures", cbName = "Player Bar Textures", cbField = "playerbartextures",
+        cbVariable = "PlayerBarTextures", cbName = "Bar Textures", cbField = "playerbartextures",
         cbTooltip = "Retexture Player Frame Separately from All Bars texture",
-        ddVariable = "PlayerTexture", ddName = "Player Bar Texture", ddField = "playerbartexture",
+        ddVariable = "PlayerTexture", ddName = "Bar Texture", ddField = "playerbartexture",
         ddTooltip = "Set your desired status bar texture for Player frame" .. opt.RELOAD_NOTE,
         cbOnChange = function() UberUI.playerframes:HealthManaBarTexture(true) end,
         ddOnChange = function() UberUI.playerframes:HealthManaBarTexture(true) end,
@@ -79,14 +79,14 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "targetAuraDuration", name = "Target Aura Duration Text",
+        variable = "targetAuraDuration", name = "Aura Duration Text",
         tooltip = "Show the time left on Target auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
         db = "general", field = "targetauraduration", default = false,
         onChange = RefreshTargetAuras,
     });
 
     opt.AddCheckbox(page, {
-        variable = "targetbuffsShowDispel", name = "Target Highlight Purgeable Buffs",
+        variable = "targetbuffsShowDispel", name = "Highlight Purgeable Buffs",
         tooltip = opt.DispelTooltip("Target"),
         db = "general", field = "targetbuffs_showdispel", default = true,
         onChange = function()
@@ -119,7 +119,7 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "targetCastBarIconBorder", name = "Target Cast Bar Icon Border",
+        variable = "targetCastBarIconBorder", name = "Cast Bar Icon Border",
         tooltip = "Give the spell icon on the Target cast bar a border, in the Target aura border style (Border Shape, Thickness and Position above) and the darkness color, with the icon zoomed like aura icons.",
         db = "general", field = "targetcastbariconborder", default = true,
         onChange = function() if UberUI.targetframes then UberUI.targetframes:StyleCastBarIcon() end end,
@@ -136,14 +136,14 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "ccEnemyTarget", name = "Class Color Enemy Target",
+        variable = "ccEnemyTarget", name = "Class Color Enemy",
         tooltip = "Class color target and target of target health bar of enemy players",
         db = "targetframes", field = "classcolorenemy", default = true,
         onChange = function() UberUI.targetframes:HealthBarColor() end,
     });
 
     opt.AddCheckbox(page, {
-        variable = "ccFriendlyTarget", name = "Class Color Friendly Target",
+        variable = "ccFriendlyTarget", name = "Class Color Friendly",
         tooltip = "Class color target and target of target health bar of friendly players",
         db = "targetframes", field = "classcolorfriendly", default = true,
         onChange = function() UberUI.targetframes:HealthBarColor() end,
@@ -151,9 +151,9 @@ function opt.BuildUnitFrames(page)
 
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.general,
-        cbVariable = "TargetBarTextures", cbName = "Target Bar Textures", cbField = "targetbartextures",
+        cbVariable = "TargetBarTextures", cbName = "Bar Textures", cbField = "targetbartextures",
         cbTooltip = "Retexture Target Frame Separately from All Bars texture",
-        ddVariable = "TargetTexture", ddName = "Target Bar Texture", ddField = "targetbartexture",
+        ddVariable = "TargetTexture", ddName = "Bar Texture", ddField = "targetbartexture",
         ddTooltip = "Set your desired status bar texture for Target frame",
         cbOnChange = function() UberUI.targetframes:HealthManaBarTexture() end,
         ddOnChange = function() UberUI.targetframes:HealthManaBarTexture() end,
@@ -179,28 +179,28 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "focusAuraDuration", name = "Focus Aura Duration Text",
+        variable = "focusAuraDuration", name = "Aura Duration Text",
         tooltip = "Show the time left on Focus auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
         db = "general", field = "focusauraduration", default = false,
         onChange = RefreshFocusAuras,
     });
 
     opt.AddCheckbox(page, {
-        variable = "focusbuffsShowDispel", name = "Focus Highlight Purgeable Buffs",
+        variable = "focusbuffsShowDispel", name = "Highlight Purgeable Buffs",
         tooltip = opt.DispelTooltip("Focus"),
         db = "general", field = "focusbuffs_showdispel", default = true,
         onChange = RefreshFocusAuras,
     });
 
     opt.AddCheckbox(page, {
-        variable = "focusCastBarIconBorder", name = "Focus Cast Bar Icon Border",
+        variable = "focusCastBarIconBorder", name = "Cast Bar Icon Border",
         tooltip = "Give the spell icon on the Focus cast bar a border, in the Focus aura border style (Border Shape, Thickness and Position above) and the darkness color, with the icon zoomed like aura icons.",
         db = "general", field = "focuscastbariconborder", default = true,
         onChange = function() if UberUI.focusframes then UberUI.focusframes:StyleCastBarIcon() end end,
     });
 
     opt.AddDropdown(page, {
-        variable = "FocusToTPlacement", name = "Focus Target of Target",
+        variable = "FocusToTPlacement", name = "Target of Target",
         tooltip = "Where the target-of-target frame goes relative to the Focus aura rows.\n\nNarrow Auras: Blizzard's behavior -- while the target-of-target frame is showing, the aura rows get narrower so they don't run under it.\n\nMove ToT Aside: shifts the target-of-target frame to the right so the aura rows keep their full width.\n\nThe target-of-target frame can only be moved out of combat; a change made in combat applies when combat ends.",
         default = "narrow",
         values = { { "narrow", "Narrow Auras" }, { "aside", "Move ToT Aside" } },
@@ -211,14 +211,14 @@ function opt.BuildUnitFrames(page)
 
     if FocusFrame then
         opt.AddCheckbox(page, {
-            variable = "ccEnemyFocus", name = "Class Color Enemy Focus",
+            variable = "ccEnemyFocus", name = "Class Color Enemy",
             tooltip = "Class color focus and focus target health bar of enemy players",
             db = "focusframes", field = "classcolorenemy", default = true,
             onChange = function() UberUI.focusframes:HealthBarColor() end,
         });
 
         opt.AddCheckbox(page, {
-            variable = "ccFriendlyFocus", name = "Class Color Friendly Focus",
+            variable = "ccFriendlyFocus", name = "Class Color Friendly",
             tooltip = "Class color focus and focus target health bar of friendly players",
             db = "focusframes", field = "classcolorfriendly", default = true,
             onChange = function() UberUI.focusframes:HealthBarColor() end,
@@ -227,9 +227,9 @@ function opt.BuildUnitFrames(page)
 
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.general,
-        cbVariable = "FocusBarTextures", cbName = "Focus Bar Textures", cbField = "focusbartextures",
+        cbVariable = "FocusBarTextures", cbName = "Bar Textures", cbField = "focusbartextures",
         cbTooltip = "Retexture Focus Frame Separately from All Bars texture",
-        ddVariable = "FocusTexture", ddName = "Focus Bar Texture", ddField = "focusbartexture",
+        ddVariable = "FocusTexture", ddName = "Bar Texture", ddField = "focusbartexture",
         ddTooltip = "Set your desired status bar texture for Focus frame",
         cbOnChange = function() UberUI.focusframes:HealthManaBarTexture() end,
         ddOnChange = function() UberUI.focusframes:HealthManaBarTexture() end,
@@ -251,7 +251,7 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "bossbuffsShowDispel", name = "Boss Highlight Purgeable Buffs",
+        variable = "bossbuffsShowDispel", name = "Highlight Purgeable Buffs",
         tooltip = opt.DispelTooltip("Boss"),
         db = "general", field = "bossbuffs_showdispel", default = true,
         onChange = RefreshBossAuras,
@@ -259,14 +259,14 @@ function opt.BuildUnitFrames(page)
 
     if Boss1TargetFrame then
         opt.AddCheckbox(page, {
-            variable = "ccEnemyBoss", name = "Class Color Enemy Boss",
+            variable = "ccEnemyBoss", name = "Class Color Enemy",
             tooltip = "Class color boss health bars of enemy players",
             db = "bossframes", field = "classcolorenemy", default = true,
             onChange = function() UberUI.bossframes:HealthBarColor() end,
         });
 
         opt.AddCheckbox(page, {
-            variable = "ccFriendlyBoss", name = "Class Color Friendly Boss",
+            variable = "ccFriendlyBoss", name = "Class Color Friendly",
             tooltip = "Class color boss health bars of friendly players",
             db = "bossframes", field = "classcolorfriendly", default = true,
             onChange = function() UberUI.bossframes:HealthBarColor() end,
@@ -275,9 +275,9 @@ function opt.BuildUnitFrames(page)
 
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.general,
-        cbVariable = "BossBarTextures", cbName = "Boss Bar Textures", cbField = "bossbartextures",
+        cbVariable = "BossBarTextures", cbName = "Bar Textures", cbField = "bossbartextures",
         cbTooltip = "Retexture Boss Frames Separately from All Bars texture",
-        ddVariable = "BossTexture", ddName = "Boss Bar Texture", ddField = "bossbartexture",
+        ddVariable = "BossTexture", ddName = "Bar Texture", ddField = "bossbartexture",
         ddTooltip = "Set your desired status bar texture for Boss frames",
         cbOnChange = function() UberUI.bossframes:HealthManaBarTexture() end,
         ddOnChange = function() UberUI.bossframes:HealthManaBarTexture() end,
@@ -299,12 +299,12 @@ function opt.BuildUnitFrames(page)
         loc = "party", label = "Party", suffix = "Party",
         buffKey = "aurastyle_partybuffs", debuffKey = "aurastyle_partydebuffs",
         refresh = RefreshPartyAuraStyle,
-        buffName = "Party Buff Border (Tooltip)",
+        buffName = "Buff Border (Tooltip)",
         buffTooltip = "Border on party buffs. Standard party frames don't show buffs on the frame itself -- only in the tooltip when you hover a party member -- so this styles those tooltip icons. \"None\" is Blizzard's look.\n\nWith Zoom off and the Blizzard border choice, Uber UI leaves these auras entirely to Blizzard.",
     });
 
     opt.AddCheckbox(page, {
-        variable = "ccPartyColor", name = "Class Color Party",
+        variable = "ccPartyColor", name = "Class Color",
         tooltip = "Class color default blizzard party (non-raid) health bars",
         db = "partyframes", field = "classcolor", default = true,
         onChange = function()
@@ -315,9 +315,9 @@ function opt.BuildUnitFrames(page)
 
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.general,
-        cbVariable = "PartyBarTextures", cbName = "Party Bar Textures", cbField = "partybartextures",
+        cbVariable = "PartyBarTextures", cbName = "Bar Textures", cbField = "partybartextures",
         cbTooltip = "Retexture Party Frame Separately from All Bars texture",
-        ddVariable = "PartyTexture", ddName = "Party Bar Texture", ddField = "partybartexture",
+        ddVariable = "PartyTexture", ddName = "Bar Texture", ddField = "partybartexture",
         ddTooltip = "Set your desired status bar texture for Party frame",
         cbOnChange = function() UberUI.partyframes:HealthManaBarTexture() end,
         ddOnChange = function() UberUI.partyframes:HealthManaBarTexture() end,

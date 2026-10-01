@@ -11,7 +11,7 @@ function opt.BuildNameplates(page)
     opt.AddNameplateBarPreview(page);
 
     opt.AddCheckbox(page, {
-        variable = "HideNPSelctionGlow", name = "Hide Nameplate Selection Glow",
+        variable = "HideNPSelctionGlow", name = "Hide Selection Glow",
         tooltip = "Hide the inner glow on selected nameplate",
         db = "general", field = "hidenameplateglow", default = false,
         onChange = function()
@@ -30,9 +30,9 @@ function opt.BuildNameplates(page)
 
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.general,
-        cbVariable = "NameplateBarTextures", cbName = "Nameplate Bar Textures", cbField = "nameplatebartextures",
+        cbVariable = "NameplateBarTextures", cbName = "Bar Textures", cbField = "nameplatebartextures",
         cbTooltip = "Retexture Nameplate Frames Separately from All Bars texture",
-        ddVariable = "NameplateTexture", ddName = "Nameplate Bar Texture", ddField = "nameplatebartexture",
+        ddVariable = "NameplateTexture", ddName = "Bar Texture", ddField = "nameplatebartexture",
         ddTooltip = "Set your desired status bar texture for Nameplate frames",
         cbOnChange = function() UberUI.nameplates:ForceNameplateTexture() end,
         ddOnChange = function(value) UberUI.nameplates:ForceNameplateTexture(value) end,
@@ -43,7 +43,7 @@ function opt.BuildNameplates(page)
     end
 
     local shapeInit = opt.AddDropdown(page, {
-        variable = "NameplateHealthBorderShape", name = "Nameplate Health Bar Border",
+        variable = "NameplateHealthBorderShape", name = "Health Bar Border",
         tooltip = "Rounded is Blizzard's nameplate border. Square draws a flat border of exact pixel thickness around the health bar, in the darkness color, with a square bar.",
         default = "rounded",
         values = { { "rounded", "Rounded" }, { "square", "Square" } },
@@ -53,7 +53,7 @@ function opt.BuildNameplates(page)
     });
 
     opt.DependsOn(opt.AddSlider(page, {
-        variable = "NameplateHealthBorderThickness", name = "Nameplate Health Bar Border Thickness",
+        variable = "NameplateHealthBorderThickness", name = "Health Bar Border Thickness",
         tooltip = "Thickness of the square nameplate health bar border, in screen pixels.",
         db = "general", field = "nameplatesquareborder_thickness", default = 1,
         min = 1, max = 4, step = 1,
@@ -115,21 +115,21 @@ function opt.BuildNameplates(page)
     }), nameplateAurasInit, NameplateAurasOn);
 
     opt.AddCheckbox(page, {
-        variable = "nameplatebuffsShowDispel", name = "Nameplate Highlight Purgeable Buffs",
-        tooltip = "Show a thin white border on enemy nameplate buffs your class can Purge, Dispel or Spellsteal, whichever Nameplate Border Shape is chosen (Blizzard's larger glow would run onto the health bar). Only shown if your class actually has a way to remove it.",
+        variable = "nameplatebuffsShowDispel", name = "Highlight Purgeable Buffs",
+        tooltip = "Show a thin white border on enemy nameplate buffs your class can Purge, Dispel or Spellsteal, whichever Border Shape is chosen (Blizzard's larger glow would run onto the health bar). Only shown if your class actually has a way to remove it.",
         db = "general", field = "nameplatebuffs_showdispel", default = true,
         onChange = RefreshNameplateAuraStyle,
     });
 
     opt.AddColorSwatch(page, {
-        variable = "nameplateDurationColor", name = "Nameplate Duration Color",
+        variable = "nameplateDurationColor", name = "Duration Color",
         tooltip = "Color of the countdown number on nameplate auras.",
         db = "general", field = "nameplatedurationcolor", default = "ffffffff",
         onChange = RefreshNameplateAuraStyle,
     });
 
     opt.AddColorSwatch(page, {
-        variable = "nameplateDurationExpiringColor", name = "Nameplate Expiring Duration Color",
+        variable = "nameplateDurationExpiringColor", name = "Expiring Duration Color",
         tooltip = "Color of the countdown number once an aura has less time left than the Expiring Duration Threshold below.",
         db = "general", field = "nameplatedurationexpiringcolor", default = "ffff3333",
         onChange = RefreshNameplateAuraStyle,
@@ -146,7 +146,7 @@ function opt.BuildNameplates(page)
 
     local pandemicStyleSetting
     local pandemicInit = opt.AddCheckbox(page, {
-        variable = "nameplatePandemic", name = "Nameplate Pandemic Highlight",
+        variable = "nameplatePandemic", name = "Pandemic Highlight",
         tooltip = "Highlight your nameplate debuffs while they're in their pandemic window: the last stretch where recasting adds the remaining time onto the new one instead of losing it. Only auras that work that way light up (the game decides, so it's exact even in combat).",
         db = "general", field = "nameplatepandemic", default = true,
         onChange = function()
@@ -161,7 +161,7 @@ function opt.BuildNameplates(page)
     local pandemicStyleInit
     pandemicStyleInit, pandemicStyleSetting = opt.AddDropdown(page, {
         variable = "nameplatePandemicStyle", name = "Pandemic Highlight Style",
-        tooltip = "Border: the debuff's border in the highlight color, in the Nameplate Border Shape (rounded or square).\n\nProc Glow: Blizzard's animated action button proc glow.\n\nMarching Ants: Blizzard's animated rotation-helper border.\n\nPixel Glow: thin dashes marching around the icon.",
+        tooltip = "Border: the debuff's border in the highlight color, in the Border Shape (rounded or square).\n\nProc Glow: Blizzard's animated action button proc glow.\n\nMarching Ants: Blizzard's animated rotation-helper border.\n\nPixel Glow: thin dashes marching around the icon.",
         default = "border",
         values = { { "border", "Border" }, { "glow", "Proc Glow" }, { "ants", "Marching Ants" }, { "pixel", "Pixel Glow" } },
         get = function() return uuidb.general.nameplatepandemicstyle or "border" end,
@@ -182,7 +182,7 @@ function opt.BuildNameplates(page)
     }), pandemicStyleInit, function() return PandemicOn() and uuidb.general.nameplatepandemicstyle == "pixel" end);
 
     local nameplatePandemicClassInit = opt.AddCheckbox(page, {
-        variable = "nameplatePandemicClassColor", name = "Nameplate Pandemic: Use Class Color",
+        variable = "nameplatePandemicClassColor", name = "Pandemic: Use Class Color",
         tooltip = "Color the pandemic highlight (Border, Proc Glow and Marching Ants) in your character's class color instead of the color below.",
         db = "general", field = "nameplatepandemicclasscolor", default = false,
         onChange = RefreshNameplateAuraStyle,
@@ -220,7 +220,7 @@ function opt.BuildNameplates(page)
     end
 
     local nameHealthInit = opt.AddDropdown(page, {
-        variable = "NameHealthStyle", name = "Friendly Name Health",
+        variable = "NameHealthStyle", name = "Style",
         tooltip = "Show friendly players' health on name-only nameplates, colored from red (low) through orange and yellow to green (full).\n\nUnderline: a thin health bar under (or above) the name.\n\nDot: a small dot beside the name.\n\nName Color: tints the name itself; at full health it's the class color.\n\nOnly works outside instances -- Blizzard locks friendly nameplates in dungeons and raids.",
         default = "off",
         values = { { "off", "Off" }, { "underline", "Underline" }, { "dot", "Dot" }, { "name", "Name Color" } },
@@ -306,7 +306,7 @@ function opt.BuildNameplates(page)
     opt.Header(page, "Friendly Raid Target Icons");
 
     opt.AddSlider(page, {
-        variable = "FriendlyNameplateRaidTargetScale", name = "Friendly Nameplate Raid Target Scale",
+        variable = "FriendlyNameplateRaidTargetScale", name = "Scale",
         tooltip = "Scale of the raid target icon on friendly nameplates",
         db = "general", field = "nameplateraidtargetscale", default = 1,
         min = 0.5, max = 10, step = 0.1,
@@ -315,7 +315,7 @@ function opt.BuildNameplates(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "AnchorFriendlyRaidIconTop", name = "Anchor Friendly Raid Icon Top",
+        variable = "AnchorFriendlyRaidIconTop", name = "Anchor to Top",
         tooltip = "Anchor the raid icon to the top center of the nameplate",
         db = "general", field = "nameplateraidtargettopanchor", default = false,
         onChange = function() UberUI.nameplates:UpdateAllNameplateRaidTargetScale() end,
@@ -329,7 +329,7 @@ function opt.BuildNameplates(page)
         end
 
         opt.AddCheckbox(page, {
-            variable = "darkenpersonalresourceborder", name = "Darken Personal Resource Border",
+            variable = "darkenpersonalresourceborder", name = "Darken Border",
             tooltip = "Darkens the border texture of the Personal Resource Display",
             db = "general", field = "darkenpersonalresourceborder", default = true,
             onChange = RefreshPersonalResource,
@@ -337,9 +337,9 @@ function opt.BuildNameplates(page)
 
         opt.AddBarTextureSetting(page, {
             dbTable = uuidb.general,
-            cbVariable = "PersonalResourceBarTextures", cbName = "Personal Resource Bar Textures", cbField = "personalresourcebartextures",
+            cbVariable = "PersonalResourceBarTextures", cbName = "Bar Textures", cbField = "personalresourcebartextures",
             cbTooltip = "Retexture Personal Resource Display Separately from All Bars texture",
-            ddVariable = "PersonalResourceTexture", ddName = "Personal Resource Bar Texture", ddField = "personalresourcebartexture",
+            ddVariable = "PersonalResourceTexture", ddName = "Bar Texture", ddField = "personalresourcebartexture",
             ddTooltip = "Set your desired status bar texture for Personal Resource Display",
             cbOnChange = RefreshPersonalResource,
             ddOnChange = RefreshPersonalResource,

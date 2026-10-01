@@ -184,6 +184,16 @@ local defaults = {
         namehealthdotside            = "LEFT",
         namehealthdotoffset          = 0,
         darkenaddonminimapbuttons    = true,
+        cursorring                   = false,
+        cursorringstyle              = "normal",
+        cursorringsize               = 30,
+        cursorringclasscolor         = true,
+        cursorringcolor              = "ffffffff",
+        cursorringcombatonly         = false,
+        cursorringgcd                = false,
+        cursorringwhilehidden        = true,
+        cursorringgcdcolor           = "ffffffff",
+        cursorringgcdstyle           = "normal",
     },
     damagemeters = {
         background = false,
@@ -404,6 +414,11 @@ function UberUI:Init()
             end
         end
         g.swingtimerbartint, g.swingtimerclasscolor = nil, nil
+        -- Cursor ring's default size became 30 (40 had been saved for everyone).
+        if (g._cursorring_version or 0) < 1 then
+            if g.cursorringsize == 40 then g.cursorringsize = nil end
+            g._cursorring_version = 1
+        end
         -- Pixel Glow Position's default became Inside (see cooldown above).
         if (g._pixelpos_version or 0) < 1 then
             g.nameplatepixelposition = nil
