@@ -113,9 +113,8 @@ end
 --  2. As plain start/duration numbers from the reference spell, when they
 --     aren't secret (EllesmereUI's way): a 0-1.6 s cooldown is the GCD.
 -- Run on the cast events and SPELL_UPDATE_COOLDOWN; cleared when a cast
--- fails or is interrupted and no GCD is running. lastStep is for
--- /uuidebuggcd.
-local lastSpell, lastStep = nil, "never ran"
+-- fails or is interrupted and no GCD is running.
+local lastSpell
 local IsSecret = UberUI.util.IsSecret
 
 local function DurationFor(spellID)
@@ -157,12 +156,9 @@ end
 
 local function StartGCD()
     if not (gcd and G().cursorringgcd and C_Spell and C_Spell.GetSpellCooldown) then return end
-    local ok, started, why = pcall(StartFromDurationObject)
-    local step1 = ok and why or ("error: " .. tostring(started))
-    if ok and started then lastStep = why return end
-    ok, started, why = pcall(StartFromNumbers)
-    local step2 = ok and why or ("error: " .. tostring(started))
-    lastStep = (ok and started) and why or ("not started -- 1: " .. tostring(step1) .. " / 2: " .. tostring(step2))
+    local ok, started = pcall(StartFromDurationObject)
+    if ok and started then return end
+    pcall(StartFromNumbers)
 end
 
 local function StopIfNoGCD()
@@ -281,40 +277,6 @@ function cursorring.CreatePreview(parent)
     end
     preview:SetScript("OnShow", preview.Update)
     return preview
-end
-
--- Temporary: /uuidebuggcd reports the GCD ring's state.
-SLASH_UUIDEBUGGCD1 = "/uuidebuggcd"
-SlashCmdList.UUIDEBUGGCD = function()
-    local function S(v)
-        if IsSecret(v) then return "<secret>" end
-        return tostring(v)
-    end
-    local g = G()
-    local lines = {
-        ("settings: ring=%s gcd=%s size=%s combatOnly=%s inCombat=%s"):format(
-            S(g.cursorring), S(g.cursorringgcd), S(g.cursorringsize), S(g.cursorringcombatonly), S(inCombat)),
-        "last attempt: " .. tostring(lastStep),
-        "last spell cast: " .. S(lastSpell),
-    }
-    if gcd then
-        local ok, start, dur = pcall(gcd.GetCooldownTimes, gcd)
-        lines[#lines + 1] = ("gcd frame: shown=%s visible=%s size=%sx%s level=%s cooldownTimes=%s,%s"):format(
-            S(gcd:IsShown()), S(gcd:IsVisible()), S(gcd:GetWidth()), S(gcd:GetHeight()), S(gcd:GetFrameLevel()),
-            ok and S(start) or "ERR", ok and S(dur) or "")
-        lines[#lines + 1] = ("root: shown=%s visible=%s"):format(S(root:IsShown()), S(root:IsVisible()))
-    else
-        lines[#lines + 1] = "gcd frame: not created"
-    end
-    local info = C_Spell and C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(GCD_SPELL)
-    if info then
-        lines[#lines + 1] = ("reference spell now: active=%s onGCD=%s start=%s dur=%s"):format(
-            S(info.isActive), S(info.isOnGCD), S(info.startTime), S(info.duration))
-    else
-        lines[#lines + 1] = "reference spell now: no info"
-    end
-    lines[#lines + 1] = "events: " .. (events and S(events:IsEventRegistered("SPELL_UPDATE_COOLDOWN")) or "none")
-    UberUI.ShowDebugReport(table.concat(lines, "\n"))
 end
 
 local login = CreateFrame("Frame")
