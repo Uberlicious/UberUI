@@ -1,4 +1,5 @@
-1.0.3:
+1.0.4:
+    - Note: there is no 1.0.3 -- that version number was already used by a 2018 release of Uber UI, so this build skips to 1.0.4.
     - Cursor Ring (Other UI): A ring that follows your mouse cursor, in your class color or a color of your choice, Normal or Thin, adjustable size, optionally only in combat. It stays on screen while the cursor is hidden (holding a mouse button to turn the camera). Comes with a live preview.
     - GCD Ring: An optional ring just inside the cursor ring that sweeps away as your global cooldown runs, with its own style and color (white by default). Works on WoW Forever too.
     - Cleaner Settings: Setting names no longer repeat the section they're in (e.g. "Zoom Icons" instead of "Target Zoom Icons"). Your saved settings are unchanged.
