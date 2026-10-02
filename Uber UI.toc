@@ -1,5 +1,5 @@
-## Interface: 120100, 10600
-## Version: 1.0.4
+## Interface: 120100, 16001
+## Version: 1.0.5
 
 ## Author: Uberlicious
 ## Notes: Darkens and modifies original Blizzard UI.

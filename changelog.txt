@@ -1,3 +1,6 @@
+1.0.5:
+    - WoW Forever: Updated for the October 1 Forever patch, which marked Uber UI as Incompatible. It loads normally again.
+
 1.0.4:
     - Note: there is no 1.0.3 -- that version number was already used by a 2018 release of Uber UI, so this build skips to 1.0.4.
     - Cursor Ring (Other UI): A ring that follows your mouse cursor, in your class color or a color of your choice, Normal or Thin, adjustable size, optionally only in combat. It stays on screen while the cursor is hidden (holding a mouse button to turn the camera). Comes with a live preview.

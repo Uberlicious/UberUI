@@ -2,7 +2,8 @@
 
 WoW addon that darkens/restyles Blizzard's default UI. One package supports
 both retail (`WOW_PROJECT_MAINLINE`) and "WoW Forever" (internal Camelot
-build, interface 10600) — check both when touching shared frames, since APIs
+build, interface 16001 as of client 1.60.1 — match what other Forever addons'
+`.toc`s declare) — check both when touching shared frames, since APIs
 sometimes differ between them (e.g. retail 12.1 lacks some Forever-only
 delegates like `UnitFrameUtil.UpdateUnitPvPIndicator`).
 
