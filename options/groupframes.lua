@@ -6,42 +6,40 @@ local addon, ns = ...
 local opt = ns.options
 
 function opt.BuildGroupFrames(page)
-    if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
-        opt.Header(page, "Auras");
+    opt.Header(page, "Auras");
 
-        -- "None" hands that aura type back to Blizzard's native display
-        -- (restores the raid frame option we turned off), so each of these
-        -- doubles as the on/off switch for testing.
-        local function RefreshCompactAuras()
-            if UberUI.compactauras and UberUI.compactauras.Refresh then
-                UberUI.compactauras:Refresh();
-            end
+    -- "None" hands that aura type back to Blizzard's native display
+    -- (restores the raid frame option we turned off), so each of these
+    -- doubles as the on/off switch for testing.
+    local function RefreshCompactAuras()
+        if UberUI.compactauras and UberUI.compactauras.Refresh then
+            UberUI.compactauras:Refresh();
         end
-
-        -- Zoom off + the Blizzard border choice hands that aura type back to
-        -- Blizzard's native display (restores the raid frame option we turned
-        -- off), so it doubles as the on/off switch for testing.
-        opt.AddAuraOptions(page, {
-            loc = "compact", label = "Compact Raid/Party", suffix = "Compact",
-            buffKey = "aurastyle_compactbuffs", debuffKey = "aurastyle_compactdebuffs",
-            refresh = RefreshCompactAuras,
-            debuffTooltip = "Border on compact raid and party debuffs, including private boss debuffs: Blizzard's dispel-type color (Magic, Curse, Disease, Poison, Bleed; red when there's no type), or the darkness color.\n\nWith Zoom off and the Blizzard border choice, Uber UI leaves these auras entirely to Blizzard.",
-        });
-
-        opt.AddCheckbox(page, {
-            variable = "compactAuraDuration", name = "Aura Duration Text",
-            tooltip = "Show the time left on compact raid and party auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
-            db = "general", field = "compactauraduration", default = false,
-            onChange = RefreshCompactAuras,
-        });
-
-        opt.AddCheckbox(page, {
-            variable = "compactBigDefensive", name = "Big Defensive",
-            tooltip = "Replace the large defensive cooldown icon in the center of compact raid and party frames with Uber UI's, styled like Compact Raid/Party buffs (same zoom, border and shape). Size follows Blizzard's Edit Mode Big Defensive size.\n\nWhen off, Blizzard's own icon is restored.",
-            db = "general", field = "compactbigdefensive", default = true,
-            onChange = RefreshCompactAuras,
-        });
     end
+
+    -- Zoom off + the Blizzard border choice hands that aura type back to
+    -- Blizzard's native display (restores the raid frame option we turned
+    -- off), so it doubles as the on/off switch for testing.
+    opt.AddAuraOptions(page, {
+        loc = "compact", label = "Compact Raid/Party", suffix = "Compact",
+        buffKey = "aurastyle_compactbuffs", debuffKey = "aurastyle_compactdebuffs",
+        refresh = RefreshCompactAuras,
+        debuffTooltip = "Border on compact raid and party debuffs, including private boss debuffs: Blizzard's dispel-type color (Magic, Curse, Disease, Poison, Bleed; red when there's no type), or the darkness color.\n\nWith Zoom off and the Blizzard border choice, Uber UI leaves these auras entirely to Blizzard.",
+    });
+
+    opt.AddCheckbox(page, {
+        variable = "compactAuraDuration", name = "Aura Duration Text",
+        tooltip = "Show the time left on compact raid and party auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
+        db = "general", field = "compactauraduration", default = false,
+        onChange = RefreshCompactAuras,
+    });
+
+    opt.AddCheckbox(page, {
+        variable = "compactBigDefensive", name = "Big Defensive",
+        tooltip = "Replace the large defensive cooldown icon in the center of compact raid and party frames with Uber UI's, styled like Compact Raid/Party buffs (same zoom, border and shape). Size follows Blizzard's Edit Mode Big Defensive size.\n\nWhen off, Blizzard's own icon is restored.",
+        db = "general", field = "compactbigdefensive", default = true,
+        onChange = RefreshCompactAuras,
+    });
 
     opt.Header(page, "Frames");
 

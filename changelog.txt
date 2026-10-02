@@ -1,3 +1,6 @@
+1.0.6:
+    - WoW Forever: The Raid & Group Frames page shows its Auras settings again (Compact Raid/Party aura styling, Aura Duration Text, Big Defensive).
+
 1.0.5:
     - WoW Forever: Updated for the October 1 Forever patch, which marked Uber UI as Incompatible. It loads normally again.
 
