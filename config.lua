@@ -170,7 +170,6 @@ local defaults = {
         focusauraduration               = false,
         compactauraduration             = false,
         compactmaxdebuffs               = 3,
-        playerauraswipe                 = false,
         cameramaxzoom                   = false,
         cameramaxzoomfactor             = 3.4,
         buffauraborders              = true,

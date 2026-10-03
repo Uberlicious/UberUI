@@ -291,76 +291,6 @@ local function StylePlayerText(button, iconTexture)
     if mirrorHooked[button] then UpdateDurationMirror(button) end
 end
 
--- Cooldown Swipe (uuidb.general.playerauraswipe): Blizzard's player aura
--- buttons have no Cooldown frame, so each gets our own, styled like the
--- aurakit buttons' (reversed, no edge, corner-masked swipe, no numbers) and
--- fed the aura's own duration object. Runs from StyleAuraButton, which
--- Blizzard's UpdateAuraButtons already drives on every aura change, so it
--- needs no hook of its own. Re-fed only when the aura or its expiration
--- changes (always, when the expiration is secret). Weapon enchants have no
--- aura instance and get no swipe.
-local swipes = setmetatable({}, { __mode = "k" }) -- button -> { cd, key }
-
-local function SwipeEnabled()
-    return uuidb and uuidb.general and uuidb.general.playerauraswipe == true
-end
-
-local function ClearPlayerSwipe(button)
-    local s = swipes[button]
-    if s then
-        pcall(s.cd.Clear, s.cd)
-        s.cd:Hide()
-        s.key = nil
-    end
-end
-
-local function UpdatePlayerSwipe(button, iconTexture)
-    local info = button.buttonInfo
-    local id = info and info.auraInstanceID
-    if not SwipeEnabled() or not id or IsSecret(id) or button.isTempEnchant
-        or not (C_UnitAuras and C_UnitAuras.GetAuraDuration) then
-        ClearPlayerSwipe(button)
-        return
-    end
-
-    local s = swipes[button]
-    if not s then
-        local cd = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
-        cd:SetReverse(true)
-        cd:SetDrawEdge(false)
-        cd:SetDrawSwipe(true)
-        cd:SetHideCountdownNumbers(true)
-        cd:EnableMouse(false)
-        pcall(cd.SetSwipeTexture, cd, "Interface\\AddOns\\Uber UI\\textures\\auracornermask", 0, 0, 0, 0.8)
-        pcall(cd.SetUseCircularEdge, cd, false)
-        s = { cd = cd }
-        swipes[button] = s
-    end
-    local cd = s.cd
-    -- Over the icon, under our borders (button + 5) and text (button + 10).
-    cd:ClearAllPoints()
-    cd:SetAllPoints(iconTexture)
-    cd:SetFrameLevel(button:GetFrameLevel() + 1)
-
-    local duration = info.duration
-    if duration ~= nil and not IsSecret(duration) and duration <= 0 then
-        ClearPlayerSwipe(button) -- permanent aura
-        return
-    end
-    local exp = info.expirationTime
-    local key = (exp ~= nil and not IsSecret(exp)) and (id .. ":" .. tostring(exp)) or nil
-    if key and s.key == key and cd:IsShown() then return end
-    local ok = pcall(function()
-        cd:SetCooldownFromDurationObject(C_UnitAuras.GetAuraDuration(PlayerFrame and PlayerFrame.unit or "player", id))
-    end)
-    if not ok then
-        ClearPlayerSwipe(button)
-        return
-    end
-    cd:Show()
-    s.key = key
-end
-
 -- Centered: shrink the buttons to the icon and re-apply Blizzard's grid.
 local STOCK_SIZE = { horizontal = { 30, 40 }, vertical = { 60, 30 } }
 local compacted = setmetatable({}, { __mode = "k" }) -- container -> true
@@ -626,7 +556,6 @@ function buffsandauras:StyleAuraButton(button)
         -- Stack count and duration above our border frames (button + 5).
         UberUI.general:LiftAuraText(button, 10, { "Count", "Duration" })
         pcall(StylePlayerText, button, iconTexture)
-        pcall(UpdatePlayerSwipe, button, iconTexture)
     end
 
     -- In combat these fields (e.g. debuffType) are secret: IsSecret comes

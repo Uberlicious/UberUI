@@ -121,13 +121,53 @@ function aurakit.GetSafeMineMaxFrameCount(unit, isHarmful, normalMaxCount)
     return normalMaxCount
 end
 
--- Blizzard's real Target/Focus/Boss frames (TargetFrameAuraContainerPrivateMixin,
--- Interface/AddOns/Blizzard_UnitFrame/Shared/TargetFrameAuraContainer.lua) hide
--- other players'/pets' debuffs by default, governed by the "noBuffDebuffFilterOnTarget"
--- CVar. Our custom "debuffs_other" group has no such rule built in (it's a plain
--- HARMFUL|!PLAYER filter), so callers gate that group's max frame count on this.
+-- Blizzard's real Target/Focus/Boss frames (TargetFrameAuraContainerPrivateMixin
+-- :ShouldShowAuraAsDebuff, Blizzard_UnitFrame/Shared/TargetFrameAuraContainer.lua)
+-- show every debuff except one case: on an enemy/neutral NPC (not a player,
+-- not another player's pet, not friendly) other players' and pets' debuffs are
+-- hidden unless flagged nameplateShowAll. The "noBuffDebuffFilterOnTarget"
+-- CVar (default off) turns that filter off.
 function aurakit.ShowAllTargetDebuffs()
     return CVarCallbackRegistry:GetCVarValueBool("noBuffDebuffFilterOnTarget") and true or false
+end
+
+local function Plain(v)
+    if IsSecret(v) then return nil end
+    return v
+end
+
+-- Whether Blizzard would show every debuff on this unit (see above).
+function aurakit.ShowsAllDebuffsOnUnit(unit)
+    if aurakit.ShowAllTargetDebuffs() then return true end
+    if not unit or not UnitExists(unit) then return true end
+    local ok, all = pcall(function()
+        return Plain(UnitIsUnit("player", unit)) or Plain(UnitIsPlayer(unit))
+            or (UnitIsOtherPlayersPet and Plain(UnitIsOtherPlayersPet(unit)))
+            or Plain(UnitIsFriend("player", unit))
+    end)
+    return ok and all and true or false
+end
+
+-- Applies Blizzard's rule to a BuildAuraContainer debuff container: the
+-- "other" group takes every debuff, or on an NPC only non-player ones, with
+-- the otherShowAll group adding other players' nameplateShowAll debuffs.
+-- Candidate filters are only re-set when the mode changes (it re-parses).
+-- mineHidden: the mine group is off (ambiguous sources), so "other" must
+-- show everything or the player's own debuffs would vanish.
+function aurakit.ApplyOtherDebuffFilter(container, unit, otherKey, count, mineHidden)
+    if not container then return end
+    local all = mineHidden or aurakit.ShowsAllDebuffsOnUnit(unit)
+    local mode = all and "all" or "npc"
+    if container.uuOtherDebuffMode ~= mode and container.SetAuraGroupCandidateFilters then
+        local ok = pcall(container.SetAuraGroupCandidateFilters, container, otherKey,
+            all and {} or { isFromPlayerOrPlayerPet = false })
+        if ok then container.uuOtherDebuffMode = mode end
+    end
+    pcall(container.SetAuraGroupMaxFrameCount, container, otherKey, count)
+    local showAllKey = container.uuOtherShowAllKey
+    if showAllKey then
+        pcall(container.SetAuraGroupMaxFrameCount, container, showAllKey, all and 0 or count)
+    end
 end
 
 -- exactLineSpacing: rows exactly spacingY apart (Blizzard's target frame);
@@ -186,6 +226,8 @@ function aurakit.ForEachActiveAuraButton(container, keyMine, keyOther, callback)
 
     visitGroup(keyMine)
     visitGroup(keyOther)
+    -- BuildAuraContainer's extra debuff group (other players' nameplateShowAll).
+    if container.uuOtherShowAllKey and keyOther then visitGroup(container.uuOtherShowAllKey) end
 end
 
 function aurakit.RefreshContainerButtons(container, keyMine, keyOther, updateStyleFn)
@@ -934,6 +976,22 @@ function aurakit.BuildAuraContainer(opts)
         end,
         layout = aurakit.MakeGroupLayout(opts.smallSize, opts.spacing, opts.spacing, false, 2, opts.exactLineSpacing),
     })
+
+    -- Debuff containers: other players' nameplateShowAll debuffs, which
+    -- Blizzard still shows on NPCs (see ApplyOtherDebuffFilter). Off (0)
+    -- until a caller applies the filter.
+    if opts.otherShowAllKey then
+        local showAllKey = opts.otherShowAllKey
+        local okG = pcall(container.AddAuraGroup, container, showAllKey, opts.otherFilter, {
+            maxFrameCount = 0,
+            candidateFilters = { isFromPlayerOrPlayerPet = true, nameplateShowAll = true },
+            initializeFrame = function(btn)
+                aurakit.InitAuraButton(container, btn, showAllKey, false, opts.smallSize, false, opts.updateStyleFn)
+            end,
+            layout = aurakit.MakeGroupLayout(opts.smallSize, opts.spacing, opts.spacing, false, 3, opts.exactLineSpacing),
+        })
+        if okG then container.uuOtherShowAllKey = showAllKey end
+    end
 
     if container.ApplyLayout then
         hooksecurefunc(container, "ApplyLayout", function()

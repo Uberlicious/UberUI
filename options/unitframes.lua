@@ -46,13 +46,6 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
-        variable = "playerAuraSwipe", name = "Cooldown Swipe",
-        tooltip = "Darken Player buff and debuff icons with a clockwise sweep as their time runs out, like target and focus auras. Auras with no duration and weapon enchants get no sweep.\n\nWith Square borders your debuffs are Uber UI's own icons, which already show it.",
-        db = "general", field = "playerauraswipe", default = false,
-        onChange = opt.RefreshPlayerAuras,
-    });
-
-    opt.AddCheckbox(page, {
         variable = "ccPlayerHealth", name = "Class Color",
         tooltip = "Class color player health bar",
         db = "playerframes", field = "classcolor", default = true,
@@ -103,7 +96,8 @@ function opt.BuildUnitFrames(page)
         end,
     });
 
-    -- This is Blizzard's own CVar (default off), not an Uber UI setting.
+    -- This is Blizzard's own CVar noBuffDebuffFilterOnTarget (default off),
+    -- not an Uber UI setting.
     -- One CVar governs Target, Focus, and Boss (all three share Blizzard's
     -- TargetFrameTemplate aura container), so there's a single checkbox
     -- here rather than one per frame. When our aura style options replace
@@ -113,7 +107,7 @@ function opt.BuildUnitFrames(page)
     -- keeps applying either way.
     opt.AddCheckbox(page, {
         variable = "showAllTargetFocusDebuffs", name = "Show All Debuffs on Target/Focus/Boss",
-        tooltip = "Blizzard's own setting, shared by the Target, Focus, and Boss frames: off (the default) only shows debuffs you (or your pet) applied; other players' debuffs are hidden entirely. On shows every debuff regardless of who cast it.\n\nA change may not show up until the next time the frame's auras update (e.g. re-targeting).",
+        tooltip = "Blizzard's own setting (noBuffDebuffFilterOnTarget), shared by the Target, Focus, and Boss frames. Off (the default): on enemy and neutral NPCs, other players' and pets' debuffs are hidden, except ones Blizzard flags to always show; yours and the NPC's own debuffs still show, and players, pets and friendly units show every debuff. On: every debuff shows everywhere.\n\nA change may not show up until the next time the frame's auras update (e.g. re-targeting).",
         default = false,
         regKey = "showAllTargetFocusDebuffs", regTable = {},
         get = function() return CVarCallbackRegistry:GetCVarValueBool("noBuffDebuffFilterOnTarget") end,

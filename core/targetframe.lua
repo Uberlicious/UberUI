@@ -328,9 +328,9 @@ function targetframes:UpdateAuras()
     local buffCount = (styleBuffs ~= "none") and 32 or 0
     local debuffMineCount = aurakit.GetSafeMineMaxFrameCount("target", true, debuffCount)
     local buffMineCount = aurakit.GetSafeMineMaxFrameCount("target", false, buffCount)
-    local debuffOtherCount = aurakit.ShowAllTargetDebuffs() and debuffCount or 0
     pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_mine", debuffMineCount)
-    pcall(self.customDebuffs.SetAuraGroupMaxFrameCount, self.customDebuffs, "debuffs_other", debuffOtherCount)
+    -- Blizzard's rule for whose debuffs show (aurakit.ApplyOtherDebuffFilter).
+    aurakit.ApplyOtherDebuffFilter(self.customDebuffs, "target", "debuffs_other", debuffCount, debuffMineCount == 0 and debuffCount > 0)
     pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_mine", buffMineCount)
     pcall(self.customBuffs.SetAuraGroupMaxFrameCount, self.customBuffs, "buffs_other", buffCount)
 
@@ -388,6 +388,7 @@ function targetframes:SetupCustomAuraContainer()
             unitToken = "target",
             mineKey = "debuffs_mine",
             otherKey = "debuffs_other",
+            otherShowAllKey = "debuffs_othershowall",
             mineFilter = "HARMFUL|PLAYER",
             otherFilter = "HARMFUL|!PLAYER",
             frameLevelBonus = 20,

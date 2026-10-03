@@ -1,3 +1,11 @@
+1.0.7:
+    - Raid Frame Debuffs: New Max Debuffs setting (3 to 6; 3 is Blizzard's, 6 is two full rows). Debuffs now line up in Blizzard's priority order (boss and role debuffs, then dispellable, then the rest), and boss/role debuffs grow 1.5x when Blizzard's "Display Larger Role-Specific Debuffs" is on.
+    - Raid Frame Settings: Turning Blizzard's Display Buffs/Debuffs/Big Defensive back on while Uber UI handles them no longer doubles up the icons.
+    - Aura Duration Text: Raid frame, Target, Focus and nameplate timers can show past a minute ("2m", "1h") with Show Durations Over a Minute, and are now white with a black outline by default (White Outlined Text; turn it off for the nameplate duration colors). Player timers inside the icon can use the white style too.
+    - Target, Focus & Boss Debuffs: Now follow Blizzard's rule for whose debuffs show: on enemy NPCs other players' debuffs are hidden (unless Blizzard flags them to always show), while your own, the NPC's, and every debuff on players and friendly units still show. Blizzard's Show All Debuffs setting still shows everything.
+    - WoW Forever: Extended Camera Distance (Other UI) lets the camera zoom out past Blizzard's 2.0 limit, up to the game's 50-yard maximum.
+    - Nameplates: Friendly nameplates keep Blizzard's own auras, which saves frame time in cities, and friendly name health no longer re-lays out names that didn't change.
+
 1.0.6:
     - WoW Forever: The Raid & Group Frames page shows its Auras settings again (Compact Raid/Party aura styling, Aura Duration Text, Big Defensive).
 
