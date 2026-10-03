@@ -24,8 +24,9 @@ aurakit.SafeIsForbidden = SafeIsForbidden
 local TEXT_REF_SIZE = NamePlateConstants and NamePlateConstants.AURA_ITEM_HEIGHT or 25
 
 -- Per-location aura text settings (auratext_<loc>_*): duration and stack
--- text size as multipliers, the stack count's anchor and offset, and
--- Player's centered duration. Shared by every aura location, including the
+-- text size as multipliers, the stack count's anchor and offset,
+-- Player's centered duration, and the duration text's format (shown past a
+-- minute) and style (white outlined). Shared by every aura location, including the
 -- Blizzard-drawn ones (Player, Party).
 local STACK_ANCHORS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true,
@@ -46,6 +47,8 @@ function aurakit.TextSettings(loc)
         x = tonumber(g[k .. "stackx"]) or 0,
         y = tonumber(g[k .. "stacky"]) or 0,
         center = g[k .. "centerduration"] == true,
+        overMinute = g[k .. "overminute"] == true,
+        white = g[k .. "whitetext"] == true,
     }
 end
 
@@ -754,12 +757,16 @@ function aurakit.InitAuraButton(container, button, groupKey, isBuff, size, isMin
     end
 end
 
--- Duration text in Blizzard's nameplate look, shared by every location that
--- shows it. The duration is secret, so the engine formats it (whole seconds,
--- rounded up) and colors it from a step curve on the remaining time: expiring
--- color up to the threshold, normal up to 60 s, transparent above (Blizzard
--- shows no number over a minute). The curve is copied at registration, so
--- settings changes re-register. Colors and threshold are the nameplate ones.
+-- Duration text, shared by every location that shows it. The duration is
+-- secret, so the engine formats and colors it from options registered on
+-- the button. Two per-location settings (aurakit.TextSettings) shape it:
+--  * overMinute: minutes/hours past 60 s ("2m", "1h", rounded up like
+--    Blizzard's). Off, it's whole seconds and hidden above a minute, as
+--    Blizzard's nameplates do.
+--  * white: plain white with a black outline. Off, it's colored from a step
+--    curve on the remaining time with the nameplate duration colors:
+--    expiring color up to the threshold, normal after.
+-- Curves are copied at registration, so settings changes re-register.
 local function DurationSettings()
     local g = uuidb and uuidb.general or {}
     local threshold = tonumber(g.nameplatedurationthreshold) or 5
@@ -767,46 +774,75 @@ local function DurationSettings()
     return g.nameplatedurationcolor or "ffffffff", g.nameplatedurationexpiringcolor or "ffff3333", threshold
 end
 
-local durationFormatter
-local durationOptions, durationOptionsKey
-local function GetDurationTextOptions()
+local secondsFormatter, longFormatter
+local function GetFormatters()
+    if secondsFormatter ~= nil then return secondsFormatter or nil, longFormatter or nil end
+    secondsFormatter, longFormatter = false, false
+    pcall(function()
+        if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum.NumericRuleFormatRounding) then return end
+        local up = Enum.NumericRuleFormatRounding.Up
+        local seconds = C_StringUtil.CreateNumericRuleFormatter()
+        seconds:AddBreakpoint({ threshold = 0, step = 1, rounding = up, format = "%d" })
+        secondsFormatter = seconds
+        local long = C_StringUtil.CreateNumericRuleFormatter()
+        long:AddBreakpoint({ threshold = 0, step = 1, rounding = up, format = "%d" })
+        long:AddBreakpoint({ threshold = 60, step = 1, rounding = up, format = "%dm",
+            components = { { div = 60, step = 1, rounding = up } } })
+        long:AddBreakpoint({ threshold = 3600, step = 1, rounding = up, format = "%dh",
+            components = { { div = 3600, step = 1, rounding = up } } })
+        longFormatter = long
+    end)
+    return secondsFormatter or nil, longFormatter or nil
+end
+
+-- The minutes/hours formatter, for duration text bindings outside aura
+-- containers (Player's Blizzard buttons). nil when the client lacks it.
+function aurakit.GetLongDurationFormatter()
+    local _, long = GetFormatters()
+    return long
+end
+
+local durationOptionsCache = {}
+local function GetDurationTextOptions(overMinute, white)
     local normal, expiring, threshold = DurationSettings()
-    local key = normal .. "|" .. expiring .. "|" .. threshold
-    if durationOptionsKey == key then return durationOptions, key end
-    durationOptionsKey = key
-    durationOptions = nil
+    local key = (overMinute and "m" or "s") .. (white and "w" or ("|" .. normal .. "|" .. expiring .. "|" .. threshold))
+    local cached = durationOptionsCache[key]
+    if cached ~= nil then return cached or nil, key end
+    durationOptionsCache[key] = false
     pcall(function()
         local opts = {}
-        if durationFormatter == nil then
-            durationFormatter = false
-            if C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum.NumericRuleFormatRounding then
-                local formatter = C_StringUtil.CreateNumericRuleFormatter()
-                formatter:AddBreakpoint({ threshold = 0, step = 1, rounding = Enum.NumericRuleFormatRounding.Up, format = "%d" })
-                durationFormatter = formatter
-            end
-        end
-        if durationFormatter then opts.textFormatter = durationFormatter end
+        local seconds, long = GetFormatters()
+        local formatter = overMinute and long or seconds
+        if formatter then opts.textFormatter = formatter end
         if C_CurveUtil and C_CurveUtil.CreateColorCurve and Enum.DurationTextBindingProperty then
-            local n = UberUI.util.HexColor(normal) or CreateColor(1, 1, 1, 1)
-            local e = UberUI.util.HexColor(expiring) or CreateColor(1, 0.2, 0.2, 1)
             local curve = C_CurveUtil.CreateColorCurve()
             curve:SetType(Enum.LuaCurveType.Step)
-            curve:AddPoint(0, CreateColor(e.r, e.g, e.b, 1))
-            if threshold > 0 and threshold < 60 then
-                curve:AddPoint(threshold, CreateColor(n.r, n.g, n.b, 1))
+            local n = white and CreateColor(1, 1, 1, 1) or UberUI.util.HexColor(normal) or CreateColor(1, 1, 1, 1)
+            if white then
+                curve:AddPoint(0, CreateColor(1, 1, 1, 1))
+            else
+                local e = UberUI.util.HexColor(expiring) or CreateColor(1, 0.2, 0.2, 1)
+                curve:AddPoint(0, CreateColor(e.r, e.g, e.b, 1))
+                if threshold > 0 then
+                    curve:AddPoint(threshold, CreateColor(n.r, n.g, n.b, 1))
+                end
             end
-            curve:AddPoint(60.001, CreateColor(n.r, n.g, n.b, 0))
+            -- Seconds only: transparent above a minute.
+            if not overMinute then
+                curve:AddPoint(60.001, CreateColor(n.r, n.g, n.b, 0))
+            end
             opts.textColor = { curve = curve, property = Enum.DurationTextBindingProperty.RemainingDuration }
         end
-        durationOptions = opts
+        durationOptionsCache[key] = opts
     end)
-    return durationOptions, key
+    return durationOptionsCache[key] or nil, key
 end
 
 -- Creates, sizes, registers and shows (or hides) a button's duration text.
 -- Call from the location's style function; it's cheap when nothing changed.
 -- The font is the cooldown countdown font scaled by icon size against
 -- Blizzard's 25px nameplate aura, re-sized when the icon size changes.
+-- Format and color follow the location's settings (button._uberTextLoc).
 function aurakit.UpdateDurationText(button, enabled)
     if not button or not button.SetDurationText then return end
     local text = button.uuDuration
@@ -826,19 +862,25 @@ function aurakit.UpdateDurationText(button, enabled)
     end
 
     local iconSize = button.elementSize or TEXT_REF_SIZE
-    local scale = aurakit.TextSettings(button._uberTextLoc).duration
-    local sizeKey = iconSize .. "|" .. scale
+    local settings = aurakit.TextSettings(button._uberTextLoc)
+    local scale = settings.duration
+    local white = settings.white
+    local sizeKey = iconSize .. "|" .. scale .. (white and "|white" or "")
     if button.uuDurationSize ~= sizeKey then
         local f = button.uuDurationFont
         if f then
-            text:SetFont(f[1], math.max(4, math.floor(f[2] * iconSize / TEXT_REF_SIZE * scale + 0.5)), f[3])
+            text:SetFont(f[1], math.max(4, math.floor(f[2] * iconSize / TEXT_REF_SIZE * scale + 0.5)), white and "OUTLINE" or f[3])
         else
             text:SetFontObject(NumberFontNormal)
+        end
+        if white then
+            text:SetShadowOffset(0, 0)
+            text:SetTextColor(1, 1, 1, 1)
         end
         button.uuDurationSize = sizeKey
     end
 
-    local opts, key = GetDurationTextOptions()
+    local opts, key = GetDurationTextOptions(settings.overMinute, white)
     if button.uuDurationKey ~= key then
         if opts and pcall(button.SetDurationText, button, text, opts) then
             button.uuDurationKey = key

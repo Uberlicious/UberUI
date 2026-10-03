@@ -126,6 +126,60 @@ end
 local mirrors = setmetatable({}, { __mode = "k" })       -- button -> font string
 local mirrorHooked = setmetatable({}, { __mode = "k" })  -- button -> true
 
+-- White Outlined Text: a duration text binding per button (whole seconds,
+-- then "2m"/"1h", like the other locations' text), fed the aura's own
+-- duration object. Re-fed only when the aura or its expiration changes;
+-- Blizzard calls UpdateDuration every frame. Weapon enchants have no aura
+-- instance and keep Blizzard's text.
+local bindings = setmetatable({}, { __mode = "k" })      -- button -> { binding, key }
+
+local function UnbindLongDuration(button)
+    local b = bindings[button]
+    if b and b.enabled then
+        pcall(b.binding.SetEnabled, b.binding, false)
+        b.enabled, b.key = false, nil
+    end
+end
+
+local function BindLongDuration(button, own)
+    local info = button.buttonInfo
+    local id = info and info.auraInstanceID
+    if not id or IsSecret(id) or not (C_DurationUtil and C_DurationUtil.CreateDurationTextBinding)
+        or not (C_UnitAuras and C_UnitAuras.GetAuraDuration) then
+        return false
+    end
+    local formatter = UberUI.aurakit.GetLongDurationFormatter()
+    if not formatter then return false end
+
+    local b = bindings[button]
+    if not b then
+        local ok, binding = pcall(C_DurationUtil.CreateDurationTextBinding)
+        if not ok or not binding then return false end
+        b = { binding = binding }
+        bindings[button] = b
+    end
+    -- A secret expiration can't tell a refresh from a repeat: no key, so
+    -- it's re-fed on every update.
+    local exp = info.expirationTime
+    local key = (exp ~= nil and not IsSecret(exp)) and (id .. ":" .. tostring(exp)) or nil
+    if key and b.enabled and b.key == key then return true end
+    local ok = pcall(function()
+        local binding = b.binding
+        binding:SetToDefaults()
+        binding:SetFormatter(formatter)
+        binding:SetFontString(own)
+        binding:SetDuration(C_UnitAuras.GetAuraDuration(PlayerFrame and PlayerFrame.unit or "player", id))
+        binding:SetEnabled(true)
+    end)
+    b.enabled = true
+    if not ok then
+        UnbindLongDuration(button)
+        return false
+    end
+    b.key = key
+    return true
+end
+
 local function UpdateDurationMirror(button)
     local blizz = button and button.Duration
     if not blizz or IsSecret(blizz) then return end
@@ -133,6 +187,7 @@ local function UpdateDurationMirror(button)
     local own = mirrors[button]
     if not PlayerDurationActive(t) then
         if own then
+            UnbindLongDuration(button)
             own:Hide()
             blizz:SetAlpha(1)
         end
@@ -162,10 +217,17 @@ local function UpdateDurationMirror(button)
         own:SetFont(font, math.max(4, size * t.duration), t.center and "OUTLINE" or flags)
     end
     if t.center then own:SetShadowOffset(0, 0) end
-    -- Blizzard's color, but never its alpha: hiding Blizzard's text with
-    -- SetAlpha(0) shows up in its GetTextColor alpha too.
-    local cr, cg, cb = blizz:GetTextColor()
-    own:SetTextColor(cr, cg, cb, 1)
+    -- White Outlined Text (centered only): white, and our own duration
+    -- binding drives the text below instead of Blizzard's.
+    local long = t.center and t.white
+    if long then
+        own:SetTextColor(1, 1, 1, 1)
+    else
+        -- Blizzard's color, but never its alpha: hiding Blizzard's text with
+        -- SetAlpha(0) shows up in its GetTextColor alpha too.
+        local cr, cg, cb = blizz:GetTextColor()
+        own:SetTextColor(cr, cg, cb, 1)
+    end
     own:ClearAllPoints()
     local icon = button.Icon
     if t.center and icon then
@@ -181,8 +243,11 @@ local function UpdateDurationMirror(button)
             own:SetPoint(point, icon, relPoint, dir[1] * push, dir[2] * push)
         end
     end
-    -- Blizzard's own text (possibly secret in combat; SetText accepts it).
-    own:SetText(blizz:GetText())
+    if not (long and BindLongDuration(button, own)) then
+        UnbindLongDuration(button)
+        -- Blizzard's own text (possibly secret in combat; SetText accepts it).
+        own:SetText(blizz:GetText())
+    end
     own:Show()
 end
 
@@ -224,6 +289,76 @@ local function StylePlayerText(button, iconTexture)
     end
     if PlayerDurationActive(t) then EnsureDurationMirror(button) end
     if mirrorHooked[button] then UpdateDurationMirror(button) end
+end
+
+-- Cooldown Swipe (uuidb.general.playerauraswipe): Blizzard's player aura
+-- buttons have no Cooldown frame, so each gets our own, styled like the
+-- aurakit buttons' (reversed, no edge, corner-masked swipe, no numbers) and
+-- fed the aura's own duration object. Runs from StyleAuraButton, which
+-- Blizzard's UpdateAuraButtons already drives on every aura change, so it
+-- needs no hook of its own. Re-fed only when the aura or its expiration
+-- changes (always, when the expiration is secret). Weapon enchants have no
+-- aura instance and get no swipe.
+local swipes = setmetatable({}, { __mode = "k" }) -- button -> { cd, key }
+
+local function SwipeEnabled()
+    return uuidb and uuidb.general and uuidb.general.playerauraswipe == true
+end
+
+local function ClearPlayerSwipe(button)
+    local s = swipes[button]
+    if s then
+        pcall(s.cd.Clear, s.cd)
+        s.cd:Hide()
+        s.key = nil
+    end
+end
+
+local function UpdatePlayerSwipe(button, iconTexture)
+    local info = button.buttonInfo
+    local id = info and info.auraInstanceID
+    if not SwipeEnabled() or not id or IsSecret(id) or button.isTempEnchant
+        or not (C_UnitAuras and C_UnitAuras.GetAuraDuration) then
+        ClearPlayerSwipe(button)
+        return
+    end
+
+    local s = swipes[button]
+    if not s then
+        local cd = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+        cd:SetReverse(true)
+        cd:SetDrawEdge(false)
+        cd:SetDrawSwipe(true)
+        cd:SetHideCountdownNumbers(true)
+        cd:EnableMouse(false)
+        pcall(cd.SetSwipeTexture, cd, "Interface\\AddOns\\Uber UI\\textures\\auracornermask", 0, 0, 0, 0.8)
+        pcall(cd.SetUseCircularEdge, cd, false)
+        s = { cd = cd }
+        swipes[button] = s
+    end
+    local cd = s.cd
+    -- Over the icon, under our borders (button + 5) and text (button + 10).
+    cd:ClearAllPoints()
+    cd:SetAllPoints(iconTexture)
+    cd:SetFrameLevel(button:GetFrameLevel() + 1)
+
+    local duration = info.duration
+    if duration ~= nil and not IsSecret(duration) and duration <= 0 then
+        ClearPlayerSwipe(button) -- permanent aura
+        return
+    end
+    local exp = info.expirationTime
+    local key = (exp ~= nil and not IsSecret(exp)) and (id .. ":" .. tostring(exp)) or nil
+    if key and s.key == key and cd:IsShown() then return end
+    local ok = pcall(function()
+        cd:SetCooldownFromDurationObject(C_UnitAuras.GetAuraDuration(PlayerFrame and PlayerFrame.unit or "player", id))
+    end)
+    if not ok then
+        ClearPlayerSwipe(button)
+        return
+    end
+    cd:Show()
+    s.key = key
 end
 
 -- Centered: shrink the buttons to the icon and re-apply Blizzard's grid.
@@ -491,6 +626,7 @@ function buffsandauras:StyleAuraButton(button)
         -- Stack count and duration above our border frames (button + 5).
         UberUI.general:LiftAuraText(button, 10, { "Count", "Duration" })
         pcall(StylePlayerText, button, iconTexture)
+        pcall(UpdatePlayerSwipe, button, iconTexture)
     end
 
     -- In combat these fields (e.g. debuffType) are secret: IsSecret comes

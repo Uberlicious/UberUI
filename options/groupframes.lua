@@ -29,8 +29,16 @@ function opt.BuildGroupFrames(page)
 
     opt.AddCheckbox(page, {
         variable = "compactAuraDuration", name = "Aura Duration Text",
-        tooltip = "Show the time left on compact raid and party auras as a number in the middle of the icon, like nameplate auras: whole seconds, hidden above a minute, using the nameplate duration colors and expiring threshold. The text is sized to the icon.",
+        tooltip = "Show the time left on compact raid and party auras as a number in the middle of the icon, sized to the icon. Show Durations Over a Minute and White Outlined Text set how it looks.",
         db = "general", field = "compactauraduration", default = false,
+        onChange = RefreshCompactAuras,
+    });
+
+    opt.AddSlider(page, {
+        variable = "compactMaxDebuffs", name = "Max Debuffs",
+        tooltip = "How many debuffs each compact raid and party frame shows, three per row: 3 is Blizzard's default, 6 is two full rows.\n\nBoss debuffs, dispellable debuffs and other debuffs are each limited to this many, so a frame carrying several kinds at once can show more.",
+        db = "general", field = "compactmaxdebuffs", default = 3,
+        min = 3, max = 6, step = 1,
         onChange = RefreshCompactAuras,
     });
 

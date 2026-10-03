@@ -10,6 +10,9 @@ local addon, ns = ...
 -- screens and attached to plates as they appear (~0.1 ms). The pool never
 -- shrinks (frames can't be freed).
 --
+-- Only hostile units get a bundle; friendly plates keep Blizzard's lists
+-- (see WantsBundle -- bundles cost the engine time every frame).
+--
 -- Filters mirror Blizzard_NamePlateAuras.lua: debuffs (yours on enemies,
 -- max 12), buffs (enemies: important or dispellable; friends: yours; max 2
 -- each), crowd control (max 2 each). Shown categories follow Blizzard's
@@ -24,6 +27,7 @@ local addon, ns = ...
 
 local aurakit = UberUI.aurakit
 local nameplateauras = {}
+local P = UberUI.profiler
 
 local SQUARE_LOC = "nameplate"
 local ICON_SIZE = 22
@@ -52,6 +56,14 @@ local dispellableToken = true                          -- false once DISPELLABLE
 local raidDispelToken = true                           -- false once RAID_PLAYER_DISPELLABLE is refused
 
 local IsSecret = UberUI.util.IsSecret
+
+-- Temporary, for finding where the engine's time goes (/uuprofile npauras):
+--   normal   as shipped
+--   none     nothing attached (the feature's on, but plates keep Blizzard's)
+--   enemies  attached to non-friendly units only
+--   nounit   attached and shown, but with no unit, so no auras get processed
+local TEST_MODES = { normal = true, none = true, enemies = true, nounit = true }
+local testMode = "normal"
 
 local function Enabled()
     return uuidb and uuidb.general and uuidb.general.nameplateauras == true
@@ -288,7 +300,7 @@ local function StylePandemic(button, style)
     })
 end
 
-StyleButton = function(button)
+StyleButton = P.Wrap("npauras StyleButton", function(button)
     local g = uuidb and uuidb.general or {}
     local style = button.isBuff and (g.aurastyle_nameplatebuffs or "both") or (g.aurastyle_nameplatedebuffs or "zoom")
     local showDispel = g.nameplatebuffs_showdispel ~= false
@@ -305,7 +317,7 @@ StyleButton = function(button)
     -- Every aura update restyles the button, which re-shows the dispel border;
     -- keep it hidden while the pandemic highlight is up.
     if button._uberInPandemic then pcall(HideDebuffBorders, button) end
-end
+end)
 
 -- Buttons whose engine-colored square strips haven't registered yet.
 local function NeedsRegistration(button)
@@ -485,6 +497,13 @@ end
 -- Attach / release
 -------------------------------------------------------------------------------
 
+-- Friendly units keep Blizzard's own lists: an attached bundle costs the
+-- engine time every frame even with no auras in it (~0.15 ms per plate,
+-- measured with /uuprofile), and a city has dozens of friendly plates.
+local function WantsBundle(unit)
+    return not UnitIsFriend("player", unit)
+end
+
 -- Per-unit filters, shown categories, scale and stride; re-run whenever
 -- Blizzard re-evaluates the plate.
 local function Bind(b, unit)
@@ -550,7 +569,10 @@ local function Bind(b, unit)
     for _, key in ipairs(CONTAINER_KEYS) do
         local c = b[key]
         c:SetScale(scale)
-        if shown[key] then
+        if testMode == "nounit" then
+            c:Show()
+            if c:GetUnit() ~= "none" then pcall(c.SetUnit, c, "none") end
+        elseif shown[key] then
             c:Show()
             if c:GetUnit() ~= unit then pcall(c.SetUnit, c, unit) end
         else
@@ -559,6 +581,7 @@ local function Bind(b, unit)
         end
     end
 end
+Bind = P.Wrap("npauras Bind", Bind)
 
 local function Layout(b)
     local af = b.aurasFrame
@@ -579,9 +602,15 @@ local function EnsureAurasFrameHooks(aurasFrame)
     hookedAuras[aurasFrame] = true
     -- UpdateShownState: unit/friend/simplified/CVar changes;
     -- UpdateAuraScale: aura scale changes.
-    hooksecurefunc(aurasFrame, "UpdateShownState", function(self) QueueRebind(self) end)
+    hooksecurefunc(aurasFrame, "UpdateShownState", function(self)
+        P.Count("npauras UpdateShownState hook")
+        QueueRebind(self)
+    end)
     if aurasFrame.UpdateAuraScale then
-        hooksecurefunc(aurasFrame, "UpdateAuraScale", function(self) QueueRebind(self) end)
+        hooksecurefunc(aurasFrame, "UpdateAuraScale", function(self)
+            P.Count("npauras UpdateAuraScale hook")
+            QueueRebind(self)
+        end)
     end
 end
 
@@ -593,7 +622,11 @@ QueueRebind = function(aurasFrame)
         rebindPending[aurasFrame] = nil
         local b = attachedTo[aurasFrame]
         if b and b.unit and not aurasFrame:IsForbidden() then
-            pcall(Bind, b, b.unit)
+            if WantsBundle(b.unit) then
+                pcall(Bind, b, b.unit)
+            else
+                pcall(Release, b.unit)
+            end
         end
     end)
 end
@@ -620,9 +653,12 @@ local function Release(unit)
         end)
     end
 end
+Release = P.Wrap("npauras Release", Release)
 
 local function Attach(unit)
-    if not Enabled() or byUnit[unit] then return end
+    if not Enabled() or byUnit[unit] or not WantsBundle(unit) then return end
+    if testMode == "none" then return end
+    if testMode == "enemies" and UnitIsFriend("player", unit) then return end
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
     if not plate or plate:IsForbidden() then return end
     local unitFrame = plate.UnitFrame
@@ -663,6 +699,7 @@ local function Attach(unit)
         if b.unit == unit then RetryRegistrations(b) end
     end)
 end
+Attach = P.Wrap("npauras Attach", Attach)
 
 local function ReleaseAll()
     for unit in pairs(byUnit) do Release(unit) end
@@ -693,6 +730,19 @@ function nameplateauras:Refresh()
     end
 end
 
+-- Returns false for an unknown mode. Reattaches every visible plate.
+function nameplateauras:SetTestMode(mode)
+    if not TEST_MODES[mode] then return false end
+    testMode = mode
+    ReleaseAll()
+    if Enabled() then AttachVisible() end
+    return true
+end
+
+function nameplateauras:GetTestMode()
+    return testMode
+end
+
 function nameplateauras:RefreshStyle()
     for _, b in ipairs(pool) do RestyleBundle(b) end
 end
@@ -702,9 +752,22 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+events:RegisterEvent("UNIT_FACTION")
 events:SetScript("OnEvent", function(_, event, arg1, arg2)
     if not Enabled() then return end
-    if event == "NAME_PLATE_UNIT_ADDED" then
+    if event == "UNIT_FACTION" then
+        -- A plate's unit turned hostile or friendly (duels, faction
+        -- changes): attach or release to match WantsBundle.
+        local unit = arg1
+        if not (unit and unit:find("^nameplate")) then return end
+        C_Timer.After(0, function()
+            if byUnit[unit] then
+                if not WantsBundle(unit) then pcall(Release, unit) end
+            elseif UnitExists(unit) then
+                pcall(Attach, unit)
+            end
+        end)
+    elseif event == "NAME_PLATE_UNIT_ADDED" then
         -- Deferred out of Blizzard's add chain; the sequence number drops a
         -- stale attach if the token was removed and re-added meanwhile.
         local unit = arg1

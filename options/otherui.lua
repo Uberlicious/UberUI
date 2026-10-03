@@ -1,6 +1,6 @@
 --[[--------------------------------------------------------------------
 	Uber UI options -- Other UI page: Action Bars, Damage Meters,
-	Swing Timers, Minimap
+	Swing Timers, Camera (WoW Forever), Minimap
 ----------------------------------------------------------------------]]
 
 local addon, ns = ...
@@ -147,6 +147,33 @@ function opt.BuildOtherUI(page)
                 onChange = RefreshSwingTimers,
             }), swingColorInit, function() return uuidb.general and uuidb.general.swingtimerbarcolor == "custom" end);
         end
+    end
+
+    if UberUI.util.IsForeverClient() then
+        opt.Header(page, "Camera");
+
+        local function ApplyCamera()
+            if UberUI.camera then UberUI.camera:Apply() end
+        end
+
+        local zoomInit = opt.AddCheckbox(page, {
+            variable = "CameraMaxZoom", name = "Extended Camera Distance",
+            tooltip = "Let the camera zoom out farther than Blizzard's Max Camera Distance slider allows (it stops at 2.0, 30 yards).\n\nWhen off, your previous camera distance setting is restored.",
+            db = "general", field = "cameramaxzoom", default = false,
+            onChange = ApplyCamera,
+        });
+
+        opt.DependsOn(opt.AddSlider(page, {
+            variable = "CameraMaxZoomFactor", name = "Max Camera Distance",
+            tooltip = "How far the camera can zoom out, 15 yards per step of 1.0: 2.0 (30 yards) is the farthest Blizzard's own slider goes, 2.6 (39 yards) is retail's maximum, and 3.4 reaches the game's 50-yard limit.",
+            db = "general", field = "cameramaxzoomfactor", default = 3.4,
+            min = 1.0, max = 3.4, step = 0.1,
+            format = function(value)
+                local yards = UberUI.camera and UberUI.camera.FactorToYards(value) or value * 15
+                return string.format("%.1f (%d yd)", value, math.floor(yards + 0.5))
+            end,
+            onChange = ApplyCamera,
+        }), zoomInit, function() return uuidb.general and uuidb.general.cameramaxzoom == true end);
     end
 
     opt.Header(page, "Minimap");

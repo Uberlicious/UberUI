@@ -169,6 +169,10 @@ local defaults = {
         targetauraduration              = false,
         focusauraduration               = false,
         compactauraduration             = false,
+        compactmaxdebuffs               = 3,
+        playerauraswipe                 = false,
+        cameramaxzoom                   = false,
+        cameramaxzoomfactor             = 3.4,
         buffauraborders              = true,
         nameplateraidtargetscale     = 1,
         nameplateraidtargettopanchor = false,
@@ -263,6 +267,12 @@ for _, loc in ipairs({ "player", "target", "focus", "boss", "party", "compact", 
     g[k .. "stacky"] = 0
 end
 defaults.general.auratext_player_centerduration = false
+-- Duration text: shown past a minute ("2m", raid frames only by default) and
+-- white outlined (everywhere by default; Player only while centered).
+for _, loc in ipairs({ "player", "target", "focus", "compact", "nameplate" }) do
+    defaults.general["auratext_" .. loc .. "_overminute"] = loc == "compact"
+    defaults.general["auratext_" .. loc .. "_whitetext"] = true
+end
 
 -- Copyable error popup.
 local reportedErrors, errorLog = {}, {}
@@ -418,6 +428,15 @@ function UberUI:Init()
         if (g._cursorring_version or 0) < 1 then
             if g.cursorringsize == 40 then g.cursorringsize = nil end
             g._cursorring_version = 1
+        end
+        -- Long Duration Format split into Show Durations Over a Minute and
+        -- White Outlined Text (which now defaults on).
+        for _, loc in ipairs({ "player", "target", "focus", "compact", "nameplate" }) do
+            local k = "auratext_" .. loc .. "_"
+            if g[k .. "longduration"] == true and g[k .. "overminute"] == nil then
+                g[k .. "overminute"] = true
+            end
+            g[k .. "longduration"] = nil
         end
         -- Pixel Glow Position's default became Inside (see cooldown above).
         if (g._pixelpos_version or 0) < 1 then

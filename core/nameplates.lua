@@ -1,5 +1,6 @@
 local addon, ns = ...
 local nameplates = {}
+local P = UberUI.profiler
 
 local _uberOriginalPoints = setmetatable({}, {__mode = "k"})
 
@@ -449,6 +450,7 @@ end
 local extrasPending = setmetatable({}, { __mode = "k" })
 local function QueueSquareExtras(unitFrame)
     if not unitFrame or extrasPending[unitFrame] then return end
+    P.Count("nameplates square extras queued")
     extrasPending[unitFrame] = true
     C_Timer.After(0, function()
         extrasPending[unitFrame] = nil
@@ -497,11 +499,13 @@ local function ApplyBarLook(healthBar, unitFrame)
         ApplySquareExtras(unitFrame, square)
     end
 end
+ApplyBarLook = P.Wrap("nameplates ApplyBarLook", ApplyBarLook)
 
 local function EnsureUpdateAnchorsHook(unitFrame)
     if anchorHooked[unitFrame] or not unitFrame.UpdateAnchors then return end
     anchorHooked[unitFrame] = true
     hooksecurefunc(unitFrame, "UpdateAnchors", function(self)
+        P.Count("nameplates UpdateAnchors hook")
         if anchorPending[self] then return end
         anchorPending[self] = true
         C_Timer.After(0, function()
@@ -699,7 +703,7 @@ f:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 f:RegisterEvent("PLAYER_TARGET_CHANGED")
 f:RegisterEvent("RAID_TARGET_UPDATE")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
-f:SetScript("OnEvent", function(self, event, unit)
+f:SetScript("OnEvent", P.Wrap("nameplates OnEvent", function(self, event, unit)
     MaybeRegisterRaidTargetScaleHooks()
     if event == "NAME_PLATE_UNIT_ADDED" then
         -- Deferred: this fires inside Blizzard's nameplate-add chain, and a
@@ -736,7 +740,7 @@ f:SetScript("OnEvent", function(self, event, unit)
         end
         UberUI.nameplates:UpdateAllNameplateRaidTargetScale()
     end
-end)
+end))
 
 function nameplates:SafeModify(nameplateFrame, callback)
     if not nameplateFrame or not nameplateFrame.UnitFrame then

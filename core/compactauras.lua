@@ -32,13 +32,16 @@ local AURA_EDGE_OFFSET = 3
 local AURA_SPACING = 1
 
 local MAX_BUFFS = 6
-local MAX_DEBUFFS = 5
-local MAX_DISPEL_DEBUFFS = 3
+-- Max Debuffs setting range; 3 is Blizzard's, 6 is two full rows.
+local MAX_DEBUFFS_MIN, MAX_DEBUFFS_MAX, MAX_DEBUFFS_DEFAULT = 3, 6, 3
+-- Blizzard_PrivateAurasUI's BOSS_DEBUFF_SCALE_INCREASE.
+local LARGE_DEBUFF_SCALE = 1.5
 
 local CVAR_BUFFS = "raidFramesDisplayBuffs"
 local CVAR_DEBUFFS = "raidFramesDisplayDebuffs"
 local CVAR_BIG_DEFENSIVE = "raidFramesCenterBigDefensive"
 local CVAR_ONLY_DISPELLABLE = "raidFramesDisplayOnlyDispellableDebuffs"
+local CVAR_LARGER_ROLE_DEBUFFS = "raidFramesDisplayLargerRoleSpecificDebuffs"
 
 local frameState = setmetatable({}, { __mode = "k" })
 local pendingBuild = setmetatable({}, { __mode = "k" })
@@ -60,6 +63,15 @@ local function BuffsEnabled() return BuffStyle() ~= "none" end
 local function DebuffsEnabled() return DebuffStyle() ~= "none" end
 local function BigDefensiveEnabled()
     return uuidb and uuidb.general and uuidb.general.compactbigdefensive ~= false
+end
+
+local function MaxDebuffs()
+    local n = tonumber(uuidb and uuidb.general and uuidb.general.compactmaxdebuffs) or MAX_DEBUFFS_DEFAULT
+    return Clamp(math.floor(n + 0.5), MAX_DEBUFFS_MIN, MAX_DEBUFFS_MAX)
+end
+
+local function LargerRoleDebuffs()
+    return C_CVar.GetCVarBool(CVAR_LARGER_ROLE_DEBUFFS) == true
 end
 
 -- Needs 12.1 (AuraContainer, ProcessAura policy, Edit Mode aura sizes); older
@@ -127,6 +139,25 @@ function compactauras:ApplyNativeCVars()
     SetNativeCVar(CVAR_BIG_DEFENSIVE, BigDefensiveEnabled())
 end
 
+-- Turning one of those options back on in Blizzard's settings while ours is
+-- active would draw Blizzard's auras on top of ours. Keep the value as the
+-- one restored when ours is turned off, and switch the native display back
+-- off.
+local MANAGED_CVARS = {
+    [CVAR_BUFFS] = BuffsEnabled,
+    [CVAR_DEBUFFS] = DebuffsEnabled,
+    [CVAR_BIG_DEFENSIVE] = BigDefensiveEnabled,
+}
+
+local function OnManagedCVarChanged(cvar, value)
+    local active = MANAGED_CVARS[cvar]
+    if not active or not active() or value == nil or tostring(value) == "0" then return end
+    if not (uuidb and uuidb.cuf) then return end
+    uuidb.cuf.nativecvars = uuidb.cuf.nativecvars or {}
+    uuidb.cuf.nativecvars[cvar] = tostring(value)
+    compactauras:ApplyNativeCVars()
+end
+
 -------------------------------------------------------------------------------
 -- Sizes and layout (mirrors Blizzard_PrivateAurasUI)
 -------------------------------------------------------------------------------
@@ -153,9 +184,14 @@ local function GetFrameMetrics(frame)
     local powerBarHeight = frame.powerBarUsedHeight
     if type(powerBarHeight) ~= "number" then powerBarHeight = 0 end
 
+    local debuffSize = NATIVE_AURA_SIZE * IconScale(groupType, settings.DebuffIconSize, AURA_SCALE_MIN, AURA_SCALE_MAX)
+
     return {
         buffSize = NATIVE_AURA_SIZE * IconScale(groupType, settings.BuffIconSize, AURA_SCALE_MIN, AURA_SCALE_MAX),
-        debuffSize = NATIVE_AURA_SIZE * IconScale(groupType, settings.DebuffIconSize, AURA_SCALE_MIN, AURA_SCALE_MAX),
+        debuffSize = debuffSize,
+        -- Boss and role debuffs, with Blizzard's "Display Larger Role-Specific
+        -- Debuffs" option.
+        largeDebuffSize = LargerRoleDebuffs() and debuffSize * LARGE_DEBUFF_SCALE or debuffSize,
         bigDefensiveSize = NATIVE_BIG_DEFENSIVE_SIZE * componentScale *
             IconScale(groupType, settings.BigDefensiveIconSize, BIG_DEFENSIVE_SCALE_MIN, BIG_DEFENSIVE_SCALE_MAX),
         organization = organization,
@@ -188,13 +224,18 @@ local function LineSize(size, perRow)
     return perRow * size + (perRow - 1) * AURA_SPACING + 0.5
 end
 
-local function PlaceContainer(container, frame, layout, size)
+-- Debuff rows also fit one large boss/role debuff beside the normal ones.
+local function DebuffLineSize(metrics, perRow)
+    return LineSize(metrics.debuffSize, perRow) + (metrics.largeDebuffSize - metrics.debuffSize)
+end
+
+local function PlaceContainer(container, frame, layout, lineSize)
     if not container then return end
     container:ClearAllPoints()
     container:SetPoint(layout.point, frame, layout.point, layout.x, layout.y)
     pcall(container.SetFlowLayoutAnchorPoint, container, layout.point)
     pcall(container.SetFlowLayoutGrowthDirection, container, layout.h, layout.v)
-    pcall(container.SetFlowLayoutMaximumLineSize, container, LineSize(size, layout.perRow))
+    pcall(container.SetFlowLayoutMaximumLineSize, container, lineSize)
 end
 
 -------------------------------------------------------------------------------
@@ -242,33 +283,62 @@ local function BuffProcessOptions()
     }
 end
 
--- Debuffs: ProcessAura's "Debuff" and "Dispel" types, one group each, shown
--- in the same row as Blizzard does.
+-- Debuffs, in one row like Blizzard's, in its priority order: boss/role
+-- debuffs (larger with Blizzard's option), then ProcessAura's "Dispel" type,
+-- then its "Debuff" type. Blizzard caps all of them together; a container
+-- can't share a cap between groups, so Max Debuffs caps each group.
+-- ProcessAura types every aura exactly once, so nothing shows twice.
+--
+-- The boss group has no processedAuraType filter (Debuff or Dispel can't be
+-- expressed as one), so it relies on HARMFUL boss/role auras always being
+-- one of the two; only a dispellable-by-me boss aura without a dispel type
+-- would slip through.
+local DEBUFF_GROUP_KEYS = { "bossdebuffs", "dispels", "debuffs" }
+
 local function BuildDebuffs(frame, metrics)
     local changed = AuraUtil.AuraUpdateChangedType
-    return aurakit.BuildGroupedAuraContainer({
+    local maxDebuffs = MaxDebuffs()
+    local container = aurakit.BuildGroupedAuraContainer({
         parentFrame = frame,
         frameLevelBonus = 22,
         spacing = AURA_SPACING,
-        maxLineSize = LineSize(metrics.debuffSize, 3),
+        maxLineSize = DebuffLineSize(metrics, 3),
         countRefSize = COUNT_REF_SIZE,
         processAura = DebuffProcessOptions(),
         updateStyleFn = StyleFn,
         groups = {
             {
-                key = "debuffs", filter = "HARMFUL", isBuff = false,
-                size = metrics.debuffSize, maxFrameCount = MAX_DEBUFFS,
+                key = "bossdebuffs", filter = "HARMFUL", isBuff = false,
+                size = metrics.largeDebuffSize, maxFrameCount = maxDebuffs,
                 sortMethod = AuraContainerSortMethod.UnitFrameDebuff,
-                candidateFilters = { processedAuraType = changed.Debuff },
+                candidateFilters = { isBossOrRoleAura = true },
             },
             {
                 key = "dispels", filter = "HARMFUL", isBuff = false,
-                size = metrics.debuffSize, maxFrameCount = MAX_DISPEL_DEBUFFS,
+                size = metrics.debuffSize, maxFrameCount = maxDebuffs,
                 sortMethod = AuraContainerSortMethod.UnitFrameDebuff,
-                candidateFilters = { processedAuraType = changed.Dispel },
+                candidateFilters = { processedAuraType = changed.Dispel, isBossOrRoleAura = false },
+            },
+            {
+                key = "debuffs", filter = "HARMFUL", isBuff = false,
+                size = metrics.debuffSize, maxFrameCount = maxDebuffs,
+                sortMethod = AuraContainerSortMethod.UnitFrameDebuff,
+                candidateFilters = { processedAuraType = changed.Debuff, isBossOrRoleAura = false },
             },
         },
     })
+    if container then container.uuMaxDebuffs = maxDebuffs end
+    return container
+end
+
+local function ApplyMaxDebuffs(container)
+    if not (container and container.SetAuraGroupMaxFrameCount) then return end
+    local maxDebuffs = MaxDebuffs()
+    if container.uuMaxDebuffs == maxDebuffs then return end
+    container.uuMaxDebuffs = maxDebuffs
+    for _, key in ipairs(DEBUFF_GROUP_KEYS) do
+        pcall(container.SetAuraGroupMaxFrameCount, container, key, maxDebuffs)
+    end
 end
 
 -- Buffs: ProcessAura's "Buff" (Blizzard's ShouldDisplayBuff).
@@ -358,15 +428,20 @@ local function UpdateFrame(frame)
 
     if state.debuffs then
         if not inCombat then
-            aurakit.SetGroupedContainerSizes(state.debuffs, { debuffs = metrics.debuffSize, dispels = metrics.debuffSize }, StyleFn)
-            PlaceContainer(state.debuffs, frame, layouts.debuffs, metrics.debuffSize)
+            aurakit.SetGroupedContainerSizes(state.debuffs, {
+                bossdebuffs = metrics.largeDebuffSize,
+                dispels = metrics.debuffSize,
+                debuffs = metrics.debuffSize,
+            }, StyleFn)
+            ApplyMaxDebuffs(state.debuffs)
+            PlaceContainer(state.debuffs, frame, layouts.debuffs, DebuffLineSize(metrics, layouts.debuffs.perRow))
         end
         apply(state.debuffs, DebuffsEnabled())
     end
     if state.buffs then
         if not inCombat then
             aurakit.SetGroupedContainerSizes(state.buffs, { buffs = metrics.buffSize }, StyleFn)
-            PlaceContainer(state.buffs, frame, layouts.buffs, metrics.buffSize)
+            PlaceContainer(state.buffs, frame, layouts.buffs, LineSize(metrics.buffSize, layouts.buffs.perRow))
         end
         apply(state.buffs, BuffsEnabled())
     end
@@ -530,7 +605,7 @@ local f = UberUI:CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_REGEN_ENABLED")
 f:RegisterEvent("CVAR_UPDATE")
-f:SetScript("OnEvent", function(self, event, arg1)
+f:SetScript("OnEvent", function(self, event, arg1, arg2)
     if event == "PLAYER_LOGIN" then
         if not IsSupported() then return end
         InstallHooks()
@@ -542,8 +617,14 @@ f:SetScript("OnEvent", function(self, event, arg1)
             EnsureFrame(frame)
         end
     elseif event == "CVAR_UPDATE" then
+        -- Not IsSupported(): an early CVAR_UPDATE would cache "unsupported".
+        if supported ~= true then return end
         if arg1 == CVAR_ONLY_DISPELLABLE then
             UpdateProcessPolicies()
+        elseif arg1 == CVAR_LARGER_ROLE_DEBUFFS then
+            for frame in pairs(frameState) do UpdateFrame(frame) end
+        elseif MANAGED_CVARS[arg1] then
+            OnManagedCVarChanged(arg1, arg2)
         end
     end
 end)

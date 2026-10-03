@@ -398,13 +398,46 @@ function opt.AddAuraTextOptions(page, o)
         }));
     end
 
+    local centerInit;
     if caps.center then
-        Gate(opt.AddCheckbox(page, {
+        centerInit = Gate(opt.AddCheckbox(page, {
             variable = "auraCenterDuration" .. o.suffix, name = "Duration Inside Icon",
             tooltip = "Show the time left in the middle of each " .. o.label .. " aura icon instead of under it (Blizzard's text, e.g. \"1 m\"), and pack the rows tighter, since the space under the icons isn't needed.\n\nBlizzard's buff frame box in Edit Mode keeps its usual size.",
             db = "general", field = k .. "centerduration", default = false,
             onChange = refresh,
         }));
+    end
+
+    if caps.duration then
+        local onlyWhenShown = (o.loc == "target" or o.loc == "focus" or o.loc == "compact")
+            and "\n\nOnly shown while Aura Duration Text is on." or "";
+
+        -- Player's text is Blizzard's, which already shows every duration.
+        if o.loc ~= "player" then
+            Gate(opt.AddCheckbox(page, {
+                variable = "auraOverMinute" .. o.suffix, name = "Show Durations Over a Minute",
+                tooltip = "Keep the time left on " .. o.label .. " auras showing past a minute, as minutes (\"2m\") and hours (\"1h\"). When off, it's whole seconds and only appears in the last minute, like Blizzard's nameplates." .. onlyWhenShown,
+                db = "general", field = k .. "overminute", default = o.loc == "compact",
+                onChange = refresh,
+            }));
+        end
+
+        local whiteInit = opt.AddCheckbox(page, {
+            variable = "auraWhiteText" .. o.suffix, name = "White Outlined Text",
+            tooltip = "Time-left text on " .. o.label .. " auras in white with a black outline, instead of "
+                .. (o.loc == "player" and "Blizzard's yellow text (e.g. \"1 m\"). Uses Uber UI's format: whole seconds, then minutes (\"2m\") and hours (\"1h\").\n\nOnly used while Duration Inside Icon is on."
+                    or "the nameplate duration colors (normal and expiring).")
+                .. onlyWhenShown,
+            db = "general", field = k .. "whitetext", default = true,
+            onChange = refresh,
+        });
+        if centerInit then
+            opt.DependsOn(whiteInit, centerInit, function()
+                return uuidb.general and uuidb.general[k .. "centerduration"] == true
+            end);
+        else
+            Gate(whiteInit);
+        end
     end
 
     Gate(opt.AddSlider(page, {

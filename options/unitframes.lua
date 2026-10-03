@@ -46,6 +46,13 @@ function opt.BuildUnitFrames(page)
     });
 
     opt.AddCheckbox(page, {
+        variable = "playerAuraSwipe", name = "Cooldown Swipe",
+        tooltip = "Darken Player buff and debuff icons with a clockwise sweep as their time runs out, like target and focus auras. Auras with no duration and weapon enchants get no sweep.\n\nWith Square borders your debuffs are Uber UI's own icons, which already show it.",
+        db = "general", field = "playerauraswipe", default = false,
+        onChange = opt.RefreshPlayerAuras,
+    });
+
+    opt.AddCheckbox(page, {
         variable = "ccPlayerHealth", name = "Class Color",
         tooltip = "Class color player health bar",
         db = "playerframes", field = "classcolor", default = true,

@@ -52,6 +52,7 @@ The only supported switch is the player's own raid frame options, which are CVar
 
 - When a feature is on, `compactauras:ApplyNativeCVars()` saves the original value to `uuidb.cuf.nativecvars[cvar]`, then sets the CVar to `"0"`.
 - When a feature is set to None or turned off, it restores the saved value and clears it.
+- If the player turns one of those options back on in Blizzard's settings while ours is active, the `CVAR_UPDATE` handler records the new value as the one to restore and sets the CVar back to `"0"`, so Blizzard's auras never draw on top of ours. Blizzard's checkbox therefore always reads unchecked while ours is active; turning our feature off (None) is what hands the option back.
 - CVar changes are made **out of combat only**. In combat they're deferred to `PLAYER_REGEN_ENABLED`.
 - A CVar change fires the `CVAR_UPDATE` event. Blizzard's `CompactUnitFrameProfiles` re-runs frame setup from its own event handler, **not** inside our `SetCVar` call, so this doesn't taint Blizzard's frame setup.
 - Turning native debuffs off does **not** remove the dispel overlay or dispel type icons. `CheckAddDispel` runs independently of the debuff toggle and is driven by `raidFramesDispelIndicatorType` / `raidFramesDispelIndicatorOverlay`.
@@ -90,14 +91,17 @@ Our groups (`core/compactauras.lua`):
 
 | Container | Group | Filter | processedAuraType | Max | Sort |
 |---|---|---|---|---|---|
-| Debuffs | `debuffs` | `HARMFUL` | Debuff | 5 | `UnitFrameDebuff` |
-| Debuffs | `dispels` | `HARMFUL` | Dispel | 3 | `UnitFrameDebuff` |
+| Debuffs | `bossdebuffs` | `HARMFUL` | (any; `isBossOrRoleAura = true`) | Max Debuffs | `UnitFrameDebuff` |
+| Debuffs | `dispels` | `HARMFUL` | Dispel (`isBossOrRoleAura = false`) | Max Debuffs | `UnitFrameDebuff` |
+| Debuffs | `debuffs` | `HARMFUL` | Debuff (`isBossOrRoleAura = false`) | Max Debuffs | `UnitFrameDebuff` |
 | Buffs | `buffs` | `HELPFUL` | Buff | 6 | default |
 | Big Defensive | `bigdefensive` | `HELPFUL\|BIG_DEFENSIVE` | (no policy) | 1 | `BigDefensive` |
 
-- If the engine's container aura data doesn't populate `isRaid`, nothing classifies as Dispel. Those debuffs fall through to Debuff and still show in the first group.
-- Blizzard's debuff cap is 5 total. Ours can show up to 8 (5 + 3) when both kinds are present.
-- Each `AddAuraGroup` creates a batch of **10 buttons up front** (`CustomAuraContainerConstants.FrameCreationBatchSize`). Four groups × up to 45 frames adds up, so don't add groups casually.
+- Debuff groups are laid out in Blizzard's priority order: boss/role, dispellable, the rest. `bossdebuffs` is drawn at 1.5x (Blizzard's `BOSS_DEBUFF_SCALE_INCREASE`) when the `raidFramesDisplayLargerRoleSpecificDebuffs` CVar is on.
+- `bossdebuffs` can't filter on processedAuraType (Debuff *or* Dispel isn't expressible), so a HARMFUL boss/role aura that `ProcessAura` types None would still show. In practice those are only nameplate-only auras.
+- If the engine's container aura data doesn't populate `isRaid`, nothing classifies as Dispel. Those debuffs fall through to Debuff and still show in the `debuffs` group.
+- Blizzard caps debuffs at 3 **in total**. A container can't share a cap across groups (no union filter, and which groups hold auras is secret in combat, so it can't be balanced live), so Max Debuffs (`compactmaxdebuffs`, 3-6) caps **each** group. A frame with several kinds at once can show more than Max Debuffs.
+- Each `AddAuraGroup` creates a batch of **10 buttons up front** (`CustomAuraContainerConstants.FrameCreationBatchSize`). Five groups × up to 45 frames adds up, so don't add groups casually.
 
 Filter tokens available in 12.1 (`AuraUtil.AuraFilters`): `HELPFUL`, `HARMFUL`, `PLAYER`, `RAID`, `CANCELABLE`, `INCLUDE_NAME_PLATE_ONLY`, `MAW`, `EXTERNAL_DEFENSIVE`, `CROWD_CONTROL`, `RAID_IN_COMBAT`, `RAID_PLAYER_DISPELLABLE`, `BIG_DEFENSIVE`, `IMPORTANT`, `DISPELLABLE`. A leading `!` negates (except `INCLUDE_NAME_PLATE_ONLY` and `MAW`).
 

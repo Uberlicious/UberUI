@@ -521,24 +521,36 @@ local function UpdateIcon(b, o, frameSize, sizes)
         else
             b.duration:SetPoint("TOP", b.icon, "BOTTOM", 0, -borderReach)
         end
-        b.duration:SetText(string.format(_G.SECOND_ONELETTER_ABBR or "%d s", info.duration))
+        if t.center and t.white then
+            -- White Outlined Text: white, whole seconds ("14").
+            b.duration:SetTextColor(1, 1, 1, 1)
+            b.duration:SetText(tostring(info.duration))
+        else
+            b.duration:SetText(string.format(_G.SECOND_ONELETTER_ABBR or "%d s", info.duration))
+        end
         b.duration:Show()
         return
     end
     -- Elsewhere: the countdown font scaled by icon size against Blizzard's
     -- 25px nameplate aura (aurakit.UpdateDurationText), times Duration Text
-    -- Size, centered, colored by the duration colors.
+    -- Size, centered, colored by the duration colors (White Outlined Text:
+    -- white and outlined).
+    local long = t.white
     local f = CountdownFont(b)
     b.duration:SetShadowOffset(0, 0)
     if f then
-        b.duration:SetFont(f[1], math.max(4, f[2] * frameSize / DURATION_REF_SIZE * t.duration), f[3])
+        b.duration:SetFont(f[1], math.max(4, f[2] * frameSize / DURATION_REF_SIZE * t.duration), long and "OUTLINE" or f[3])
     else
         b.duration:SetFontObject(NumberFontNormal)
     end
     b.duration:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
-    local normal, expiring, threshold = DurationColors()
-    local c = info.duration <= threshold and expiring or normal
-    b.duration:SetTextColor(c.r, c.g, c.b, 1)
+    if long then
+        b.duration:SetTextColor(1, 1, 1, 1)
+    else
+        local normal, expiring, threshold = DurationColors()
+        local c = info.duration <= threshold and expiring or normal
+        b.duration:SetTextColor(c.r, c.g, c.b, 1)
+    end
     b.duration:SetText(tostring(info.duration))
     b.duration:Show()
 end
@@ -664,7 +676,7 @@ function opt.AddAuraPreview(page, o)
         tooltip = "Sample " .. o.label .. " buffs and debuffs drawn with the settings below, at the size they appear on screen"
             .. (twoSizes and " (your auras large, others' small)" or "")
             .. ". Earth Shield and Agony show stack counts"
-            .. (DURATION[o.loc] and "; Riptide, Magic, Agony and Poison show duration text when it's on (Agony with its stack count, Poison in the expiring color)" or "")
+            .. (DURATION[o.loc] and "; Riptide, Magic, Agony and Poison show duration text when it's on (Agony with its stack count" .. (o.loc == "player" and ")" or ", Poison in the expiring color unless White Outlined Text is on)") or "")
             .. ".",
         height = STAGE_HEIGHT + CAPTION_HEIGHT + 12,
         create = function(parent)

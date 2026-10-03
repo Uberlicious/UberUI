@@ -11,6 +11,7 @@
 
 local addon, ns = ...
 local namehealth = {}
+local P = UberUI.profiler
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
@@ -210,18 +211,40 @@ local function OnePixel(region)
 end
 
 -- Size the box to the rendered text, respecting the name's justification.
+-- Blizzard refreshes names several times a second per plate, and re-anchoring
+-- makes the engine redo the layout, so nothing is touched unless the text's
+-- size, justification or the settings changed.
 local function Layout(w, fs, style)
     local g = Settings()
-    local width = Plain(fs:GetStringWidth()) or fs:GetWidth()
-    local height = Plain(fs:GetStringHeight()) or fs:GetHeight()
-    local j = fs:GetJustifyH()
+    local width = Plain(fs:GetStringWidth()) or Plain(fs:GetWidth())
+    local height = Plain(fs:GetStringHeight()) or Plain(fs:GetHeight())
+    local j = Plain(fs:GetJustifyH())
     local p = (j == "LEFT" or j == "RIGHT") and j or "CENTER"
-    w.box:ClearAllPoints()
-    w.box:SetPoint(p, fs, p)
-    w.box:SetSize(width, height)
-
     -- Pixels in the drawing layer's space (where the offsets apply).
     local px = OnePixel(w)
+
+    local key = table.concat({
+        tostring(width), tostring(height), p, style, tostring(px), DotSide(),
+        tostring(g.namehealthdotsize), tostring(g.namehealthdotoffset),
+        tostring(UnderlineAbove()), tostring(g.namehealthunderlineoffset),
+        tostring(g.namehealthunderlinethickness),
+    }, "|")
+    if w.layoutKey == key then
+        P.Count("namehealth Layout unchanged (skipped)")
+        return
+    end
+    w.layoutKey = key
+
+    w.box:ClearAllPoints()
+    if width and height then
+        w.box:SetPoint(p, fs, p)
+        w.box:SetSize(width, height)
+    else
+        -- Secret text (e.g. names in instances) can't be measured; hug the
+        -- fontstring itself instead.
+        w.box:SetAllPoints(fs)
+    end
+
     if style == "underline" then
         -- Measured text width includes the outline and a little spacing after
         -- the last letter, so pull each end in to match the visible text.
@@ -245,6 +268,7 @@ local function Layout(w, fs, style)
     w.underline:SetShown(style == "underline")
     w.dot:SetShown(style == "dot")
 end
+Layout = P.Wrap("namehealth Layout", Layout)
 
 ---------------------------------------------------------------------------
 -- Name tint bookkeeping
@@ -330,12 +354,14 @@ local function Apply(unit)
     end
     w:SetShown(fs:IsShown())
 end
+Apply = P.Wrap("namehealth Apply", Apply)
 
 -- Coalesced and deferred: most triggers fire inside Blizzard's nameplate
 -- update chain.
 local pending = {}
 local function Queue(unit)
     if not unit or pending[unit] then return end
+    P.Count("namehealth queued update")
     pending[unit] = true
     C_Timer.After(0, function()
         pending[unit] = nil
@@ -350,6 +376,7 @@ local hookedFs = setmetatable({}, { __mode = "k" }) -- fontstring -> UnitFrame
 
 local function OnNameChanged(self)
     if applying then return end
+    P.Count("namehealth name fontstring hook")
     local uf = hookedFs[self]
     local u = uf and uf.unit
     if u and Style() then Queue(u) end
@@ -397,6 +424,7 @@ local function EnsureHooks()
         globalHooked = true
         -- Blizzard's name refresh (class color, text, font).
         hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
+            P.Count("namehealth UpdateName hook")
             local u = frame and frame.unit
             if u and Style() and u:find("^nameplate") then Queue(u) end
         end)
@@ -410,7 +438,9 @@ events:SetScript("OnEvent", function(_, event, unit)
         EnsureHooks()
         return
     end
+    if P.on then P.Count("namehealth event " .. event) end
     if not (unit and unit:find("^nameplate")) then return end
+    if P.on then P.Count("namehealth event " .. event .. " (plate)") end
     if event == "NAME_PLATE_UNIT_REMOVED" then
         local plate = C_NamePlate.GetNamePlateForUnit(unit, false)
         local uf = plate and plate.UnitFrame

@@ -18,6 +18,7 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 
 config.lua
 core\util.lua
+core\profiler.lua
 options\helpers.lua
 options\aurapreview.lua
 options\cdmpreview.lua
@@ -38,6 +39,7 @@ core\targetframe.lua
 core\focusframe.lua
 core\bossframes.lua
 core\miscframes.lua
+core\camera.lua
 core\swingtimers.lua
 core\nameplates.lua
 core\nameplateauras.lua

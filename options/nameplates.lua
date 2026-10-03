@@ -123,21 +123,21 @@ function opt.BuildNameplates(page)
 
     opt.AddColorSwatch(page, {
         variable = "nameplateDurationColor", name = "Duration Color",
-        tooltip = "Color of the countdown number on nameplate auras.",
+        tooltip = "Color of the countdown number on nameplate auras.\n\nUsed on nameplate, target, focus and raid frame auras where White Outlined Text is off.",
         db = "general", field = "nameplatedurationcolor", default = "ffffffff",
         onChange = RefreshNameplateAuraStyle,
     });
 
     opt.AddColorSwatch(page, {
         variable = "nameplateDurationExpiringColor", name = "Expiring Duration Color",
-        tooltip = "Color of the countdown number once an aura has less time left than the Expiring Duration Threshold below.",
+        tooltip = "Color of the countdown number once an aura has less time left than the Expiring Duration Threshold below.\n\nUsed on nameplate, target, focus and raid frame auras where White Outlined Text is off.",
         db = "general", field = "nameplatedurationexpiringcolor", default = "ffff3333",
         onChange = RefreshNameplateAuraStyle,
     });
 
     opt.AddSlider(page, {
         variable = "nameplateDurationThreshold", name = "Expiring Duration Threshold",
-        tooltip = "Seconds left at which a nameplate aura's countdown switches to the Expiring Duration Color.",
+        tooltip = "Seconds left at which a nameplate aura's countdown switches to the Expiring Duration Color.\n\nUsed on nameplate, target, focus and raid frame auras where White Outlined Text is off.",
         db = "general", field = "nameplatedurationthreshold", default = 5,
         min = 1, max = 10, step = 1,
         format = function(value) return string.format("%d s", value) end,
