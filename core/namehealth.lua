@@ -218,6 +218,10 @@ local function Layout(w, fs, style)
     local g = Settings()
     local width = Plain(fs:GetStringWidth()) or Plain(fs:GetWidth())
     local height = Plain(fs:GetStringHeight()) or Plain(fs:GetHeight())
+    -- GetStringWidth is the full name's width; a name longer than the
+    -- fontstring is drawn shortened ("..."), so cap it at what's visible.
+    local visible = Plain(fs:GetWidth())
+    if width and visible and visible > 0 and width > visible then width = visible end
     local j = Plain(fs:GetJustifyH())
     local p = (j == "LEFT" or j == "RIGHT") and j or "CENTER"
     -- Pixels in the drawing layer's space (where the offsets apply).

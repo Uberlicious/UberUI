@@ -62,7 +62,9 @@ local IsSecret = UberUI.util.IsSecret
 --   none     nothing attached (the feature's on, but plates keep Blizzard's)
 --   enemies  attached to non-friendly units only
 --   nounit   attached and shown, but with no unit, so no auras get processed
-local TEST_MODES = { normal = true, none = true, enemies = true, nounit = true }
+--   hidden   attached as normal (Blizzard's lists faded out), but our icons
+--            hidden: any aura tooltip on mouseover is Blizzard's invisible ones
+local TEST_MODES = { normal = true, none = true, enemies = true, nounit = true, hidden = true }
 local testMode = "normal"
 
 local function Enabled()
@@ -687,7 +689,7 @@ local function Attach(unit)
         pcall(b.holder.SetParent, b.holder, plate)
     end
     b.holder:SetFrameLevel(af:GetFrameLevel() + 5)
-    b.holder:Show()
+    if testMode == "hidden" then b.holder:Hide() else b.holder:Show() end
     Layout(b)
     EnsureAurasFrameHooks(af)
     SetBlizzardListsFaded(af, true)

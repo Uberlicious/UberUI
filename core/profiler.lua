@@ -10,6 +10,9 @@
 --                       typed again mid-run, stops early
 --   /uuprofile report   show the report so far without stopping
 --   /uuprofile npauras normal|none|enemies|nounit [secs]
+--   /uuprofile npauras hidden
+--                       our nameplate aura icons hidden, Blizzard's still
+--                       faded out (mouseover tooltip test); no profiling run
 --                       switch nameplate aura test mode (core/nameplateauras.lua)
 --                       and start a run
 
@@ -163,9 +166,13 @@ SlashCmdList.UUPROFILE = function(msg)
     if mode then
         local npa = UberUI.nameplateauras
         if npa and npa.SetTestMode and npa:SetTestMode(mode) then
-            Start(tonumber(modeSecs) or DEFAULT_SECONDS)
+            if mode == "hidden" then
+                UIErrorsFrame:AddMessage("Nameplate auras: ours hidden, Blizzard's faded -- hover where auras would be. /uuprofile npauras normal to undo.", 1, 1, 0.3)
+            else
+                Start(tonumber(modeSecs) or DEFAULT_SECONDS)
+            end
         else
-            UIErrorsFrame:AddMessage("Unknown mode -- normal, none, enemies or nounit", 1, 0.3, 0.3)
+            UIErrorsFrame:AddMessage("Unknown mode -- normal, none, enemies, nounit or hidden", 1, 0.3, 0.3)
         end
     elseif msg == "report" then
         Report()
