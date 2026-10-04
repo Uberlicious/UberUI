@@ -298,6 +298,30 @@ in our debuff row as well as Blizzard's).
   `DebuffListFrame.stride`. 22px icons + 3px spacing = Blizzard's 25px pitch.
 - **Blizzard's icons:** the three list frames get `SetAlpha(0)` while a bundle is attached,
   restored (deferred, and only if no new bundle took the plate) on release.
+  - **Keep it that way -- reparenting them was tried and reverted (2026-10-04).** EllesmereUI
+    parks the whole `AurasFrame` under a hidden frame, citing two problems with alpha 0: the
+    engine still lays out invisible icons, and Blizzard's aura items are mouse-enabled with
+    tooltips (`enableMouse="true"` in Blizzard_NamePlateAuras.xml), so invisible ones would trap
+    the mouse. We tried parking just the three lists in a hidden frame created inside the same
+    `AurasFrame` (same scale, lists keep their own anchors, our containers keep anchoring to
+    them). Measured on retail with `/uuprofile` at one spot, 12 hostile plates, 20 s runs, two
+    of each, switching test modes without moving:
+
+    | Mode | fps | whole game ms/frame | Uber UI ms/frame (Blizzard profiler) |
+    |---|---|---|---|
+    | lists parked | 127.2, 124.8 | 8.10, 9.12 | 0.236, 0.339 |
+    | lists at alpha 0 (current) | 133.1, 129.9 | 7.18, 7.90 | 0.218, 0.281 |
+    | our auras off (Blizzard's only) | 123.5, 136.1 | 7.68, 7.73 | 0.138, 0.229 |
+
+    Run-to-run noise is ~12 fps (the two "off" runs). Parking was the slowest in both pairs
+    (~1 ms/frame worse than alpha 0), most likely because our containers then anchor to frames
+    under a hidden parent; alpha 0 was level with Blizzard's own display, so it has no
+    measurable cost. The mouse trap didn't reproduce either: with our icons hidden and
+    Blizzard's at alpha 0 (`/uuprofile npauras hidden`), hovering where the auras sit showed no
+    tooltip. Ellesmere needs to park because it removes Blizzard's whole plate; we don't.
+  - Overall cost of nameplate auras (retail, same measurement): within noise of Blizzard's own
+    display. A 2026-10-03 follower-dungeon pair (different pulls, not comparable) looked like
+    ~1.6 ms/frame but had half the plate churn. Forever not yet measured the same way.
 - **Categories per unit:** read from the same CVars as Blizzard's `Update*AuraFrames`.
 - **Re-evaluation:** per-instance `hooksecurefunc` on each plate's `AurasFrame`
   `UpdateShownState` (unit, friend/enemy, player, simplified, every display CVar) and

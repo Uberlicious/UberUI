@@ -307,7 +307,11 @@ local function ShowErrors(text)
         scroll:SetScrollChild(edit)
         errorFrame.edit = edit
 
-        CreateFrame("Button", nil, errorFrame, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -5, -5)
+        -- NoScripts: UIPanelCloseButton's own OnClick calls HideUIPanel, which
+        -- is blocked from addon code in combat ("Interface action failed").
+        local close = CreateFrame("Button", nil, errorFrame, "UIPanelCloseButtonNoScripts")
+        close:SetPoint("TOPRIGHT", -5, -5)
+        close:SetScript("OnClick", function() errorFrame:Hide() end)
         local hint = errorFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         hint:SetPoint("BOTTOM", 0, 16)
         hint:SetText("Click inside the box, Ctrl+A to select all, Ctrl+C to copy")
