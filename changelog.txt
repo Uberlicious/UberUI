@@ -1,3 +1,15 @@
+1.0.7:
+    - Show Raid Buffs (Raid & Group Frames): Long raid-wide buffs (Mark of the Wild, Fortitude, Arcane Intellect, Battle Shout, Skyfury, Blessing of the Bronze) are now hidden on compact raid and party frames, so buffs worth watching like Earth Shield, heal over time effects and externals keep their place. Pick any you want back from the icon grid. WoW Forever has its own list covering every rank, including the paladin blessings, Divine Spirit, Battle Shout and Shadow Protection.
+    - Threat Highlight (Raid & Group Frames): Choose how party and raid threat shows: Blizzard's frame, a Thin Border, an Inner Glow, Corner Marks, a Top Stripe, or Hidden, with adjustable line thickness and a live preview.
+    - Expiring Color: White outlined aura timers on Target, Focus, Raid & Group Frames and nameplates can switch to the Expiring Duration Color in their last seconds. Turn it on per location under Aura Text.
+    - Friendly Name Health: New Border option draws a black border around the underline or dot (1 to 3 pixels); on the underline, missing health shows as black.
+    - Copy Chat: A small button in each chat window (and /uucopychat) opens its history in a box you can copy from, keeping chat's colors.
+    - Personal Resource Display: Darken Border can now be turned off, Square mode draws its own border and hides Blizzard's, square bars at Edit Mode padding 0 share one border line, and class resource backgrounds are darkened (Retail).
+    - Player Frame: Druid combo points are darkened.
+    - WoW Forever Gamepad UI: Action button rings, shoulder button backgrounds and modifier icons are darkened, the gamepad cast bar gets a border with an optional icon border, and the Cursor Ring can hide while the Gamepad UI is up.
+    - Hide Raid & Party Frame Titles: Now hides the "Party" title too (renamed from Hide Raid Frame Titles).
+    - Fixes: The Friendly Name Health dot no longer drifts on long, shortened names; the error popup's close button works in combat and no longer opens to an empty box; settings tooltips now point to where the duration colors are set.
+
 1.0.6:
     - Raid Frame Debuffs: New Max Debuffs setting (3 to 6; 3 is Blizzard's, 6 is two full rows). Debuffs now line up in Blizzard's priority order (boss and role debuffs, then dispellable, then the rest), and boss/role debuffs grow 1.5x when Blizzard's "Display Larger Role-Specific Debuffs" is on.
     - Raid Frame Settings: Turning Blizzard's Display Buffs/Debuffs/Big Defensive back on while Uber UI handles them no longer doubles up the icons.

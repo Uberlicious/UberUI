@@ -63,7 +63,7 @@ function chatcopy.Copy(frame, count)
     local tab = _G[name .. "Tab"]
     local label = (tab and tab.GetText and tab:GetText()) or name
     -- Opens at the bottom: the latest messages are what's usually wanted.
-    UberUI.ShowDebugReport(("Chat: %s -- %d line(s)\n\n%s"):format(tostring(label), #lines, table.concat(lines, "\n")), true)
+    UberUI.ShowReport(("Chat: %s -- %d line(s)\n\n%s"):format(tostring(label), #lines, table.concat(lines, "\n")), true)
 end
 
 local function CreateButton(chatFrame)

@@ -304,43 +304,6 @@ function swingtimers:Apply()
     end
 end
 
--- Temporary: /uuidebugswing reports each swing timer's layout state.
-SLASH_UUIDEBUGSWING1 = "/uuidebugswing"
-SlashCmdList.UUIDEBUGSWING = function()
-    local function pts(region)
-        local out = {}
-        for i = 1, region:GetNumPoints() do
-            local p, rel, rp, x, y = region:GetPoint(i)
-            out[#out + 1] = ("%s->%s:%s (%.2f, %.2f)"):format(p, rel and (rel:GetName() or tostring(rel)) or "nil", rp, x or 0, y or 0)
-        end
-        return table.concat(out, "; ")
-    end
-    local g = uuidb and uuidb.general or {}
-    local lines = { ("squareborder=%s thickness=%s"):format(tostring(g.swingtimersquareborder), tostring(g.swingtimersquareborder_thickness)) }
-    for _, def in ipairs(FRAMES) do
-        local f = _G[def.name]
-        lines[#lines + 1] = ""
-        if not f then
-            lines[#lines + 1] = def.name .. ": missing"
-        else
-            local bar = f.StatusBar
-            local ok, inDefault = pcall(function() return f.IsInDefaultPosition and f:IsInDefaultPosition() end)
-            lines[#lines + 1] = ("%s: shown=%s forbidden=%s managed=%s inDefault=%s scale=%.3f size=%.1fx%.1f"):format(
-                def.name, tostring(f:IsShown()), tostring(f:IsForbidden()), tostring(f.isManagedFrame),
-                ok and tostring(inDefault) or ("ERR " .. tostring(inDefault)), f:GetScale(), f:GetWidth(), f:GetHeight())
-            lines[#lines + 1] = "  frame points: " .. pts(f)
-            if bar then
-                lines[#lines + 1] = ("  bar size=%.1fx%.1f reanchored=%s squareParts=%s"):format(
-                    bar:GetWidth(), bar:GetHeight(), tostring(barReanchored[bar]), tostring(squareParts[bar] ~= nil))
-                lines[#lines + 1] = "  bar points: " .. pts(bar)
-            else
-                lines[#lines + 1] = "  no StatusBar"
-            end
-        end
-    end
-    UberUI.ShowDebugReport(table.concat(lines, "\n"))
-end
-
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")

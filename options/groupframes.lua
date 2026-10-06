@@ -13,8 +13,8 @@ function opt.BuildGroupFrames(page)
     opt.AddRaidFramePreview(page);
 
     opt.AddCheckbox(page, {
-        variable = "HideRaidFrameTitles", name = "Hide Raid Frame Titles",
-        tooltip = "Hide the title text on raid frames e.g. 'Group 1'",
+        variable = "HideRaidFrameTitles", name = "Hide Raid & Party Frame Titles",
+        tooltip = "Hide the title text on raid and party frames, e.g. 'Group 1' and 'Party'.",
         db = "cuf", field = "hideRaidTitle", default = false,
         onChange = function() UberUI.cuf:HideRaidFrameTitles() end,
     });
@@ -91,10 +91,28 @@ function opt.BuildGroupFrames(page)
                 db = "general", field = "compactbigdefensive", default = true,
                 onChange = RefreshCompactAuras,
             });
+
+            -- Raid buffs are hidden unless picked here (compactauras:GetRaidBuffs,
+            -- per client).
+            local raidBuffs = UberUI.compactauras and UberUI.compactauras.GetRaidBuffs
+                and UberUI.compactauras:GetRaidBuffs() or {}
+            local function RaidBuffField(item) return "compactshowraidbuff_" .. item.key end
+            opt.AddToggleGrid(page, {
+                name = "Show Raid Buffs",
+                tooltip = "Long raid-wide buffs are hidden on compact raid and party frames, so buffs worth watching like Earth Shield, heal over time effects and externals keep their place. Select a buff to show it on the frames"
+                    .. (UberUI.util.IsForeverClient() and " (every rank)." or "."),
+                items = raidBuffs,
+                columns = 2,
+                get = function(item) return uuidb.general and uuidb.general[RaidBuffField(item)] == true end,
+                set = function(item, value) uuidb.general[RaidBuffField(item)] = value end,
+                onChange = RefreshCompactAuras,
+                onText = "Shown on raid and party frames.",
+                offText = "Hidden on raid and party frames.",
+            });
         end,
         durationToggle = {
             variable = "compactAuraDuration", field = "compactauraduration", onChange = RefreshCompactAuras,
-            tooltip = "Show the time left on compact raid and party auras as a number in the middle of the icon, sized to the icon. The settings under it set how it looks.",
+            tooltip = "Show the time left on compact raid and party auras as a number in the middle of the icon, sized to the icon. The settings under it set how it looks; its colors are under Aura Duration Text Colors on the main Uber UI page.",
         },
     });
 end

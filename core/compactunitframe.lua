@@ -123,19 +123,26 @@ function cuf:set_hook()
     EnsureTitleHook()
 end
 
+-- Raid group titles ("Group 1") and the party frame's ("Party"): both are
+-- CompactRaidGroupTemplate.
+local function SetTitleShown(frame, hide)
+    if frame and frame.title then
+        if hide then
+            frame.title:Hide()
+        else
+            frame.title:Show()
+        end
+    end
+end
+
 function cuf:HideRaidFrameTitles()
     EnsureTitleHook()
     if not uuidb or not uuidb.cuf then return end
+    local hide = uuidb.cuf.hideRaidTitle
     for i = 1, 8 do
-        local frame = _G["CompactRaidGroup" .. i]
-        if frame and frame.title then
-            if uuidb.cuf.hideRaidTitle then
-                frame.title:Hide()
-            else
-                frame.title:Show()
-            end
-        end
+        SetTitleShown(_G["CompactRaidGroup" .. i], hide)
     end
+    SetTitleShown(_G.CompactPartyFrame, hide)
 end
 
 function cuf:UpdateAllAuras()

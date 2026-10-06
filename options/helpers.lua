@@ -236,6 +236,163 @@ function opt.AddPreview(page, o)
     return initializer;
 end
 
+-- Toggle grid ----------------------------------------------------------------
+
+-- A list row holding a grid of spell toggles: icon + short name per cell,
+-- several to a line. Built for lists of spells per aura area, so later areas
+-- (or user-added spells) are just more items.
+-- o: name?, tooltip? (with a name: label on the left like other settings,
+--    grid in the control column; without: grid across the whole row),
+--    items = { { key, name, short?, ids = { spellID, ... } }, ... },
+--    get(item) -> bool, set(item, bool), onChange(),
+--    columns (default 3), onText / offText (tooltip status lines).
+-- On cells draw in full color; off cells are dimmed and desaturated.
+local GRID_CELL_HEIGHT = 24
+local GRID_ICON_SIZE = 20
+local GRID_PADDING = 4
+local GRID_LEFT = 37
+local GRID_RIGHT = 20
+local GRID_FALLBACK_ICON = 134400 -- INV_Misc_QuestionMark
+
+-- Cells and icons are sized and placed in whole screen pixels: the settings
+-- panel is scaled, and icons at fractional positions snap to the pixel grid
+-- one by one, so some drew a pixel smaller than others.
+local function SpellIcon(item)
+    local id = item.ids and item.ids[1]
+    local icon = id and C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(id)
+    return icon or GRID_FALLBACK_ICON
+end
+
+function opt.AddToggleGrid(page, o)
+    local columns = o.columns or 3
+    local rows = math.max(1, math.ceil(#o.items / columns))
+    local initializer = Settings.CreateElementInitializer("SettingsListElementTemplate",
+        { name = o.name or "", tooltip = o.tooltip });
+    initializer.GetExtent = function() return rows * GRID_CELL_HEIGHT + GRID_PADDING * 2 end
+
+    local grid
+
+    local function UpdateCell(cell)
+        local on = o.get(cell.item) and true or false
+        cell.icon:SetDesaturated(not on)
+        cell.icon:SetAlpha(on and 1 or 0.45)
+        if on then
+            cell.label:SetTextColor(HIGHLIGHT_FONT_COLOR:GetRGB())
+        else
+            cell.label:SetTextColor(GRAY_FONT_COLOR:GetRGB())
+        end
+    end
+
+    local function ShowCellTooltip(cell)
+        GameTooltip:SetOwner(cell, "ANCHOR_RIGHT")
+        local id = cell.item.ids and cell.item.ids[1]
+        if not (id and pcall(GameTooltip.SetSpellByID, GameTooltip, id)) then
+            GameTooltip:SetText(cell.item.name, 1, 1, 1)
+        end
+        local on = o.get(cell.item)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(on and (o.onText or "On") or (o.offText or "Off"),
+            on and 1 or 0.6, on and 0.82 or 0.6, on and 0 or 0.6, true)
+        GameTooltip:AddLine("Click to change.", 0.6, 0.6, 0.6, true)
+        GameTooltip:Show()
+    end
+
+    local function Layout()
+        local parent = grid:GetParent()
+        local width = grid:GetWidth()
+        if not width or width <= 0 then
+            width = (parent and parent:GetWidth() or 600) - GRID_LEFT - GRID_RIGHT
+        end
+        local cellWidth = math.floor(width / columns)
+        for i, cell in ipairs(grid.cells) do
+            local col = (i - 1) % columns
+            local row = math.floor((i - 1) / columns)
+            PixelUtil.SetSize(cell, cellWidth, GRID_CELL_HEIGHT)
+            cell:ClearAllPoints()
+            PixelUtil.SetPoint(cell, "TOPLEFT", grid, "TOPLEFT", col * cellWidth, -row * GRID_CELL_HEIGHT)
+            PixelUtil.SetSize(cell.icon, GRID_ICON_SIZE, GRID_ICON_SIZE)
+            cell.icon:ClearAllPoints()
+            PixelUtil.SetPoint(cell.icon, "TOPLEFT", cell, "TOPLEFT", 0, -(GRID_CELL_HEIGHT - GRID_ICON_SIZE) / 2)
+        end
+    end
+
+    local function CreateGrid(parent)
+        grid = CreateFrame("Frame", nil, parent)
+        grid.cells = {}
+        for _, item in ipairs(o.items) do
+            local cell = CreateFrame("Button", nil, grid)
+            cell.item = item
+            cell.icon = cell:CreateTexture(nil, "ARTWORK")
+            cell.icon:SetTexture(SpellIcon(item))
+            cell.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            cell.label = cell:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            cell.label:SetPoint("LEFT", cell.icon, "RIGHT", 5, 0)
+            cell.label:SetPoint("RIGHT", cell, "RIGHT", -4, 0)
+            cell.label:SetJustifyH("LEFT")
+            cell.label:SetWordWrap(false)
+            cell.label:SetText(item.short or item.name)
+            local hl = cell:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.08)
+            cell:SetScript("OnClick", function(self)
+                o.set(self.item, not o.get(self.item))
+                UpdateCell(self)
+                if o.onChange then o.onChange(self.item) end
+                opt.RefreshPreviews()
+                if GameTooltip:IsOwned(self) then ShowCellTooltip(self) end
+            end)
+            cell:SetScript("OnEnter", ShowCellTooltip)
+            cell:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            grid.cells[#grid.cells + 1] = cell
+        end
+        grid:SetScript("OnSizeChanged", Layout)
+        return grid
+    end
+
+    -- Same pooled-row handling as opt.AddPreview: one grid, moved to
+    -- whichever row is showing this entry.
+    initializer.InitFrame = function(self, frame)
+        if frame.NewFeature then frame.NewFeature:Hide() end
+        if o.name then
+            -- Label top-aligned with the first line of cells.
+            frame.Text:SetFontObject("GameFontNormal")
+            frame.Text:SetText(o.name)
+            frame.Text:ClearAllPoints()
+            frame.Text:SetPoint("TOPLEFT", frame, "TOPLEFT", GRID_LEFT, -GRID_PADDING)
+            frame.Text:SetPoint("RIGHT", frame, "CENTER", -85, 0)
+            frame.Text:SetHeight(GRID_CELL_HEIGHT)
+            frame.Text:SetJustifyH("LEFT")
+            frame.Text:Show()
+            if frame.Tooltip and DefaultTooltipMixin then
+                DefaultTooltipMixin.SetTooltipFunc(frame.Tooltip, function()
+                    Settings.InitTooltip(o.name, o.tooltip)
+                end)
+            end
+        else
+            frame.Text:SetText("")
+            frame.Text:Hide()
+        end
+        if not grid then CreateGrid(frame) end
+        grid:SetParent(frame)
+        grid:ClearAllPoints()
+        if o.name then
+            -- The control column, where checkboxes and sliders sit.
+            PixelUtil.SetPoint(grid, "TOPLEFT", frame, "TOP", -80, -GRID_PADDING)
+        else
+            PixelUtil.SetPoint(grid, "TOPLEFT", frame, "TOPLEFT", GRID_LEFT, -GRID_PADDING)
+        end
+        PixelUtil.SetPoint(grid, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", -GRID_RIGHT, GRID_PADDING)
+        grid:Show()
+        Layout()
+        for _, cell in ipairs(grid.cells) do UpdateCell(cell) end
+    end
+    initializer.Resetter = function(self, frame)
+        if grid and grid:GetParent() == frame then grid:Hide() end
+    end
+    page.layout:AddInitializer(Track(page, initializer));
+    return initializer;
+end
+
 -- Generic dropdown -----------------------------------------------------------
 
 -- o: variable, name, tooltip, default, values = { {value, label}, ... },
@@ -562,7 +719,7 @@ function opt.AddAuraTextOptions(page, o)
             variable = "auraWhiteText" .. o.suffix, name = "White Outlined Text",
             tooltip = "Time-left text on " .. o.label .. " auras in white with a black outline, instead of "
                 .. (o.loc == "player" and "Blizzard's yellow text (e.g. \"1 m\"). Uses Uber UI's format: whole seconds, then minutes (\"2m\") and hours (\"1h\").\n\nOnly used while Duration Inside Icon is on."
-                    or "the nameplate duration colors (normal and expiring)."),
+                    or "the Duration Color and Expiring Duration Color on the main Uber UI page. Expiring Color, below, keeps it white until it's about to run out."),
             db = "general", field = k .. "whitetext", default = true,
             onChange = refresh,
         });
@@ -572,6 +729,21 @@ function opt.AddAuraTextOptions(page, o)
             end);
         else
             UnderDuration(whiteInit);
+        end
+
+        -- Player's white text is Blizzard's duration binding, with no color
+        -- curve to add an expiring point to.
+        if o.loc ~= "player" then
+            local expiringInit = opt.AddCheckbox(page, {
+                variable = "auraExpiringColor" .. o.suffix, name = "Expiring Color",
+                tooltip = "Turn the white time-left text on " .. o.label .. " auras to the Expiring Duration Color once less time is left than the Expiring Duration Threshold. Both are set under Aura Duration Text Colors on the main Uber UI page.",
+                db = "general", field = k .. "expiringcolor", default = false,
+                onChange = refresh,
+            });
+            opt.DependsOn(expiringInit, whiteInit, function()
+                local g = uuidb.general
+                return g and g[k .. "whitetext"] == true and (not durationInit or DurationOn())
+            end);
         end
     end
 

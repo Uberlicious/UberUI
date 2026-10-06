@@ -190,6 +190,8 @@ local defaults = {
         namehealthdotsize            = 8,
         namehealthdotside            = "LEFT",
         namehealthdotoffset          = 0,
+        namehealthborder             = false,
+        namehealthborderthickness    = 1,
         darkenaddonminimapbuttons    = true,
         cursorring                   = false,
         cursorringstyle              = "normal",
@@ -276,6 +278,10 @@ defaults.general.auratext_player_centerduration = false
 for _, loc in ipairs({ "player", "target", "focus", "compact", "nameplate" }) do
     defaults.general["auratext_" .. loc .. "_overminute"] = loc == "compact"
     defaults.general["auratext_" .. loc .. "_whitetext"] = true
+    -- White text turning to the expiring color (not Player: Blizzard's text).
+    if loc ~= "player" then
+        defaults.general["auratext_" .. loc .. "_expiringcolor"] = false
+    end
 end
 
 -- Copyable error popup.
@@ -328,7 +334,7 @@ local function ShowErrors(text, scrollToEnd)
     end
     local scroll = errorFrame.scroll
     -- Back to the top first: an offset left over from a longer report (e.g.
-    -- a big /uuidebug dump) would otherwise sit past the end of shorter text
+    -- a long chat copy) would otherwise sit past the end of shorter text
     -- and show an empty box.
     scroll:SetVerticalScroll(0)
     errorFrame.edit:SetText(text)
@@ -343,8 +349,8 @@ local function ShowErrors(text, scrollToEnd)
     end
 end
 
--- Copyable popup for /uuidebug* reports (never chat).
-function UberUI.ShowDebugReport(text, scrollToEnd)
+-- Copyable popup for longer text (chat copy), never chat.
+function UberUI.ShowReport(text, scrollToEnd)
     ShowErrors(text, scrollToEnd)
 end
 

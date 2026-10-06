@@ -11,7 +11,6 @@
 
 local addon, ns = ...
 local namehealth = {}
-local P = UberUI.profiler
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
@@ -78,6 +77,16 @@ local function PlaceDot(dot, anchor, px)
     else
         dot:SetPoint("RIGHT", anchor, "LEFT", -gap, 0)
     end
+end
+
+-- Border: black, Border Thickness screen pixels on every side of the
+-- underline (behind the missing-health part too) or around the dot.
+local BORDER_COLOR = { 0, 0, 0 }
+
+local function BorderPx()
+    local g = Settings()
+    if not (g and g.namehealthborder == true) then return 0 end
+    return math.max(1, math.floor(tonumber(g.namehealthborderthickness) or 1))
 end
 
 local function HideAtFull()
@@ -151,8 +160,8 @@ local function PlateFrame(parent)
     return f
 end
 
-local function NewDot(owner)
-    local dot = owner:CreateTexture(nil, "OVERLAY")
+local function NewDot(owner, subLevel)
+    local dot = owner:CreateTexture(nil, "OVERLAY", nil, subLevel or 0)
     dot:SetTexture(WHITE)
     Snap(dot)
     local mask = owner:CreateMaskTexture()
@@ -185,6 +194,12 @@ local function GetWidgets(uf)
     w.box = PlateFrame(uf)
 
     w.dot = NewDot(w)
+    -- Border behind the dot (a larger black circle) and behind the
+    -- underline (the bar is a child frame, so it draws over w's textures).
+    w.dotBorder = NewDot(w, -1)
+    w.barBorder = w:CreateTexture(nil, "BACKGROUND")
+    w.barBorder:SetTexture(WHITE)
+    Snap(w.barBorder)
 
     local bar = CreateFrame("StatusBar", nil, w)
     bar:SetStatusBarTexture(WHITE)
@@ -231,10 +246,9 @@ local function Layout(w, fs, style)
         tostring(width), tostring(height), p, style, tostring(px), DotSide(),
         tostring(g.namehealthdotsize), tostring(g.namehealthdotoffset),
         tostring(UnderlineAbove()), tostring(g.namehealthunderlineoffset),
-        tostring(g.namehealthunderlinethickness),
+        tostring(g.namehealthunderlinethickness), tostring(BorderPx()),
     }, "|")
     if w.layoutKey == key then
-        P.Count("namehealth Layout unchanged (skipped)")
         return
     end
     w.layoutKey = key
@@ -269,10 +283,21 @@ local function Layout(w, fs, style)
         w.dot:SetSize(size, size)
         PlaceDot(w.dot, w.box, px)
     end
+    local border = BorderPx() * px
+    w.barBorder:ClearAllPoints()
+    w.dotBorder:ClearAllPoints()
+    if border > 0 and style == "underline" then
+        w.barBorder:SetPoint("TOPLEFT", w.underline, "TOPLEFT", -border, border)
+        w.barBorder:SetPoint("BOTTOMRIGHT", w.underline, "BOTTOMRIGHT", border, -border)
+    elseif border > 0 and style == "dot" then
+        w.dotBorder:SetPoint("TOPLEFT", w.dot, "TOPLEFT", -border, border)
+        w.dotBorder:SetPoint("BOTTOMRIGHT", w.dot, "BOTTOMRIGHT", border, -border)
+    end
     w.underline:SetShown(style == "underline")
     w.dot:SetShown(style == "dot")
+    w.barBorder:SetShown(border > 0 and style == "underline")
+    w.dotBorder:SetShown(border > 0 and style == "dot")
 end
-Layout = P.Wrap("namehealth Layout", Layout)
 
 ---------------------------------------------------------------------------
 -- Name tint bookkeeping
@@ -355,17 +380,19 @@ local function Apply(unit)
         else
             w.dot:SetVertexColor(r, g, b, a)
         end
+        -- Same alpha as the marker, so Hide at Full Health hides it too.
+        local bc = BORDER_COLOR
+        w.barBorder:SetVertexColor(bc[1], bc[2], bc[3], a)
+        w.dotBorder:SetVertexColor(bc[1], bc[2], bc[3], a)
     end
     w:SetShown(fs:IsShown())
 end
-Apply = P.Wrap("namehealth Apply", Apply)
 
 -- Coalesced and deferred: most triggers fire inside Blizzard's nameplate
 -- update chain.
 local pending = {}
 local function Queue(unit)
     if not unit or pending[unit] then return end
-    P.Count("namehealth queued update")
     pending[unit] = true
     C_Timer.After(0, function()
         pending[unit] = nil
@@ -380,7 +407,6 @@ local hookedFs = setmetatable({}, { __mode = "k" }) -- fontstring -> UnitFrame
 
 local function OnNameChanged(self)
     if applying then return end
-    P.Count("namehealth name fontstring hook")
     local uf = hookedFs[self]
     local u = uf and uf.unit
     if u and Style() then Queue(u) end
@@ -428,7 +454,6 @@ local function EnsureHooks()
         globalHooked = true
         -- Blizzard's name refresh (class color, text, font).
         hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
-            P.Count("namehealth UpdateName hook")
             local u = frame and frame.unit
             if u and Style() and u:find("^nameplate") then Queue(u) end
         end)
@@ -442,9 +467,7 @@ events:SetScript("OnEvent", function(_, event, unit)
         EnsureHooks()
         return
     end
-    if P.on then P.Count("namehealth event " .. event) end
     if not (unit and unit:find("^nameplate")) then return end
-    if P.on then P.Count("namehealth event " .. event .. " (plate)") end
     if event == "NAME_PLATE_UNIT_REMOVED" then
         local plate = C_NamePlate.GetNamePlateForUnit(unit, false)
         local uf = plate and plate.UnitFrame
@@ -553,15 +576,16 @@ local function UpdatePreview(preview)
     local thick = (tonumber(g.namehealthunderlinethickness) or 1) * px
     local size = (tonumber(g.namehealthdotsize) or 8) * px
     local side = DotSide()
+    local border = BorderPx() * px
 
     -- How far the decoration reaches past the name on each side, so the names
     -- can be spaced and centered to fit it.
     local left, right, above, below = 0, 0, 0, 0
     if style == "underline" then
-        local reach = math.max(0, UnderlineGap(px) + thick)
+        local reach = math.max(0, UnderlineGap(px) + thick + border)
         if UnderlineAbove() then above = reach else below = reach end
     elseif style == "dot" then
-        local reach = math.max(0, DotGap(px) + size)
+        local reach = math.max(0, DotGap(px) + size + border)
         if side == "LEFT" then left = reach
         elseif side == "RIGHT" then right = reach
         elseif side == "TOP" then above = reach
@@ -600,8 +624,26 @@ local function UpdatePreview(preview)
             PlaceDot(s.dot, fs, px)
             s.dot:SetVertexColor(SampleColor(pct, classFile, style))
         end
+        -- Border: the underline's spans the full width (behind missing health).
+        local _, _, _, alpha = SampleColor(pct, classFile, style)
+        local bc = BORDER_COLOR
+        s.barBorder:ClearAllPoints()
+        s.dotBorder:ClearAllPoints()
+        if border > 0 and style == "underline" then
+            local inset = UNDERLINE_INSET * px
+            local full = math.max(fs:GetStringWidth() - 2 * inset, px)
+            s.barBorder:SetPoint("TOPLEFT", s.bar, "TOPLEFT", -border, border)
+            s.barBorder:SetSize(full + 2 * border, thick + 2 * border)
+        elseif border > 0 and style == "dot" then
+            s.dotBorder:SetPoint("TOPLEFT", s.dot, "TOPLEFT", -border, border)
+            s.dotBorder:SetPoint("BOTTOMRIGHT", s.dot, "BOTTOMRIGHT", border, -border)
+        end
+        s.barBorder:SetVertexColor(bc[1], bc[2], bc[3], alpha)
+        s.dotBorder:SetVertexColor(bc[1], bc[2], bc[3], alpha)
         s.bar:SetShown(style == "underline")
         s.dot:SetShown(style == "dot")
+        s.barBorder:SetShown(border > 0 and style == "underline")
+        s.dotBorder:SetShown(border > 0 and style == "dot")
 
         -- Caption centered under the name but below the strip, so it reads
         -- as a label, not part of the look: fs bottom -> strip bottom.
@@ -642,6 +684,10 @@ function namehealth.CreatePreview(parent)
         s.bar:SetTexture(WHITE)
         Snap(s.bar)
         s.dot = NewDot(holder)
+        s.dotBorder = NewDot(holder, -1)
+        s.barBorder = holder:CreateTexture(nil, "ARTWORK")
+        s.barBorder:SetTexture(WHITE)
+        Snap(s.barBorder)
         preview.samples[i] = s
     end
 

@@ -545,7 +545,13 @@ local function UpdateIcon(b, o, frameSize, sizes)
     end
     b.duration:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
     if long then
-        b.duration:SetTextColor(1, 1, 1, 1)
+        -- White, or the expiring color under the threshold with Expiring Color.
+        local _, expiring, threshold = DurationColors()
+        if t.expiring and info.duration <= threshold then
+            b.duration:SetTextColor(expiring.r, expiring.g, expiring.b, 1)
+        else
+            b.duration:SetTextColor(1, 1, 1, 1)
+        end
     else
         local normal, expiring, threshold = DurationColors()
         local c = info.duration <= threshold and expiring or normal
@@ -833,7 +839,7 @@ function opt.AddAuraPreview(page, o)
         tooltip = "Sample " .. o.label .. " buffs and debuffs drawn with the settings below, at the size they appear on screen"
             .. (twoSizes and " (your auras large, others' small)" or "")
             .. ". Earth Shield and Agony show stack counts"
-            .. (DURATION[o.loc] and "; Riptide, Magic, Agony and Poison show duration text when it's on (Agony with its stack count" .. (o.loc == "player" and ")" or ", Poison in the expiring color unless White Outlined Text is on)") or "")
+            .. (DURATION[o.loc] and "; Riptide, Magic, Agony and Poison show duration text when it's on (Agony with its stack count" .. (o.loc == "player" and ")" or ", Poison in the expiring color unless White Outlined Text is on without Expiring Color)") or "")
             .. ".",
         height = STAGE_HEIGHT + CAPTION_HEIGHT + 12,
         create = function(parent)

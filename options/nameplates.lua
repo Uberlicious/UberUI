@@ -231,7 +231,6 @@ function opt.BuildNameplates(page)
     -- Friendly Name Health
     ---------------------------------------------------------------------------
     opt.Section(page, "Friendly Name Health", "nameplates_namehealth");
-
     local function RefreshNameHealth()
         if UberUI.namehealth then UberUI.namehealth:Refresh() end
     end
@@ -278,6 +277,27 @@ function opt.BuildNameplates(page)
         db = "general", field = "namehealthhidefull", default = true,
         onChange = RefreshNameHealth,
     }), IsMarker);
+
+    local borderInit = opt.AddCheckbox(page, {
+        variable = "NameHealthBorder", name = "Border",
+        tooltip = "Draw a black border around the underline or dot, so it stands out against bright ground. The underline's border spans its full width, so missing health shows as black.",
+        db = "general", field = "namehealthborder", default = false,
+        onChange = RefreshNameHealth,
+        repair = true,
+    });
+    ForStyle(borderInit, IsMarker);
+    local function BorderOn()
+        return IsMarker() and uuidb.general and uuidb.general.namehealthborder == true
+    end
+    local borderThicknessInit = opt.AddSlider(page, {
+        variable = "NameHealthBorderThickness", name = "Border Thickness",
+        tooltip = "Thickness of the border around the underline or dot, in screen pixels.",
+        db = "general", field = "namehealthborderthickness", default = 1,
+        min = 1, max = 3, step = 1,
+        onChange = RefreshNameHealth,
+    });
+    opt.DependsOn(borderThicknessInit, borderInit, BorderOn);
+    opt.ShowWhen(borderThicknessInit, BorderOn);
 
     ForStyle(opt.AddSlider(page, {
         variable = "NameHealthUnderlineThickness", name = "Underline Thickness",

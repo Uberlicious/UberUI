@@ -49,6 +49,7 @@ function aurakit.TextSettings(loc)
         center = g[k .. "centerduration"] == true,
         overMinute = g[k .. "overminute"] == true,
         white = g[k .. "whitetext"] == true,
+        expiring = g[k .. "expiringcolor"] == true,
     }
 end
 
@@ -808,6 +809,8 @@ end
 --  * white: plain white with a black outline. Off, it's colored from a step
 --    curve on the remaining time with the nameplate duration colors:
 --    expiring color up to the threshold, normal after.
+--  * expiring (white only): white switches to the expiring color up to the
+--    threshold.
 -- Curves are copied at registration, so settings changes re-register.
 local function DurationSettings()
     local g = uuidb and uuidb.general or {}
@@ -845,9 +848,11 @@ function aurakit.GetLongDurationFormatter()
 end
 
 local durationOptionsCache = {}
-local function GetDurationTextOptions(overMinute, white)
+local function GetDurationTextOptions(overMinute, white, whiteExpiring)
     local normal, expiring, threshold = DurationSettings()
-    local key = (overMinute and "m" or "s") .. (white and "w" or ("|" .. normal .. "|" .. expiring .. "|" .. threshold))
+    local key = (overMinute and "m" or "s") .. (white and "w" or "")
+        .. ((white and not whiteExpiring) and "" or ("|" .. expiring .. "|" .. threshold))
+        .. (white and "" or ("|" .. normal))
     local cached = durationOptionsCache[key]
     if cached ~= nil then return cached or nil, key end
     durationOptionsCache[key] = false
@@ -860,7 +865,7 @@ local function GetDurationTextOptions(overMinute, white)
             local curve = C_CurveUtil.CreateColorCurve()
             curve:SetType(Enum.LuaCurveType.Step)
             local n = white and CreateColor(1, 1, 1, 1) or UberUI.util.HexColor(normal) or CreateColor(1, 1, 1, 1)
-            if white then
+            if white and not whiteExpiring then
                 curve:AddPoint(0, CreateColor(1, 1, 1, 1))
             else
                 local e = UberUI.util.HexColor(expiring) or CreateColor(1, 0.2, 0.2, 1)
@@ -922,7 +927,7 @@ function aurakit.UpdateDurationText(button, enabled)
         button.uuDurationSize = sizeKey
     end
 
-    local opts, key = GetDurationTextOptions(settings.overMinute, white)
+    local opts, key = GetDurationTextOptions(settings.overMinute, white, settings.expiring)
     if button.uuDurationKey ~= key then
         if opts and pcall(button.SetDurationText, button, text, opts) then
             button.uuDurationKey = key

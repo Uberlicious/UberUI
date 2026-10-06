@@ -1,5 +1,5 @@
 ## Interface: 120100, 16001
-## Version: 1.0.6
+## Version: 1.0.7
 
 ## Author: Uberlicious
 ## Notes: Darkens and modifies original Blizzard UI.
@@ -18,7 +18,6 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 
 config.lua
 core\util.lua
-core\profiler.lua
 options\helpers.lua
 options\aurapreview.lua
 options\cdmpreview.lua
@@ -59,4 +58,3 @@ core\cooldownmanager.lua
 core\damagemeter.lua
 core\personalresource.lua
 core\cursorring.lua
-core\gamepaddebug.lua

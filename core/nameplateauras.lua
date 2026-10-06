@@ -27,7 +27,6 @@ local addon, ns = ...
 
 local aurakit = UberUI.aurakit
 local nameplateauras = {}
-local P = UberUI.profiler
 
 local SQUARE_LOC = "nameplate"
 local ICON_SIZE = 22
@@ -56,16 +55,6 @@ local dispellableToken = true                          -- false once DISPELLABLE
 local raidDispelToken = true                           -- false once RAID_PLAYER_DISPELLABLE is refused
 
 local IsSecret = UberUI.util.IsSecret
-
--- Temporary, for finding where the engine's time goes (/uuprofile npauras):
---   normal   as shipped
---   none     nothing attached (the feature's on, but plates keep Blizzard's)
---   enemies  attached to non-friendly units only
---   nounit   attached and shown, but with no unit, so no auras get processed
---   hidden   attached as normal (Blizzard's lists faded out), but our icons
---            hidden: any aura tooltip on mouseover is Blizzard's invisible ones
-local TEST_MODES = { normal = true, none = true, enemies = true, nounit = true, hidden = true }
-local testMode = "normal"
 
 local function Enabled()
     return uuidb and uuidb.general and uuidb.general.nameplateauras == true
@@ -302,7 +291,7 @@ local function StylePandemic(button, style)
     })
 end
 
-StyleButton = P.Wrap("npauras StyleButton", function(button)
+StyleButton = function(button)
     local g = uuidb and uuidb.general or {}
     local style = button.isBuff and (g.aurastyle_nameplatebuffs or "both") or (g.aurastyle_nameplatedebuffs or "zoom")
     local showDispel = g.nameplatebuffs_showdispel ~= false
@@ -319,7 +308,7 @@ StyleButton = P.Wrap("npauras StyleButton", function(button)
     -- Every aura update restyles the button, which re-shows the dispel border;
     -- keep it hidden while the pandemic highlight is up.
     if button._uberInPandemic then pcall(HideDebuffBorders, button) end
-end)
+end
 
 -- Buttons whose engine-colored square strips haven't registered yet.
 local function NeedsRegistration(button)
@@ -571,10 +560,7 @@ local function Bind(b, unit)
     for _, key in ipairs(CONTAINER_KEYS) do
         local c = b[key]
         c:SetScale(scale)
-        if testMode == "nounit" then
-            c:Show()
-            if c:GetUnit() ~= "none" then pcall(c.SetUnit, c, "none") end
-        elseif shown[key] then
+        if shown[key] then
             c:Show()
             if c:GetUnit() ~= unit then pcall(c.SetUnit, c, unit) end
         else
@@ -583,7 +569,6 @@ local function Bind(b, unit)
         end
     end
 end
-Bind = P.Wrap("npauras Bind", Bind)
 
 local function Layout(b)
     local af = b.aurasFrame
@@ -605,12 +590,10 @@ local function EnsureAurasFrameHooks(aurasFrame)
     -- UpdateShownState: unit/friend/simplified/CVar changes;
     -- UpdateAuraScale: aura scale changes.
     hooksecurefunc(aurasFrame, "UpdateShownState", function(self)
-        P.Count("npauras UpdateShownState hook")
         QueueRebind(self)
     end)
     if aurasFrame.UpdateAuraScale then
         hooksecurefunc(aurasFrame, "UpdateAuraScale", function(self)
-            P.Count("npauras UpdateAuraScale hook")
             QueueRebind(self)
         end)
     end
@@ -655,12 +638,9 @@ local function Release(unit)
         end)
     end
 end
-Release = P.Wrap("npauras Release", Release)
 
 local function Attach(unit)
     if not Enabled() or byUnit[unit] or not WantsBundle(unit) then return end
-    if testMode == "none" then return end
-    if testMode == "enemies" and UnitIsFriend("player", unit) then return end
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
     if not plate or plate:IsForbidden() then return end
     local unitFrame = plate.UnitFrame
@@ -689,7 +669,7 @@ local function Attach(unit)
         pcall(b.holder.SetParent, b.holder, plate)
     end
     b.holder:SetFrameLevel(af:GetFrameLevel() + 5)
-    if testMode == "hidden" then b.holder:Hide() else b.holder:Show() end
+    b.holder:Show()
     Layout(b)
     EnsureAurasFrameHooks(af)
     SetBlizzardListsFaded(af, true)
@@ -701,7 +681,6 @@ local function Attach(unit)
         if b.unit == unit then RetryRegistrations(b) end
     end)
 end
-Attach = P.Wrap("npauras Attach", Attach)
 
 local function ReleaseAll()
     for unit in pairs(byUnit) do Release(unit) end
@@ -730,19 +709,6 @@ function nameplateauras:Refresh()
     else
         ReleaseAll()
     end
-end
-
--- Returns false for an unknown mode. Reattaches every visible plate.
-function nameplateauras:SetTestMode(mode)
-    if not TEST_MODES[mode] then return false end
-    testMode = mode
-    ReleaseAll()
-    if Enabled() then AttachVisible() end
-    return true
-end
-
-function nameplateauras:GetTestMode()
-    return testMode
 end
 
 function nameplateauras:RefreshStyle()

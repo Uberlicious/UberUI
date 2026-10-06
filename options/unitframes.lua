@@ -50,7 +50,7 @@ end
 local function DurationToggle(label, variable, field, onChange)
     return {
         variable = variable, field = field, onChange = onChange,
-        tooltip = "Show the time left on " .. label .. " auras as a number in the middle of the icon, sized to the icon. The settings under it set how it looks. With White Outlined Text off it uses the duration colors on the Nameplates page.",
+        tooltip = "Show the time left on " .. label .. " auras as a number in the middle of the icon, sized to the icon. The settings under it set how it looks. With White Outlined Text off (or Expiring Color on) it uses the colors under Aura Duration Text Colors on the main Uber UI page.",
     };
 end
 

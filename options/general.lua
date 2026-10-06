@@ -76,10 +76,11 @@ function opt.BuildGeneral(page)
     });
 
     -- Shared by every location's duration text (aurakit.DurationSettings);
-    -- each location's own White Outlined Text replaces them.
+    -- each location's own White Outlined Text replaces them (Expiring Color
+    -- keeps the expiring color and threshold).
     opt.Header(page, "Aura Duration Text Colors");
 
-    local colorNote = "\n\nUsed wherever White Outlined Text is off (Target, Focus, Raid & Group Frames, Nameplates).";
+    local colorNote = "\n\nUsed wherever White Outlined Text is off (Target, Focus, Raid & Group Frames, Nameplates). With White Outlined Text on, the location's Expiring Color option uses the expiring color and threshold.";
 
     opt.AddColorSwatch(page, {
         variable = "nameplateDurationColor", name = "Duration Color",

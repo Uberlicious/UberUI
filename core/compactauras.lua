@@ -65,6 +65,79 @@ local function BigDefensiveEnabled()
     return uuidb and uuidb.general and uuidb.general.compactbigdefensive ~= false
 end
 
+-- Raid-wide buffs: they sit on every frame and push out the buffs a healer
+-- watches, so they're hidden from compact frame buffs unless picked under
+-- Show Raid Buffs (uuidb.general["compactshowraidbuff_" .. key]). Matched by
+-- Blizzard's container (excludeSpellIDs), so secret spell IDs in combat are
+-- fine.
+--
+-- Retail IDs from EllesmereUI's buff reminder table. WoW Forever has an ID
+-- per rank, from Wowhead's Forever spell database (trainable ranks plus
+-- Forever's own variants of the same buff).
+local RETAIL_RAID_BUFFS = {
+    { key = "motw", name = "Mark of the Wild", ids = { 1126, 432661 } },
+    { key = "fort", name = "Power Word: Fortitude", ids = { 21562 } },
+    { key = "ai", name = "Arcane Intellect", ids = { 1459, 432778 } },
+    { key = "bshout", name = "Battle Shout", ids = { 6673 } },
+    { key = "skyfury", name = "Skyfury", ids = { 462854 } },
+    { key = "bronze", name = "Blessing of the Bronze", ids = {
+        381732, 381741, 381746, 381748, 381749, 381750, 381751,
+        381752, 381753, 381754, 381756, 381757, 381758 } },
+}
+
+local FOREVER_RAID_BUFFS = {
+    { key = "ai", name = "Arcane Intellect & Brilliance", short = "Arcane Intellect", ids = {
+        1459, 1460, 1461, 10156, 10157, 364161, 23028 } },
+    { key = "fort", name = "Power Word & Prayer of Fortitude", short = "Power Word: Fortitude", ids = {
+        1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564, 450086 } },
+    { key = "spirit", name = "Divine Spirit & Prayer of Spirit", short = "Divine Spirit", ids = {
+        14752, 14818, 14819, 27841, 27681 } },
+    { key = "motw", name = "Mark & Gift of the Wild", short = "Mark of the Wild", ids = {
+        1126, 5232, 6756, 5234, 8907, 9884, 9885, 364163, 1291335, 1310503,
+        21849, 21850 } },
+    { key = "might", name = "Blessing of Might", ids = {
+        19740, 19834, 19835, 19836, 19837, 19838, 25291, 25782, 25916 } },
+    { key = "wisdom", name = "Blessing of Wisdom", ids = {
+        19742, 19850, 19852, 19853, 19854, 25290, 25894, 25918 } },
+    { key = "kings", name = "Blessing of Kings", ids = { 20217, 25898 } },
+    { key = "salvation", name = "Blessing of Salvation", ids = { 1038, 25895 } },
+    { key = "light", name = "Blessing of Light", ids = { 19977, 19978, 19979, 25890 } },
+    { key = "bshout", name = "Battle Shout", ids = {
+        6673, 5242, 6192, 11549, 11550, 11551, 25289 } },
+    { key = "shadowprot", name = "Shadow Protection", ids = {
+        976, 10957, 10958, 27683 } },
+}
+
+-- The raid buff groups for this client: { key, name, short, ids }.
+function compactauras:GetRaidBuffs()
+    return UberUI.util.IsForeverClient() and FOREVER_RAID_BUFFS or RETAIL_RAID_BUFFS
+end
+
+local function RaidBuffShown(group)
+    return uuidb and uuidb.general and uuidb.general["compactshowraidbuff_" .. group.key] == true
+end
+
+-- The excluded spell IDs and a key for what's in them (nil when none).
+local function RaidBuffExclusions()
+    local ids, keys = {}, {}
+    for _, group in ipairs(compactauras:GetRaidBuffs()) do
+        if not RaidBuffShown(group) then
+            keys[#keys + 1] = group.key
+            for _, id in ipairs(group.ids) do ids[id] = true end
+        end
+    end
+    if #keys == 0 then return nil, "" end
+    return ids, table.concat(keys, ",")
+end
+
+local function BuffCandidateFilters()
+    local ids, key = RaidBuffExclusions()
+    return {
+        processedAuraType = AuraUtil.AuraUpdateChangedType.Buff,
+        excludeSpellIDs = ids,
+    }, key
+end
+
 local function MaxDebuffs()
     local n = tonumber(uuidb and uuidb.general and uuidb.general.compactmaxdebuffs) or MAX_DEBUFFS_DEFAULT
     return Clamp(math.floor(n + 0.5), MAX_DEBUFFS_MIN, MAX_DEBUFFS_MAX)
@@ -341,9 +414,11 @@ local function ApplyMaxDebuffs(container)
     end
 end
 
--- Buffs: ProcessAura's "Buff" (Blizzard's ShouldDisplayBuff).
+-- Buffs: ProcessAura's "Buff" (Blizzard's ShouldDisplayBuff), minus the raid
+-- buffs when Hide Raid Buffs is on.
 local function BuildBuffs(frame, metrics)
-    return aurakit.BuildGroupedAuraContainer({
+    local filters, exclusionKey = BuffCandidateFilters()
+    local container = aurakit.BuildGroupedAuraContainer({
         parentFrame = frame,
         frameLevelBonus = 20,
         spacing = AURA_SPACING,
@@ -355,10 +430,21 @@ local function BuildBuffs(frame, metrics)
             {
                 key = "buffs", filter = "HELPFUL", isBuff = true,
                 size = metrics.buffSize, maxFrameCount = MAX_BUFFS,
-                candidateFilters = { processedAuraType = AuraUtil.AuraUpdateChangedType.Buff },
+                candidateFilters = filters,
             },
         },
     })
+    if container then container.uuRaidBuffExclusions = exclusionKey end
+    return container
+end
+
+local function ApplyRaidBuffFilter(container)
+    if not (container and container.SetAuraGroupCandidateFilters) then return end
+    local filters, exclusionKey = BuffCandidateFilters()
+    if container.uuRaidBuffExclusions == exclusionKey then return end
+    if pcall(container.SetAuraGroupCandidateFilters, container, "buffs", filters) then
+        container.uuRaidBuffExclusions = exclusionKey
+    end
 end
 
 -- Big Defensive: one centered icon, Blizzard's BigDefensive sort, buff style.
@@ -441,6 +527,7 @@ local function UpdateFrame(frame)
     if state.buffs then
         if not inCombat then
             aurakit.SetGroupedContainerSizes(state.buffs, { buffs = metrics.buffSize }, StyleFn)
+            ApplyRaidBuffFilter(state.buffs)
             PlaceContainer(state.buffs, frame, layouts.buffs, LineSize(metrics.buffSize, layouts.buffs.perRow))
         end
         apply(state.buffs, BuffsEnabled())
