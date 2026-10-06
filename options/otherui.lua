@@ -1,12 +1,23 @@
 --[[--------------------------------------------------------------------
 	Uber UI options -- Other UI page: Action Bars, Damage Meters,
-	Swing Timers, Camera (WoW Forever), Minimap
+	Swing Timers (WoW Forever), Cursor Ring, Misc (Chat, Minimap,
+	Camera on WoW Forever)
 ----------------------------------------------------------------------]]
 
 local addon, ns = ...
 local opt = ns.options
 
 function opt.BuildOtherUI(page)
+    -- Indented under `parent`, enabled by `isEnabled`, hidden unless `isShown`.
+    local function Nested(init, parent, isEnabled, isShown)
+        opt.DependsOn(init, parent, isEnabled);
+        if isShown then opt.ShowWhen(init, isShown) end
+        return init;
+    end
+
+    ---------------------------------------------------------------------------
+    -- Action Bars
+    ---------------------------------------------------------------------------
     opt.Header(page, "Action Bars");
 
     opt.AddCheckbox(page, {
@@ -23,6 +34,9 @@ function opt.BuildOtherUI(page)
         onChange = function() UberUI.actionbars:Color() end,
     });
 
+    ---------------------------------------------------------------------------
+    -- Damage Meters
+    ---------------------------------------------------------------------------
     if DamageMeterSessionWindowMixin then
         opt.Header(page, "Damage Meters");
 
@@ -30,14 +44,14 @@ function opt.BuildOtherUI(page)
             if UberUI.damageMeter then UberUI.damageMeter:ForceTexture() end
         end
 
-        opt.AddCheckbox(page, {
+        local bgInit = opt.AddCheckbox(page, {
             variable = "dmBackground", name = "Show Background",
             tooltip = "Show/Hide damage meter background",
             db = "damagemeters", field = "background", default = false,
             onChange = RefreshDamageMeter,
         });
 
-        opt.AddSlider(page, {
+        Nested(opt.AddSlider(page, {
             variable = "dmAlpha", name = "Background Alpha",
             tooltip = "Set damage meter background alpha",
             db = "damagemeters", field = "alpha", default = 50,
@@ -50,7 +64,7 @@ function opt.BuildOtherUI(page)
             end,
             set = function(value) uuidb.damagemeters.alpha = value / 100 end,
             onChange = RefreshDamageMeter,
-        });
+        }), bgInit, function() return uuidb.damagemeters and uuidb.damagemeters.background == true end);
 
         opt.AddCheckbox(page, {
             variable = "dmHideOverlay", name = "Hide Overlay",
@@ -77,7 +91,9 @@ function opt.BuildOtherUI(page)
         });
     end
 
-    -- WoW Forever only: retail has no native swing timer.
+    ---------------------------------------------------------------------------
+    -- Swing Timers (WoW Forever only: retail has no native swing timer)
+    ---------------------------------------------------------------------------
     if C_SwingTimer then
         opt.Header(page, "Swing Timers");
 
@@ -107,15 +123,17 @@ function opt.BuildOtherUI(page)
             get = function() return (uuidb.general and uuidb.general.swingtimersquareborder) and "square" or "rounded" end,
             set = function(value) uuidb.general.swingtimersquareborder = (value == "square") end,
             onChange = RefreshSwingTimers,
+            repair = true,
         });
+        local function SquareSwing() return uuidb.general and uuidb.general.swingtimersquareborder end
 
-        opt.DependsOn(opt.AddSlider(page, {
+        Nested(opt.AddSlider(page, {
             variable = "SwingTimerBorderThickness", name = "Border Thickness",
             tooltip = "Thickness of the square swing timer border, in screen pixels.",
             db = "general", field = "swingtimersquareborder_thickness", default = 1,
             min = 1, max = 4, step = 1,
             onChange = RefreshSwingTimers,
-        }), swingShapeInit, function() return uuidb.general and uuidb.general.swingtimersquareborder end);
+        }), swingShapeInit, SquareSwing, SquareSwing);
 
         opt.AddBarTextureSetting(page, {
             dbTable = uuidb.general,
@@ -133,64 +151,40 @@ function opt.BuildOtherUI(page)
             db = "general", field = "swingtimerbarcolor", default = "none",
             values = { { "none", "None" }, { "custom", "Custom" }, { "class", "Class" } },
             onChange = RefreshSwingTimers,
+            repair = true,
         });
+        local function CustomSwingColor() return uuidb.general and uuidb.general.swingtimerbarcolor == "custom" end
 
         for _, c in ipairs({
             { "swingtimermainhandcolor", "SwingTimerMainHandColor", "Main Hand Color", "ffffc21a" },
             { "swingtimeroffhandcolor",  "SwingTimerOffHandColor",  "Off Hand Color",  "ff3d9eff" },
             { "swingtimerrangedcolor",   "SwingTimerRangedColor",   "Ranged Color",    "ff5cd65c" },
         }) do
-            opt.DependsOn(opt.AddColorSwatch(page, {
+            Nested(opt.AddColorSwatch(page, {
                 variable = c[2], name = c[3],
                 tooltip = "Fill color of this swing timer bar when Bar Color is Custom.",
                 db = "general", field = c[1], default = c[4],
                 onChange = RefreshSwingTimers,
-            }), swingColorInit, function() return uuidb.general and uuidb.general.swingtimerbarcolor == "custom" end);
+            }), swingColorInit, CustomSwingColor, CustomSwingColor);
         end
     end
 
-    if UberUI.util.IsForeverClient() then
-        opt.Header(page, "Camera");
-
-        local function ApplyCamera()
-            if UberUI.camera then UberUI.camera:Apply() end
-        end
-
-        local zoomInit = opt.AddCheckbox(page, {
-            variable = "CameraMaxZoom", name = "Extended Camera Distance",
-            tooltip = "Let the camera zoom out farther than Blizzard's Max Camera Distance slider allows (it stops at 2.0, 30 yards).\n\nWhen off, your previous camera distance setting is restored.",
-            db = "general", field = "cameramaxzoom", default = false,
-            onChange = ApplyCamera,
-        });
-
-        opt.DependsOn(opt.AddSlider(page, {
-            variable = "CameraMaxZoomFactor", name = "Max Camera Distance",
-            tooltip = "How far the camera can zoom out, 15 yards per step of 1.0: 2.0 (30 yards) is the farthest Blizzard's own slider goes, 2.6 (39 yards) is retail's maximum, and 3.4 reaches the game's 50-yard limit.",
-            db = "general", field = "cameramaxzoomfactor", default = 3.4,
-            min = 1.0, max = 3.4, step = 0.1,
-            format = function(value)
-                local yards = UberUI.camera and UberUI.camera.FactorToYards(value) or value * 15
-                return string.format("%.1f (%d yd)", value, math.floor(yards + 0.5))
-            end,
-            onChange = ApplyCamera,
-        }), zoomInit, function() return uuidb.general and uuidb.general.cameramaxzoom == true end);
-    end
-
-    opt.Header(page, "Minimap");
-
-    opt.AddCheckbox(page, {
-        variable = "DarkenAddonMinimapButtons", name = "Darken Addon Minimap Buttons",
-        tooltip = "Darken the ring around other addons' minimap buttons to match the minimap border. The addons' own icons keep their colors.\n\nButtons that use their own custom ring art are left alone.",
-        db = "general", field = "darkenaddonminimapbuttons", default = true,
-        onChange = function() if UberUI.minimap then UberUI.minimap.DarkenAddonButtons() end end,
-    });
-
+    ---------------------------------------------------------------------------
+    -- Cursor Ring
+    ---------------------------------------------------------------------------
     opt.Header(page, "Cursor Ring");
 
     local function RefreshCursorRing()
         if UberUI.cursorring then UberUI.cursorring:Refresh() end
     end
     local function RingOn() return uuidb.general and uuidb.general.cursorring == true end
+
+    local ringInit = opt.AddCheckbox(page, {
+        variable = "CursorRing", name = "Show Cursor Ring",
+        tooltip = "Show a ring around your mouse cursor, to keep track of it in busy fights.",
+        db = "general", field = "cursorring", default = false,
+        onChange = RefreshCursorRing,
+    });
 
     opt.AddPreview(page, {
         name = "Preview",
@@ -202,14 +196,7 @@ function opt.BuildOtherUI(page)
         end,
     });
 
-    local ringInit = opt.AddCheckbox(page, {
-        variable = "CursorRing", name = "Show Cursor Ring",
-        tooltip = "Show a ring around your mouse cursor, to keep track of it in busy fights.",
-        db = "general", field = "cursorring", default = false,
-        onChange = RefreshCursorRing,
-    });
-
-    opt.DependsOn(opt.AddDropdown(page, {
+    Nested(opt.AddDropdown(page, {
         variable = "CursorRingStyle", name = "Style",
         tooltip = "Normal or Thin ring.",
         default = "normal",
@@ -219,7 +206,7 @@ function opt.BuildOtherUI(page)
         onChange = RefreshCursorRing,
     }), ringInit, RingOn);
 
-    opt.DependsOn(opt.AddSlider(page, {
+    Nested(opt.AddSlider(page, {
         variable = "CursorRingSize", name = "Size",
         tooltip = "Size of the cursor ring.",
         db = "general", field = "cursorringsize", default = 30,
@@ -227,44 +214,53 @@ function opt.BuildOtherUI(page)
         onChange = RefreshCursorRing,
     }), ringInit, RingOn);
 
-    local ringClassInit = opt.AddCheckbox(page, {
+    local ringClassInit = Nested(opt.AddCheckbox(page, {
         variable = "CursorRingClassColor", name = "Use Class Color",
         tooltip = "Color the cursor ring in your character's class color instead of the color below.",
         db = "general", field = "cursorringclasscolor", default = true,
         onChange = RefreshCursorRing,
-    });
-    opt.DependsOn(ringClassInit, ringInit, RingOn);
+    }), ringInit, RingOn);
 
-    opt.DependsOn(opt.AddColorSwatch(page, {
+    local function OwnColor() return uuidb.general.cursorringclasscolor == false end
+    Nested(opt.AddColorSwatch(page, {
         variable = "CursorRingColor", name = "Color",
         tooltip = "Color of the cursor ring, unless Use Class Color is on.",
         db = "general", field = "cursorringcolor", default = "ffffffff",
         onChange = RefreshCursorRing,
-    }), ringClassInit, function() return RingOn() and uuidb.general.cursorringclasscolor == false end);
+    }), ringClassInit, function() return RingOn() and OwnColor() end);
 
-    opt.DependsOn(opt.AddCheckbox(page, {
+    Nested(opt.AddCheckbox(page, {
         variable = "CursorRingCombatOnly", name = "In Combat Only",
         tooltip = "Only show the cursor ring while you're in combat.",
         db = "general", field = "cursorringcombatonly", default = false,
         onChange = RefreshCursorRing,
     }), ringInit, RingOn);
 
-    opt.DependsOn(opt.AddCheckbox(page, {
+    Nested(opt.AddCheckbox(page, {
         variable = "CursorRingWhileHidden", name = "Show While Cursor Is Hidden",
         tooltip = "Keep the ring on screen while the cursor is hidden, like when you hold a mouse button to turn the camera. It stays where the cursor was.",
         db = "general", field = "cursorringwhilehidden", default = true,
         onChange = RefreshCursorRing,
     }), ringInit, RingOn);
 
-    local gcdInit = opt.AddCheckbox(page, {
-        variable = "CursorRingGCD", name = "Cursor Ring: GCD Ring",
+    if UberUI.util.IsForeverClient() then
+        Nested(opt.AddCheckbox(page, {
+            variable = "CursorRingHideGamepad", name = "Hide in Gamepad UI",
+            tooltip = "Hide the cursor ring while the gamepad interface is active, and show it again when you switch back to mouse and keyboard.",
+            db = "general", field = "cursorringhidegamepad", default = true,
+            onChange = RefreshCursorRing,
+        }), ringInit, RingOn);
+    end
+
+    local gcdInit = Nested(opt.AddCheckbox(page, {
+        variable = "CursorRingGCD", name = "GCD Ring",
         tooltip = "A ring just inside the cursor ring that sweeps away as your global cooldown runs.",
         db = "general", field = "cursorringgcd", default = false,
         onChange = RefreshCursorRing,
-    });
-    opt.DependsOn(gcdInit, ringInit, RingOn);
+    }), ringInit, RingOn);
+    local function GCDOn() return RingOn() and uuidb.general.cursorringgcd == true end
 
-    opt.DependsOn(opt.AddDropdown(page, {
+    Nested(opt.AddDropdown(page, {
         variable = "CursorRingGCDStyle", name = "GCD Ring Style",
         tooltip = "Normal or Thin GCD ring, separately from the cursor ring.",
         default = "normal",
@@ -272,12 +268,56 @@ function opt.BuildOtherUI(page)
         get = function() return uuidb.general.cursorringgcdstyle == "thin" and "thin" or "normal" end,
         set = function(value) uuidb.general.cursorringgcdstyle = value end,
         onChange = RefreshCursorRing,
-    }), gcdInit, function() return RingOn() and uuidb.general.cursorringgcd == true end);
+    }), gcdInit, GCDOn);
 
-    opt.DependsOn(opt.AddColorSwatch(page, {
+    Nested(opt.AddColorSwatch(page, {
         variable = "CursorRingGCDColor", name = "GCD Ring Color",
         tooltip = "Color of the GCD ring.",
         db = "general", field = "cursorringgcdcolor", default = "ffffffff",
         onChange = RefreshCursorRing,
-    }), gcdInit, function() return RingOn() and uuidb.general.cursorringgcd == true end);
+    }), gcdInit, GCDOn);
+
+    ---------------------------------------------------------------------------
+    -- Misc
+    ---------------------------------------------------------------------------
+    opt.Header(page, "Misc");
+
+    opt.AddCheckbox(page, {
+        variable = "ChatCopyButton", name = "Copy Chat Button",
+        tooltip = "A small note button in the top-right corner of each chat window (faint until you hover it). Click it to open that window's chat history in a box you can copy from, in chat's colors. Copying gives plain text. /uucopychat does the same for the current tab, and /uucopychat 50 copies just the last 50 lines.\n\nMessages the game hides from addons (in combat or instances) show as a placeholder.",
+        db = "general", field = "chatcopybutton", default = true,
+        onChange = function() if UberUI.chatcopy then UberUI.chatcopy:Refresh() end end,
+    });
+
+    opt.AddCheckbox(page, {
+        variable = "DarkenAddonMinimapButtons", name = "Darken Addon Minimap Buttons",
+        tooltip = "Darken the ring around other addons' minimap buttons to match the minimap border. The addons' own icons keep their colors.\n\nButtons that use their own custom ring art are left alone.",
+        db = "general", field = "darkenaddonminimapbuttons", default = true,
+        onChange = function() if UberUI.minimap then UberUI.minimap.DarkenAddonButtons() end end,
+    });
+
+    if UberUI.util.IsForeverClient() then
+        local function ApplyCamera()
+            if UberUI.camera then UberUI.camera:Apply() end
+        end
+
+        local zoomInit = opt.AddCheckbox(page, {
+            variable = "CameraMaxZoom", name = "Extended Camera Distance",
+            tooltip = "Let the camera zoom out up to the game's 50-yard limit (3.4), set with the Max Camera Distance slider below. Blizzard's own Max Camera Distance slider stops at 2.0 (30 yards).\n\nWhen off, your previous camera distance setting is restored.",
+            db = "general", field = "cameramaxzoom", default = false,
+            onChange = ApplyCamera,
+        });
+
+        Nested(opt.AddSlider(page, {
+            variable = "CameraMaxZoomFactor", name = "Max Camera Distance",
+            tooltip = "How far the camera can zoom out, 15 yards per step of 1.0: 2.0 (30 yards) is the farthest Blizzard's own slider goes, 2.6 (39 yards) is retail's maximum, and 3.4 reaches the game's 50-yard limit.",
+            db = "general", field = "cameramaxzoomfactor", default = 3.4,
+            min = 1.0, max = 3.4, step = 0.1,
+            format = function(value)
+                local yards = UberUI.camera and UberUI.camera.FactorToYards(value) or value * 15
+                return string.format("%.1f (%d yd)", value, math.floor(yards + 0.5))
+            end,
+            onChange = ApplyCamera,
+        }), zoomInit, function() return uuidb.general and uuidb.general.cameramaxzoom == true end);
+    end
 end

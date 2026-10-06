@@ -1440,6 +1440,7 @@ function aurakit.StyleCastBarIcon(spellbar, loc, enabled)
 
     if not enabled then
         if host then
+            host.uuEnabled = false
             host:Hide()
             pcall(icon.SetTexCoord, icon, 0, 1, 0, 1)
         end
@@ -1485,7 +1486,19 @@ function aurakit.StyleCastBarIcon(spellbar, loc, enabled)
         host.ring:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
         host.ring:Show()
     end
+    host.uuEnabled = true
     host:Show()
+end
+
+-- The border is a frame on the cast bar, not on the icon. For bars whose
+-- icon comes and goes (player-style bars hide it per cast and per Edit
+-- Mode), the caller re-syncs the border to the icon's own visibility.
+function aurakit.SyncCastBarIconBorder(spellbar)
+    local host = castIconBorders[spellbar]
+    local icon = spellbar and spellbar.Icon
+    if not (host and icon) then return end
+    local ok, shown = pcall(icon.IsShown, icon)
+    host:SetShown(host.uuEnabled == true and ok and shown == true)
 end
 
 -- Highlight visuals (nameplate aura and Cooldown Manager pandemic). Styles

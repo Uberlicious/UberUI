@@ -79,12 +79,23 @@ local function NewGCD(parent)
     return cd
 end
 
--- Shown while enabled, and only in combat when "In Combat Only" is on.
+-- WoW Forever's gamepad UI (Blizzard's InputUtil.IsGamepadUIEnabled): no
+-- mouse cursor there to ring. Retail has no C_InputInterfaceStyle.
+local function GamepadUI()
+    local types = Enum and Enum.InputDeviceInterfaceType
+    if not (C_InputInterfaceStyle and C_InputInterfaceStyle.GetCurrentStyle and types) then return false end
+    local ok, style = pcall(C_InputInterfaceStyle.GetCurrentStyle)
+    return ok and style == types.Gamepad
+end
+
+-- Shown while enabled, and only in combat when "In Combat Only" is on;
+-- hidden in the gamepad UI when "Hide in Gamepad UI" is on.
 -- While the mouse turns the camera the cursor is hidden: the ring stays where
 -- the cursor was ("Show While Cursor Is Hidden", default) or hides with it.
 local function ShouldShow()
     if not Enabled() then return false end
     if G().cursorringcombatonly and not inCombat then return false end
+    if G().cursorringhidegamepad ~= false and GamepadUI() then return false end
     return true
 end
 
@@ -191,6 +202,8 @@ local function Create()
             pcall(StopIfNoGCD)
         elseif event == "SPELL_UPDATE_COOLDOWN" then
             StartGCD()
+        elseif event == "INPUT_DEVICE_INTERFACE_TRANSITION" then
+            root:SetShown(ShouldShow())
         else
             inCombat = (event == "PLAYER_REGEN_DISABLED")
             root:SetShown(ShouldShow())
@@ -216,6 +229,10 @@ function cursorring:Refresh()
 
     events:RegisterEvent("PLAYER_REGEN_DISABLED")
     events:RegisterEvent("PLAYER_REGEN_ENABLED")
+    if C_InputInterfaceStyle then
+        -- Forever only; pcall in case the event name differs on a client.
+        pcall(events.RegisterEvent, events, "INPUT_DEVICE_INTERFACE_TRANSITION")
+    end
     if g.cursorringgcd then
         events:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
         events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")

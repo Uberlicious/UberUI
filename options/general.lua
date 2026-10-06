@@ -28,8 +28,6 @@ function opt.BuildGeneral(page)
         onChange = function() UberUI.misc:AllFramesColor() end,
     });
 
-    opt.Header(page, "Health Bars");
-
     opt.AddCheckbox(page, {
         variable = "HostilityColor", name = "Color By Hostility",
         tooltip = "Color all healthbars according to hostility \n\n|cffff0000Enemy\n|cff00ff00Friendly\n|cffffff00Neutral\n\n|cffff0000This setting will be overwritten in respective frames that have class coloring enabled when targeting a player",
@@ -63,7 +61,7 @@ function opt.BuildGeneral(page)
         ddOnChange = function() UberUI.misc:AllFramesHealthManaTexture() end,
     });
 
-    opt.Header(page, "Square Aura Borders");
+    opt.Header(page, "Aura Borders");
 
     opt.AddCheckbox(page, {
         variable = "squareDispelBorderThicker", name = "Thicker Dispel/Enchant Borders",
@@ -77,8 +75,38 @@ function opt.BuildGeneral(page)
         end,
     });
 
+    -- Shared by every location's duration text (aurakit.DurationSettings);
+    -- each location's own White Outlined Text replaces them.
+    opt.Header(page, "Aura Duration Text Colors");
+
+    local colorNote = "\n\nUsed wherever White Outlined Text is off (Target, Focus, Raid & Group Frames, Nameplates).";
+
+    opt.AddColorSwatch(page, {
+        variable = "nameplateDurationColor", name = "Duration Color",
+        tooltip = "Color of the countdown number on auras." .. colorNote,
+        db = "general", field = "nameplatedurationcolor", default = "ffffffff",
+        onChange = opt.RefreshAllAuras,
+    });
+
+    opt.AddColorSwatch(page, {
+        variable = "nameplateDurationExpiringColor", name = "Expiring Duration Color",
+        tooltip = "Color of the countdown number once an aura has less time left than the Expiring Duration Threshold below." .. colorNote,
+        db = "general", field = "nameplatedurationexpiringcolor", default = "ffff3333",
+        onChange = opt.RefreshAllAuras,
+    });
+
+    opt.AddSlider(page, {
+        variable = "nameplateDurationThreshold", name = "Expiring Duration Threshold",
+        tooltip = "Seconds left at which an aura's countdown switches to the Expiring Duration Color." .. colorNote,
+        db = "general", field = "nameplatedurationthreshold", default = 5,
+        min = 1, max = 10, step = 1,
+        format = function(value) return string.format("%d s", value) end,
+        onChange = opt.RefreshAllAuras,
+    });
+
     -- One-time copy of aura settings into every location (see
     -- opt.AddAllAurasOptions); per-location settings stay on their own pages.
-    opt.Header(page, "All Auras  |cffff4040(overwrites every frame's aura settings)|r");
+    -- Collapsed by default: picking a value overwrites every location.
+    opt.Section(page, "All Auras  |cffff4040(overwrites every frame's aura settings)|r", "general_allauras");
     opt.AddAllAurasOptions(page);
 end

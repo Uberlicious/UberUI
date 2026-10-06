@@ -31,6 +31,7 @@ function opt.BuildArena(page)
         loc = "arena", label = "Arena", suffix = "Arena",
         buffKey = "aurastyle_arenabuffs", debuffKey = "aurastyle_arenadebuffs",
         refresh = RefreshArenaAuraStyle,
+        styleHeader = "DR & CC Trackers",
         zoomTooltip = "Zoom the arena DR and CC tracker icons slightly to crop off Blizzard's built-in icon edge.",
         buffName = "DR Tracker Border",
         buffTooltip = "Border on the Diminishing Returns tracker icons. \"None\" is Blizzard's look (no border).",

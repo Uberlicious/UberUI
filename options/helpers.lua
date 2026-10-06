@@ -13,9 +13,100 @@ local function commitValue()
 end
 opt.commitValue = commitValue
 
+-- Layout conventions for every page:
+--  * opt.Header: a plain section title. opt.Section: a collapsible one (its
+--    rows hide while it's collapsed); either ends the previous section.
+--    opt.SubHeader: a title inside the current collapsible section.
+--  * A setting that only matters while a toggle/choice is on is indented
+--    under it with opt.DependsOn. Under an on/off checkbox it's greyed out
+--    while that's off; under a choice (dropdown), rows that don't apply to
+--    the chosen option are also hidden with opt.ShowWhen (e.g. Square-only
+--    rows while the shape is Rounded). A dropdown that hides rows passes
+--    `repair = true` so the list redraws when it changes.
+
+-- Re-evaluates every row's shown state on the open settings page.
+function opt.RepairDisplay()
+    if SettingsInbound and SettingsInbound.RepairDisplay then
+        pcall(SettingsInbound.RepairDisplay);
+    end
+end
+
+-- While the settings search box has text, collapsed rows still match (the
+-- search only looks at shown rows).
+local function SearchActive()
+    local box = SettingsPanel and SettingsPanel.SearchBox;
+    return box and box.HasText and box:HasText() or false;
+end
+
+-- Rows added while a collapsible section is current follow its state.
+local function Track(page, initializer)
+    local section = page.section;
+    if initializer and section and initializer.AddShownPredicate then
+        initializer:AddShownPredicate(function() return section.expanded or SearchActive() end);
+    end
+    return initializer;
+end
+opt.Track = Track
+
+-- Hides a row while fn() is false (it's still indented under its parent).
+function opt.ShowWhen(initializer, fn)
+    if initializer and initializer.AddShownPredicate then
+        initializer:AddShownPredicate(function() return fn() and true or false end);
+    end
+    return initializer;
+end
+
 -- A page is { category, layout }. Pages are created in register.lua.
 function opt.Header(page, text)
+    page.section = nil;
     page.layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text));
+end
+
+-- A title row inside the current collapsible section (hidden with it).
+function opt.SubHeader(page, text)
+    page.layout:AddInitializer(Track(page, CreateSettingsListSectionHeaderInitializer(text)));
+end
+
+-- Collapsible section: Blizzard's expand bar (as on the Keybindings page).
+-- key: saved expanded state (uuidb.general.optsections[key]); expanded:
+-- the state before the user first touches it.
+local SECTION_HEIGHT = 30
+function opt.Section(page, title, key, expanded)
+    local states = uuidb.general.optsections or {};
+    uuidb.general.optsections = states;
+    local initializer = CreateSettingsExpandableSectionInitializer(title);
+    local data = initializer.data;
+    if states[key] == nil then
+        data.expanded = expanded and true or false;
+    else
+        data.expanded = states[key] and true or false;
+    end
+    initializer.GetExtent = function() return SECTION_HEIGHT end;
+
+    local function UpdateArrow(frame, isExpanded)
+        local right = frame.Button and frame.Button.Right;
+        if right then
+            right:SetAtlas(isExpanded and "Options_ListExpand_Right_Expanded" or "Options_ListExpand_Right", true);
+        end
+    end
+    local baseInit = initializer.InitFrame;
+    initializer.InitFrame = function(self, frame)
+        -- The template's mixin leaves these to its users; set per frame,
+        -- since the list pools its rows.
+        frame.CalculateHeight = function() return SECTION_HEIGHT end;
+        frame.OnExpandedChanged = function(_, isExpanded)
+            states[key] = isExpanded and true or false;
+            UpdateArrow(frame, isExpanded);
+            opt.RepairDisplay();
+        end;
+        baseInit(self, frame);
+        frame:SetHeight(SECTION_HEIGHT);
+        UpdateArrow(frame, data.expanded);
+    end;
+
+    page.layout:AddInitializer(initializer);
+    page.section = data;
+    return initializer;
 end
 
 -- Registers a setting (RegisterAddOnSetting with GetValue/SetValue/Commit
@@ -40,6 +131,8 @@ local function RegisterSetting(page, o, varType)
         end
         if o.onChange then o.onChange(value) end
         opt.RefreshPreviews();
+        -- Rows shown or hidden by this setting (opt.ShowWhen).
+        if o.repair then opt.RepairDisplay() end
         -- Replacing SetValue skips its value-changed event, which dependent
         -- rows re-check their greyed-out state on, so fire it ourselves.
         if self and self.TriggerValueChanged then
@@ -55,7 +148,7 @@ end
 
 function opt.AddCheckbox(page, o)
     local setting = RegisterSetting(page, o, Settings.VarType.Boolean);
-    return Settings.CreateCheckbox(page.category, setting, o.tooltip), setting;
+    return Track(page, Settings.CreateCheckbox(page.category, setting, o.tooltip)), setting;
 end
 
 -- o additionally: min, max, step, format(value) -> label text
@@ -63,13 +156,13 @@ function opt.AddSlider(page, o)
     local setting = RegisterSetting(page, o, Settings.VarType.Number);
     local options = Settings.CreateSliderOptions(o.min, o.max, o.step);
     options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, o.format);
-    return Settings.CreateSlider(page.category, setting, options, o.tooltip), setting;
+    return Track(page, Settings.CreateSlider(page.category, setting, options, o.tooltip)), setting;
 end
 
 -- Color swatch; stored as an "AARRGGBB" hex string.
 function opt.AddColorSwatch(page, o)
     local setting = RegisterSetting(page, o, Settings.VarType.String);
-    local initializer = Settings.CreateColorSwatchInitializer(setting, nil, o.tooltip);
+    local initializer = Track(page, Settings.CreateColorSwatchInitializer(setting, nil, o.tooltip));
     page.layout:AddInitializer(initializer);
     return initializer, setting;
 end
@@ -139,7 +232,7 @@ function opt.AddPreview(page, o)
     initializer.Resetter = function(self, frame)
         if preview and preview:GetParent() == frame then preview:Hide() end
     end
-    page.layout:AddInitializer(initializer);
+    page.layout:AddInitializer(Track(page, initializer));
     return initializer;
 end
 
@@ -158,7 +251,7 @@ function opt.AddDropdown(page, o)
         end
         return container:GetData();
     end
-    local initializer = Settings.CreateDropdownInitializer(setting, GetOptions, o.tooltip);
+    local initializer = Track(page, Settings.CreateDropdownInitializer(setting, GetOptions, o.tooltip));
     page.layout:AddInitializer(initializer);
     return initializer, setting;
 end
@@ -227,8 +320,8 @@ function opt.AddBarTextureSetting(page, opts)
 
     local cbdd = CreateSettingsCheckboxDropdownInitializer(cbsetting, opts.cbName, opts.cbTooltip, ddsetting,
         GetBarTextureOptionsWithTextures, opts.ddName, opts.ddTooltip);
-    page.layout:AddInitializer(cbdd);
-    return cbsetting, ddsetting;
+    page.layout:AddInitializer(Track(page, cbdd));
+    return cbsetting, ddsetting, cbdd;
 end
 
 -- Per-location aura rows -------------------------------------------------------
@@ -260,16 +353,25 @@ end
 -- refresh(), buffName/debuffName, buffNative/debuffNative (label of the
 -- Blizzard choice), buffTooltip/debuffTooltip, zoomTooltip, shapeTooltip,
 -- positionDetail, squareVarSuffix ("" for Player's original name).
+-- Layout (all optional): styleHeader / textHeader (opt.SubHeader titles
+-- before the look rows and the text rows), afterStyle(page) (more look rows,
+-- e.g. Highlight Purgeable Buffs), durationToggle (see AddAuraTextOptions),
+-- parent / parentOn (every row indented under an on/off setting, e.g.
+-- Uber UI Nameplate Auras; text rows too, unless textParent is given).
 function opt.AddAuraOptions(page, o)
+    if o.parent and not o.textParent then
+        o.textParent, o.textParentOn = o.parent, o.parentOn;
+    end
     local SBkeys = UberUI.squareborders.Keys(o.loc);
     local refresh = o.refresh;
     local BUFF_DEFAULT, DEBUFF_DEFAULT = "both", "zoom";
 
+    if o.styleHeader then opt.SubHeader(page, o.styleHeader) end
     if opt.AddAuraPreview then opt.AddAuraPreview(page, o) end
 
     local handBackNote = "\n\nWith Zoom off and the Blizzard border choice, Uber UI leaves these auras entirely to Blizzard.";
 
-    opt.AddCheckbox(page, {
+    local zoomInit = opt.AddCheckbox(page, {
         variable = "auraZoom" .. o.suffix, name = "Zoom Icons",
         tooltip = o.zoomTooltip or ("Zoom " .. o.label .. " aura icons slightly to crop off Blizzard's built-in icon edge." .. handBackNote),
         default = true,
@@ -286,7 +388,7 @@ function opt.AddAuraOptions(page, o)
         onChange = refresh,
     });
 
-    opt.AddDropdown(page, {
+    local buffInit = opt.AddDropdown(page, {
         variable = "auraBuffBorder" .. o.suffix, name = o.buffName or "Buff Border",
         tooltip = o.buffTooltip or ("Border on " .. o.label .. " buffs. Blizzard doesn't draw one on buffs, so \"" .. (o.buffNative or "None") .. "\" is its default look." .. handBackNote),
         default = "dark",
@@ -299,7 +401,7 @@ function opt.AddAuraOptions(page, o)
         onChange = refresh,
     });
 
-    opt.AddDropdown(page, {
+    local debuffInit = opt.AddDropdown(page, {
         variable = "auraDebuffBorder" .. o.suffix, name = o.debuffName or "Debuff Border",
         tooltip = o.debuffTooltip or ("Border on " .. o.label .. " debuffs: Blizzard's dispel-type color (Magic, Curse, Disease, Poison, Bleed; red when there's no type), or the darkness color." .. handBackNote),
         default = "blizzard",
@@ -322,19 +424,28 @@ function opt.AddAuraOptions(page, o)
         end,
         set = function(value) uuidb.general[SBkeys[1]] = (value == "square") end,
         onChange = refresh,
+        repair = true,
     });
     local function IsSquare() return uuidb.general and uuidb.general[SBkeys[1]] end
+    if o.parent then
+        for _, init in ipairs({ zoomInit, buffInit, debuffInit, shapeInit }) do
+            opt.DependsOn(init, o.parent, o.parentOn);
+        end
+    end
 
-    opt.DependsOn(opt.AddSlider(page, {
+    -- Square-only: indented under the shape, hidden while it's Rounded.
+    local thicknessInit = opt.AddSlider(page, {
         variable = "squareAuraBorderThickness" .. (o.squareVarSuffix or o.suffix),
         name = "Border Thickness",
         tooltip = "Thickness of the square " .. o.label .. " aura border, in screen pixels.",
         db = "general", field = SBkeys[2], default = 1,
         min = 1, max = 8, step = 1,
         onChange = refresh,
-    }), shapeInit, IsSquare);
+    });
+    opt.DependsOn(thicknessInit, shapeInit, IsSquare);
+    opt.ShowWhen(thicknessInit, IsSquare);
 
-    opt.DependsOn(opt.AddDropdown(page, {
+    local positionInit = opt.AddDropdown(page, {
         variable = "auraBorderPosition" .. o.suffix, name = "Border Position",
         tooltip = "Inside Icon draws the square border over the icon's outer edge, so icons keep their size. Outside Icon draws it around the icon instead." .. (o.positionDetail or ""),
         default = "inside",
@@ -344,8 +455,12 @@ function opt.AddAuraOptions(page, o)
         end,
         set = function(value) uuidb.general[SBkeys[3]] = (value ~= "outside") end,
         onChange = refresh,
-    }), shapeInit, IsSquare);
+    });
+    opt.DependsOn(positionInit, shapeInit, IsSquare);
+    opt.ShowWhen(positionInit, IsSquare);
 
+    if o.afterStyle then o.afterStyle(page) end
+    if o.textHeader then opt.SubHeader(page, o.textHeader) end
     opt.AddAuraTextOptions(page, o);
 end
 
@@ -373,6 +488,9 @@ local function Percent(value) return string.format("%d%%", value) end
 
 -- o: the AddAuraOptions table; o.textParent / o.textParentOn grey the rows
 -- out while the location's auras aren't Uber UI's (nameplates).
+-- o.durationToggle: { variable, name, tooltip, field, default, onChange } --
+-- the location's own duration text on/off (Target, Focus, Raid); it comes
+-- first and the duration rows are indented under it.
 function opt.AddAuraTextOptions(page, o)
     local caps = TEXT_CAPS[o.loc];
     if not caps then return end
@@ -386,12 +504,33 @@ function opt.AddAuraTextOptions(page, o)
         return init;
     end
 
+    local toggle = caps.duration and o.durationToggle;
+    local durationInit;
+    if toggle then
+        durationInit = Gate(opt.AddCheckbox(page, {
+            variable = toggle.variable, name = toggle.name or "Aura Duration Text",
+            tooltip = toggle.tooltip,
+            db = "general", field = toggle.field, default = toggle.default or false,
+            onChange = toggle.onChange or refresh,
+        }));
+    end
+    local function DurationOn()
+        return uuidb.general and uuidb.general[toggle.field] == true;
+    end
+    -- Duration rows: under the location's toggle when it has one.
+    local function UnderDuration(init)
+        if durationInit then
+            opt.DependsOn(init, durationInit, DurationOn);
+            return init;
+        end
+        return Gate(init);
+    end
+
     if caps.duration then
-        Gate(opt.AddSlider(page, {
+        UnderDuration(opt.AddSlider(page, {
             variable = "auraDurationSize" .. o.suffix, name = "Duration Text Size",
             tooltip = "Size of the time-left text on " .. o.label .. " auras, relative to its normal size."
-                .. (o.loc == "player" and "\n\nThe text itself stays Blizzard's (e.g. \"1 m\")." or "")
-                .. ((o.loc == "target" or o.loc == "focus" or o.loc == "compact") and "\n\nOnly shown while Aura Duration Text is on." or ""),
+                .. (o.loc == "player" and "\n\nThe text itself stays Blizzard's (e.g. \"1 m\")." or ""),
             db = "general", field = k .. "durationsize", default = 100,
             min = 50, max = 200, step = 5, format = Percent,
             onChange = refresh,
@@ -409,14 +548,11 @@ function opt.AddAuraTextOptions(page, o)
     end
 
     if caps.duration then
-        local onlyWhenShown = (o.loc == "target" or o.loc == "focus" or o.loc == "compact")
-            and "\n\nOnly shown while Aura Duration Text is on." or "";
-
         -- Player's text is Blizzard's, which already shows every duration.
         if o.loc ~= "player" then
-            Gate(opt.AddCheckbox(page, {
+            UnderDuration(opt.AddCheckbox(page, {
                 variable = "auraOverMinute" .. o.suffix, name = "Show Durations Over a Minute",
-                tooltip = "Keep the time left on " .. o.label .. " auras showing past a minute, as minutes (\"2m\") and hours (\"1h\"). When off, it's whole seconds and only appears in the last minute, like Blizzard's nameplates." .. onlyWhenShown,
+                tooltip = "Keep the time left on " .. o.label .. " auras showing past a minute, as minutes (\"2m\") and hours (\"1h\"). When off, it's whole seconds and only appears in the last minute, like Blizzard's nameplates.",
                 db = "general", field = k .. "overminute", default = o.loc == "compact",
                 onChange = refresh,
             }));
@@ -426,8 +562,7 @@ function opt.AddAuraTextOptions(page, o)
             variable = "auraWhiteText" .. o.suffix, name = "White Outlined Text",
             tooltip = "Time-left text on " .. o.label .. " auras in white with a black outline, instead of "
                 .. (o.loc == "player" and "Blizzard's yellow text (e.g. \"1 m\"). Uses Uber UI's format: whole seconds, then minutes (\"2m\") and hours (\"1h\").\n\nOnly used while Duration Inside Icon is on."
-                    or "the nameplate duration colors (normal and expiring).")
-                .. onlyWhenShown,
+                    or "the nameplate duration colors (normal and expiring)."),
             db = "general", field = k .. "whitetext", default = true,
             onChange = refresh,
         });
@@ -436,7 +571,7 @@ function opt.AddAuraTextOptions(page, o)
                 return uuidb.general and uuidb.general[k .. "centerduration"] == true
             end);
         else
-            Gate(whiteInit);
+            UnderDuration(whiteInit);
         end
     end
 
@@ -502,6 +637,14 @@ local AURA_LOCATIONS = {
     { loc = "nameplate", buffKey = "aurastyle_nameplatebuffs", debuffKey = "aurastyle_nameplatedebuffs",
       refresh = function() if UberUI.nameplateauras then UberUI.nameplateauras:RefreshStyle() end end },
 };
+
+-- Restyles every aura location (settings shared by all of them, e.g. the
+-- duration colors).
+function opt.RefreshAllAuras()
+    for _, L in ipairs(AURA_LOCATIONS) do
+        pcall(L.refresh);
+    end
+end
 
 -- Copies chosen aura parts into every location's settings (a one-time copy,
 -- not a live override). parts: zoom ("on"/"off"), buffborder / debuffborder
@@ -609,5 +752,9 @@ end
 function opt.RefreshPlayerAuras()
     if UberUI.buffsandauras then
         UberUI.buffsandauras:Refresh();
+    end
+    -- The gamepad cast bar icon border follows the Player border shape.
+    if UberUI.playerframes and UberUI.playerframes.StyleGamepadCastBarIcon then
+        UberUI.playerframes:StyleGamepadCastBarIcon();
     end
 end

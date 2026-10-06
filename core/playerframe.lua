@@ -86,6 +86,11 @@ function playerframes:Color()
         end
     end
     
+    -- WoW Forever's gamepad UI has its own player cast bar (same template).
+    if GamepadPlayerCastingBarFrame and GamepadPlayerCastingBarFrame.Border then
+        ApplyDarkenColor(GamepadPlayerCastingBarFrame.Border)
+    end
+    self:StyleGamepadCastBarIcon()
     if PlayerCastingBarFrame and PlayerCastingBarFrame.Border then
         ApplyDarkenColor(PlayerCastingBarFrame.Border)
     elseif CastingBarFrame and CastingBarFrame.Border then
@@ -295,13 +300,18 @@ function playerframes:ColorHolyPower()
     end
 end
 
+-- Rogue points: BGActive/BGInactive; druid points: BG_Active/BG_Inactive.
 function playerframes:ColorComboPoints()
     if RogueComboPointBarFrame then
         for _, cp in pairs({ RogueComboPointBarFrame:GetChildren() }) do
             if cp.BGInactive then ApplyDarkenColor(cp.BGInactive) end
             if cp.BGActive then ApplyDarkenColor(cp.BGActive) end
-            if cp.Border then ApplyDarkenColor(cp.Border) end
-            if cp.ComboPointBorder then ApplyDarkenColor(cp.ComboPointBorder) end
+        end
+    end
+    if DruidComboPointBarFrame then
+        for _, cp in pairs({ DruidComboPointBarFrame:GetChildren() }) do
+            if cp.BG_Inactive then ApplyDarkenColor(cp.BG_Inactive) end
+            if cp.BG_Active then ApplyDarkenColor(cp.BG_Active) end
         end
     end
 end
@@ -320,6 +330,26 @@ function playerframes:ColorMonkChi()
             if chi.Chi_BG then ApplyDarkenColor(chi.Chi_BG) end
             if chi.Chi_BG_Active then ApplyDarkenColor(chi.Chi_BG_Active) end
         end
+    end
+end
+
+-- Gamepad cast bar icon border (WoW Forever), in the Player aura border
+-- look. Blizzard shows/hides this bar's icon per cast and per Edit Mode, so
+-- the border follows UpdateIconShown -- hooked only once the option is on.
+local gamepadIconHooked = false
+function playerframes:StyleGamepadCastBarIcon()
+    local bar = GamepadPlayerCastingBarFrame
+    local aurakit = UberUI.aurakit
+    if not (bar and bar.Icon and aurakit) then return end
+    local enabled = uuidb.general.gamepadcastbariconborder ~= false
+    aurakit.StyleCastBarIcon(bar, "player", enabled)
+    if not enabled then return end
+    aurakit.SyncCastBarIconBorder(bar)
+    if not gamepadIconHooked and type(bar.UpdateIconShown) == "function" then
+        gamepadIconHooked = true
+        hooksecurefunc(bar, "UpdateIconShown", function(self)
+            C_Timer.After(0, function() aurakit.SyncCastBarIconBorder(self) end)
+        end)
     end
 end
 

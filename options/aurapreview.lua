@@ -668,6 +668,163 @@ function opt.AddNameplatePandemicPreview(page, o)
     })
 end
 
+-- Raid frame preview -----------------------------------------------------------
+-- Two mock compact raid frames at their real on-screen size: one selected at
+-- high threat, one gaining threat, both with sample buffs and debuffs drawn
+-- with the Raid & Group Frames aura settings, and the threat highlight drawn
+-- by compactthreat.DrawPreview (the same code as the real frames). The
+-- health fill is a texture on the frame itself, like Blizzard's layering, so
+-- the threat textures (ARTWORK 3) sit over it and the selection (OVERLAY)
+-- over them.
+
+local RAID_PREVIEW_HEIGHT = 70
+local RAID_GAP = 40
+local COMPACT_O = { loc = "compact", label = "Compact Raid/Party",
+    buffKey = "aurastyle_compactbuffs", debuffKey = "aurastyle_compactdebuffs" }
+local RAID_FRAMES = {
+    { name = "Uberlicious", class = "PRIEST", health = 0.85, selected = true, threat = 3, caption = "Target, tanking" },
+    { name = "Jaina", class = "MAGE", health = 0.45, threat = 1, caption = "Gaining threat" },
+}
+
+local function RaidBarTexture()
+    local g = G()
+    local bars = uuidb and uuidb.statusbars or {}
+    if g.raidbartextures and g.raidbartexture and g.raidbartexture ~= "Blizzard" and bars[g.raidbartexture] then
+        return bars[g.raidbartexture]
+    end
+    if g.allbartextures and g.texture and g.texture ~= "Blizzard" and bars[g.texture] then
+        return bars[g.texture]
+    end
+end
+
+local function ThreatColor(status)
+    if GetThreatStatusColor then
+        local ok, r, gr, b = pcall(GetThreatStatusColor, status)
+        if ok and r then return r, gr, b end
+    end
+    if status >= 3 then return 1, 0, 0 end
+    return 1, 1, 0.47
+end
+
+local function NewRaidFrame(stage, spec)
+    local f = CreateFrame("Frame", nil, stage)
+    f.spec = spec
+    f.bg = f:CreateTexture(nil, "BACKGROUND")
+    f.bg:SetAllPoints()
+    f.bg:SetColorTexture(0.08, 0.08, 0.08, 1)
+    f.fill = f:CreateTexture(nil, "ARTWORK", nil, 0)
+    Unsnap(f.fill)
+    f.name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.name:SetPoint("TOPLEFT", 3, -3)
+    f.name:SetText(spec.name)
+    f.select = f:CreateTexture(nil, "OVERLAY")
+    f.select:SetAtlas("RaidFrame-TargetFrame")
+    f.select:SetAllPoints()
+    f.select:SetShown(spec.selected == true)
+    -- compactthreat reads this to move the threat style inside the selection.
+    f.selectionHighlight = f.select
+    f.icons = {}
+    for _, info in ipairs(SAMPLES) do
+        local wanted = info.buff and (info.stack or info.duration) or (info.dispel == "Magic" or info.dispel == "Curse")
+        if wanted then
+            local b = NewIcon(f, info, "compact")
+            f.icons[#f.icons + 1] = b
+        end
+    end
+    return f
+end
+
+local function UpdateRaidFrame(f, width, height, bottomY, sizes)
+    f:SetSize(width, height)
+    local spec = f.spec
+
+    local tex = RaidBarTexture()
+    if tex then f.fill:SetTexture(tex) else f.fill:SetAtlas("RaidFrame-Hp-Fill") end
+    local c = UberUI.util and UberUI.util.ClassColor and UberUI.util.ClassColor(spec.class)
+    if c then f.fill:SetVertexColor(c.r, c.g, c.b, 1) end
+    f.fill:ClearAllPoints()
+    f.fill:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+    f.fill:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+    f.fill:SetWidth(math.max(1, (width - 2) * spec.health))
+
+    if UberUI.compactthreat and UberUI.compactthreat.DrawPreview then
+        pcall(UberUI.compactthreat.DrawPreview, f, ThreatColor(spec.threat))
+    end
+
+    -- Debuffs from the bottom left, buffs from the bottom right (Blizzard's
+    -- Legacy layout).
+    local left, right = 3, 3
+    for _, b in ipairs(f.icons) do
+        local isBuff = b.info.buff
+        local size = isBuff and sizes.buffSmall or sizes.debuffSmall
+        b:SetScale(1)
+        pcall(UpdateIcon, b, COMPACT_O, size, sizes)
+        b:ClearAllPoints()
+        if isBuff then
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -right, bottomY)
+            right = right + size + 1
+        else
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", left, bottomY)
+            left = left + size + 1
+        end
+    end
+end
+
+local function UpdateRaidPreview(preview)
+    local sizes = LocationSizes("compact")
+    local width, height, bottomY = 72, 36, 2
+    local ca = UberUI.compactauras
+    if ca and ca.GetPreviewSizes then
+        local _, _, _, _, w, h, by = ca:GetPreviewSizes()
+        if w and h and w > 0 and h > 0 then width, height, bottomY = w, h, by or 2 end
+    end
+    local peff = preview:GetEffectiveScale()
+    local r = (peff and peff > 0) and (sizes.eff / peff) or 1
+    -- Shrink both together if they don't fit side by side.
+    local fit = math.min(1, (WIDTH - EDGE * 2 - RAID_GAP) / math.max(width * r * 2, 1),
+        (RAID_PREVIEW_HEIGHT - CAPTION_HEIGHT - 6) / math.max(height * r, 1))
+    r = r * fit
+    preview.fitNote:SetShown(fit < 0.999)
+
+    local x = EDGE
+    for _, f in ipairs(preview.frames) do
+        f:SetScale(r)
+        UpdateRaidFrame(f, width, height, bottomY, sizes)
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", preview, "TOPLEFT", x / r, -4 / r)
+        f.cap:ClearAllPoints()
+        f.cap:SetPoint("TOP", preview, "TOPLEFT", x + width * r / 2, -(4 + height * r + 2))
+        x = x + width * r + RAID_GAP
+    end
+end
+
+function opt.AddRaidFramePreview(page)
+    opt.AddPreview(page, {
+        name = "Preview",
+        tooltip = "Two sample raid frames at the size they appear on screen: one targeted while tanking, one gaining threat, with sample buffs and debuffs. Drawn with the threat highlight and Raid & Group Frames aura settings on this page.",
+        height = RAID_PREVIEW_HEIGHT + 12,
+        create = function(parent)
+            if not (UberUI.squareborders and UberUI.squareborders.CreateBorder) then return nil end
+            local preview = CreateFrame("Frame", nil, parent)
+            preview:SetSize(WIDTH, RAID_PREVIEW_HEIGHT)
+            preview.fitNote = preview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+            preview.fitNote:SetPoint("TOPRIGHT", preview, "TOPRIGHT", -4, -2)
+            preview.fitNote:SetText("scaled to fit")
+            preview.fitNote:Hide()
+            preview.frames = {}
+            for i, spec in ipairs(RAID_FRAMES) do
+                local f = NewRaidFrame(preview, spec)
+                f.cap = preview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+                f.cap:SetText(spec.caption)
+                preview.frames[i] = f
+            end
+            preview.Update = UpdateRaidPreview
+            preview:SetScript("OnShow", UpdateRaidPreview)
+            return preview
+        end,
+    })
+end
+
 -- o: the AddAuraOptions table (loc, label, buffKey, debuffKey).
 function opt.AddAuraPreview(page, o)
     local twoSizes = o.loc == "target" or o.loc == "focus" or o.loc == "boss"

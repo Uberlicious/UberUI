@@ -39,6 +39,7 @@ core\targetframe.lua
 core\focusframe.lua
 core\bossframes.lua
 core\miscframes.lua
+core\chatcopy.lua
 core\camera.lua
 core\swingtimers.lua
 core\nameplates.lua
@@ -46,6 +47,7 @@ core\nameplateauras.lua
 core\namehealth.lua
 core\compactunitframe.lua
 core\compactauras.lua
+core\compactthreat.lua
 core\partyframes.lua
 core\arenaframes.lua
 core\raidframes.lua
@@ -57,3 +59,4 @@ core\cooldownmanager.lua
 core\damagemeter.lua
 core\personalresource.lua
 core\cursorring.lua
+core\gamepaddebug.lua

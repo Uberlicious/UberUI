@@ -152,6 +152,7 @@ local defaults = {
         nameplateauras               = false,
         targetcastbariconborder      = true,
         focuscastbariconborder       = true,
+        gamepadcastbariconborder     = true,
         aurastyle_nameplatebuffs     = "both",
         aurastyle_nameplatedebuffs   = "zoom",
         nameplatebuffs_showdispel    = true,
@@ -170,6 +171,9 @@ local defaults = {
         focusauraduration               = false,
         compactauraduration             = false,
         compactmaxdebuffs               = 3,
+        cufthreatstyle                  = "blizzard",
+        cufthreatthickness              = 2,
+        chatcopybutton                  = true,
         cameramaxzoom                   = false,
         cameramaxzoomfactor             = 3.4,
         buffauraborders              = true,
@@ -195,6 +199,7 @@ local defaults = {
         cursorringcombatonly         = false,
         cursorringgcd                = false,
         cursorringwhilehidden        = true,
+        cursorringhidegamepad        = true,
         cursorringgcdcolor           = "ffffffff",
         cursorringgcdstyle           = "normal",
     },
@@ -277,7 +282,11 @@ end
 local reportedErrors, errorLog = {}, {}
 local errorFrame
 
-local function ShowErrors(text)
+-- Color codes in `text` show as colors; copying from the box copies only the
+-- visible text (checked in game), so colored text is safe to paste.
+-- scrollToEnd: open at the bottom (chat copies, where the latest lines are
+-- what's wanted) instead of the top.
+local function ShowErrors(text, scrollToEnd)
     if not errorFrame then
         errorFrame = CreateFrame("Frame", "UberUIErrorFrame", UIParent, "BackdropTemplate")
         errorFrame:SetSize(640, 360)
@@ -306,6 +315,7 @@ local function ShowErrors(text)
         edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
         scroll:SetScrollChild(edit)
         errorFrame.edit = edit
+        errorFrame.scroll = scroll
 
         -- NoScripts: UIPanelCloseButton's own OnClick calls HideUIPanel, which
         -- is blocked from addon code in combat ("Interface action failed").
@@ -316,13 +326,26 @@ local function ShowErrors(text)
         hint:SetPoint("BOTTOM", 0, 16)
         hint:SetText("Click inside the box, Ctrl+A to select all, Ctrl+C to copy")
     end
+    local scroll = errorFrame.scroll
+    -- Back to the top first: an offset left over from a longer report (e.g.
+    -- a big /uuidebug dump) would otherwise sit past the end of shorter text
+    -- and show an empty box.
+    scroll:SetVerticalScroll(0)
     errorFrame.edit:SetText(text)
     errorFrame:Show()
+    if scrollToEnd then
+        -- The scroll range isn't known until the text has been laid out;
+        -- recompute it rather than trusting the previous text's range.
+        C_Timer.After(0, function()
+            scroll:UpdateScrollChildRect()
+            scroll:SetVerticalScroll(scroll:GetVerticalScrollRange())
+        end)
+    end
 end
 
 -- Copyable popup for /uuidebug* reports (never chat).
-function UberUI.ShowDebugReport(text)
-    ShowErrors(text)
+function UberUI.ShowDebugReport(text, scrollToEnd)
+    ShowErrors(text, scrollToEnd)
 end
 
 function UberUI:ReportError(where, err)

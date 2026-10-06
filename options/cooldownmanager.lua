@@ -1,18 +1,33 @@
 --[[--------------------------------------------------------------------
-	Uber UI options -- Cooldown Manager page: Icon borders, square icons,
-	debuff coloring, pandemic highlights, countdown coloring,
-	and bar textures
+	Uber UI options -- Cooldown Manager page: Icons (borders, shape,
+	pandemic highlight), Countdown Text, Tracked Bars (look, pandemic
+	highlight), Layout. Rows that only apply to some choices are indented
+	under them and hidden otherwise.
 ----------------------------------------------------------------------]]
 
 local addon, ns = ...
 local opt = ns.options
+
+local function HexOr(v, default)
+    return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or default
+end
 
 function opt.BuildCooldownManager(page)
     local function RefreshCooldownManager()
         if UberUI.cdManager then UberUI.cdManager:Refresh() end
     end
 
-    opt.Header(page, "Cooldown Manager Icons");
+    -- Indented under `parent`, enabled by `isEnabled`, hidden unless `isShown`.
+    local function Nested(init, parent, isEnabled, isShown)
+        opt.DependsOn(init, parent, isEnabled);
+        if isShown then opt.ShowWhen(init, isShown) end
+        return init;
+    end
+
+    ---------------------------------------------------------------------------
+    -- Icons
+    ---------------------------------------------------------------------------
+    opt.Header(page, "Icons");
 
     opt.AddCDMIconPreview(page);
 
@@ -34,17 +49,18 @@ function opt.BuildCooldownManager(page)
         get = function() return CdmSquare() and "square" or "rounded" end,
         set = function(value) uuidb.general[cdmKeys[1]] = (value == "square") end,
         onChange = RefreshCooldownManager,
+        repair = true,
     });
 
-    opt.DependsOn(opt.AddSlider(page, {
+    Nested(opt.AddSlider(page, {
         variable = "CooldownIconBorderThickness", name = "Border Thickness",
         tooltip = "Thickness of the square Cooldown Manager icon border, in screen pixels.",
         db = "general", field = cdmKeys[2], default = 1,
         min = 1, max = 8, step = 1,
         onChange = RefreshCooldownManager,
-    }), cdmShapeInit, CdmSquare);
+    }), cdmShapeInit, CdmSquare, CdmSquare);
 
-    opt.DependsOn(opt.AddDropdown(page, {
+    Nested(opt.AddDropdown(page, {
         variable = "CooldownIconBorderPosition", name = "Border Position",
         tooltip = "Inside Icon draws the square border over the icon's outer edge, so icons keep their size and spacing. Outside Icon draws it around the icon (with Edit Mode icon padding at 0, neighboring borders touch).",
         default = "inside",
@@ -52,7 +68,9 @@ function opt.BuildCooldownManager(page)
         get = function() return (uuidb.general and uuidb.general[cdmKeys[3]] == false) and "outside" or "inside" end,
         set = function(value) uuidb.general[cdmKeys[3]] = (value ~= "outside") end,
         onChange = RefreshCooldownManager,
-    }), cdmShapeInit, CdmSquare);
+    }), cdmShapeInit, CdmSquare, CdmSquare);
+
+    opt.SubHeader(page, "Icon Pandemic Highlight");
 
     local cdmPandemicInit = opt.AddDropdown(page, {
         variable = "CooldownPandemicStyle", name = "Pandemic Highlight",
@@ -63,9 +81,11 @@ function opt.BuildCooldownManager(page)
         get = function() return uuidb.cooldown.pandemicstyle or "blizzard" end,
         set = function(value) uuidb.cooldown.pandemicstyle = value end,
         onChange = RefreshCooldownManager,
+        repair = true,
     });
 
-    opt.DependsOn(opt.AddDropdown(page, {
+    local function IconPixel() return uuidb.cooldown.pandemicstyle == "pixel" end
+    Nested(opt.AddDropdown(page, {
         variable = "CooldownPixelGlowPosition", name = "Pixel Glow Position",
         tooltip = "Inside draws the Pixel Glow dashes over the icon's edge. Outside draws them just past it.",
         default = "inside",
@@ -73,7 +93,7 @@ function opt.BuildCooldownManager(page)
         get = function() return uuidb.cooldown.pixelposition == "outside" and "outside" or "inside" end,
         set = function(value) uuidb.cooldown.pixelposition = value end,
         onChange = RefreshCooldownManager,
-    }), cdmPandemicInit, function() return uuidb.cooldown.pandemicstyle == "pixel" end);
+    }), cdmPandemicInit, IconPixel, IconPixel);
 
     -- One of our own highlights (not Blizzard's, not None).
     local function CustomPandemic()
@@ -81,26 +101,25 @@ function opt.BuildCooldownManager(page)
         return style ~= "blizzard" and style ~= "none"
     end
 
-    local cdmPandemicClassInit = opt.AddCheckbox(page, {
-        variable = "CooldownPandemicClassColor", name = "Pandemic Highlight: Use Class Color",
+    local cdmPandemicClassInit = Nested(opt.AddCheckbox(page, {
+        variable = "CooldownPandemicClassColor", name = "Use Class Color",
         tooltip = "Color the pandemic highlight (Border, Proc Glow, Marching Ants and Pixel Glow) in your character's class color instead of the color below.",
         db = "cooldown", field = "pandemicclasscolor", default = false,
         onChange = RefreshCooldownManager,
-    });
-    opt.DependsOn(cdmPandemicClassInit, cdmPandemicInit, CustomPandemic);
+    }), cdmPandemicInit, CustomPandemic, CustomPandemic);
 
-    opt.DependsOn(opt.AddColorSwatch(page, {
+    Nested(opt.AddColorSwatch(page, {
         variable = "CooldownPandemicColor", name = "Pandemic Color",
         tooltip = "Color of the Cooldown Manager pandemic highlight (Border, Proc Glow, Marching Ants and Pixel Glow), unless Use Class Color is on.",
         db = "cooldown", field = "pandemiccolor", default = "ffff3030",
-        get = function()
-            local v = uuidb.cooldown.pandemiccolor
-            return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff3030"
-        end,
+        get = function() return HexOr(uuidb.cooldown.pandemiccolor, "ffff3030") end,
         onChange = RefreshCooldownManager,
-    }), cdmPandemicClassInit, function() return CustomPandemic() and not uuidb.cooldown.pandemicclasscolor end);
+    }), cdmPandemicClassInit, function() return CustomPandemic() and not uuidb.cooldown.pandemicclasscolor end, CustomPandemic);
 
-    opt.Header(page, "Cooldown Manager Countdown Text");
+    ---------------------------------------------------------------------------
+    -- Countdown Text
+    ---------------------------------------------------------------------------
+    opt.Header(page, "Countdown Text");
 
     local countdownInit = opt.AddCheckbox(page, {
         variable = "CooldownDurationColors", name = "Color Countdown Text",
@@ -110,21 +129,21 @@ function opt.BuildCooldownManager(page)
     });
     local function CountdownOn() return uuidb.cooldown.durationcolors == true end
 
-    opt.DependsOn(opt.AddColorSwatch(page, {
+    Nested(opt.AddColorSwatch(page, {
         variable = "CooldownDurationColor", name = "Duration Color",
         tooltip = "Color of the countdown number on Cooldown Manager icons and bars.",
         db = "cooldown", field = "durationcolor", default = "ffffffff",
         onChange = RefreshCooldownManager,
     }), countdownInit, CountdownOn);
 
-    opt.DependsOn(opt.AddColorSwatch(page, {
+    Nested(opt.AddColorSwatch(page, {
         variable = "CooldownDurationExpiringColor", name = "Expiring Duration Color",
         tooltip = "Color of the countdown number once an aura or cooldown has less time left than the Expiring Duration Threshold below.",
         db = "cooldown", field = "durationexpiringcolor", default = "ffff3333",
         onChange = RefreshCooldownManager,
     }), countdownInit, CountdownOn);
 
-    opt.DependsOn(opt.AddSlider(page, {
+    Nested(opt.AddSlider(page, {
         variable = "CooldownDurationThreshold", name = "Expiring Duration Threshold",
         tooltip = "Seconds left at which a Cooldown Manager countdown switches to the Expiring Duration Color.",
         db = "cooldown", field = "durationthreshold", default = 5,
@@ -133,7 +152,10 @@ function opt.BuildCooldownManager(page)
         onChange = RefreshCooldownManager,
     }), countdownInit, CountdownOn);
 
-    opt.Header(page, "Cooldown Manager Bars");
+    ---------------------------------------------------------------------------
+    -- Tracked Bars
+    ---------------------------------------------------------------------------
+    opt.Header(page, "Tracked Bars");
 
     opt.AddCDMBarPreview(page);
 
@@ -164,6 +186,15 @@ function opt.BuildCooldownManager(page)
         onChange = RefreshCooldownManager,
     });
 
+    opt.AddCheckbox(page, {
+        variable = "CooldownBarIconToBar", name = "Scale Icon to Bar Height",
+        tooltip = "Shrink each Tracked Bar's spell icon to the height of its bar, so icon and bar line up.",
+        db = "cooldown", field = "baricontobar", default = false,
+        onChange = RefreshCooldownManager,
+    });
+
+    opt.SubHeader(page, "Bar Pandemic Highlight");
+
     local barPandemicInit = opt.AddDropdown(page, {
         variable = "CooldownBarPandemicStyle", name = "Pandemic Highlight",
         tooltip = "What a Tracked Bar shows while its aura is in the pandemic window.\n\nBlizzard: Blizzard's own bar animation.\n\nBorder: a border in the highlight color.\n\nBar Glow: Blizzard's bar glow, tinted.\n\nPixel Glow: thin dashes marching around the bar.\n\nBar Fill Color: the bar itself fills in the highlight color.\n\nNone: no pandemic highlight at all (Blizzard's is hidden too).",
@@ -177,10 +208,34 @@ function opt.BuildCooldownManager(page)
         end,
         set = function(value) uuidb.cooldown.barpandemicstyle = value end,
         onChange = RefreshCooldownManager,
+        repair = true,
     });
     local function BarPandemicStyle() return uuidb.cooldown.barpandemicstyle or "blizzard" end
+    local function BarPixel()
+        local style = BarPandemicStyle()
+        return style == "pixel" or style == "ants"
+    end
+    local function BarPandemicColored()
+        local style = BarPandemicStyle()
+        return style ~= "blizzard" and style ~= "none"
+    end
+    -- Border / Bar Glow / Pixel Glow go around the bar or its icon.
+    local function BarPlaced()
+        local style = BarPandemicStyle()
+        return style == "border" or style == "glow" or style == "ants" or style == "pixel"
+    end
 
-    opt.DependsOn(opt.AddDropdown(page, {
+    Nested(opt.AddDropdown(page, {
+        variable = "CooldownBarPandemicTarget", name = "Highlight On",
+        tooltip = "Where the Border, Bar Glow or Pixel Glow highlight goes: around the bar (Blizzard's placement) or around the bar's icon.",
+        default = "bar",
+        values = { { "bar", "Bar" }, { "icon", "Icon" } },
+        get = function() return uuidb.cooldown.barpandemic or "bar" end,
+        set = function(value) uuidb.cooldown.barpandemic = value end,
+        onChange = RefreshCooldownManager,
+    }), barPandemicInit, BarPlaced, BarPlaced);
+
+    Nested(opt.AddDropdown(page, {
         variable = "CooldownBarPixelGlowPosition", name = "Pixel Glow Position",
         tooltip = "Inside draws the Pixel Glow dashes over the bar's (or its icon's) edge. Outside draws them just past it.",
         default = "inside",
@@ -188,55 +243,27 @@ function opt.BuildCooldownManager(page)
         get = function() return uuidb.cooldown.barpixelposition == "outside" and "outside" or "inside" end,
         set = function(value) uuidb.cooldown.barpixelposition = value end,
         onChange = RefreshCooldownManager,
-    }), barPandemicInit, function()
-        local style = BarPandemicStyle()
-        return style == "pixel" or style == "ants"
-    end);
-    local function BarPandemicColored()
-        local style = BarPandemicStyle()
-        return style ~= "blizzard" and style ~= "none"
-    end
+    }), barPandemicInit, BarPixel, BarPixel);
 
-    local barPandemicClassInit = opt.AddCheckbox(page, {
-        variable = "CooldownBarPandemicClassColor", name = "Pandemic: Use Class Color",
+    local barPandemicClassInit = Nested(opt.AddCheckbox(page, {
+        variable = "CooldownBarPandemicClassColor", name = "Use Class Color",
         tooltip = "Color the Tracked Bars pandemic highlight in your character's class color instead of the color below.",
         db = "cooldown", field = "barpandemicclasscolor", default = false,
         onChange = RefreshCooldownManager,
-    });
-    opt.DependsOn(barPandemicClassInit, barPandemicInit, BarPandemicColored);
+    }), barPandemicInit, BarPandemicColored, BarPandemicColored);
 
-    opt.DependsOn(opt.AddColorSwatch(page, {
+    Nested(opt.AddColorSwatch(page, {
         variable = "CooldownBarPandemicColor", name = "Pandemic Color",
         tooltip = "Color of the Tracked Bars pandemic highlight, unless Use Class Color is on.",
         db = "cooldown", field = "barpandemiccolor", default = "ffff3030",
-        get = function()
-            local v = uuidb.cooldown.barpandemiccolor
-            return (type(v) == "string" and v:match("^%x%x%x%x%x%x%x%x$")) and v or "ffff3030"
-        end,
+        get = function() return HexOr(uuidb.cooldown.barpandemiccolor, "ffff3030") end,
         onChange = RefreshCooldownManager,
-    }), barPandemicClassInit, function() return BarPandemicColored() and not uuidb.cooldown.barpandemicclasscolor end);
+    }), barPandemicClassInit, function() return BarPandemicColored() and not uuidb.cooldown.barpandemicclasscolor end, BarPandemicColored);
 
-    opt.DependsOn(opt.AddDropdown(page, {
-        variable = "CooldownBarPandemicTarget", name = "Pandemic Highlight On",
-        tooltip = "Where the Border, Bar Glow or Pixel Glow highlight goes: around the bar (Blizzard's placement) or around the bar's icon.",
-        default = "bar",
-        values = { { "bar", "Bar" }, { "icon", "Icon" } },
-        get = function() return uuidb.cooldown.barpandemic or "bar" end,
-        set = function(value) uuidb.cooldown.barpandemic = value end,
-        onChange = RefreshCooldownManager,
-    }), barPandemicInit, function()
-        local style = BarPandemicStyle()
-        return style == "border" or style == "glow" or style == "ants"
-    end);
-
-    opt.AddCheckbox(page, {
-        variable = "CooldownBarIconToBar", name = "Scale Icon to Bar Height",
-        tooltip = "Shrink each Tracked Bar's spell icon to the height of its bar, so icon and bar line up.",
-        db = "cooldown", field = "baricontobar", default = false,
-        onChange = RefreshCooldownManager,
-    });
-
-    opt.Header(page, "Cooldown Manager Layout");
+    ---------------------------------------------------------------------------
+    -- Layout
+    ---------------------------------------------------------------------------
+    opt.Header(page, "Layout");
 
     -- One alignment choice per viewer. Which items show at all (inactive
     -- buffs) stays Blizzard's Edit Mode "Hide When Inactive" setting.

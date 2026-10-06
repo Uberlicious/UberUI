@@ -509,8 +509,10 @@ local function ForEachExistingCompactFrame(callback)
 end
 
 -- For the options preview: buff and debuff icon sizes (in the frame's units),
--- the count font's reference size, and that frame's effective scale, from
--- the first existing compact frame (shown ones first). nil when there's none.
+-- the count font's reference size, that frame's effective scale, its width
+-- and height, and the bottom offset of the aura rows (power bar included),
+-- from the first existing compact frame (shown ones first). nil when
+-- there's none.
 function compactauras:GetPreviewSizes()
     local found, fallback
     ForEachExistingCompactFrame(function(f)
@@ -521,7 +523,8 @@ function compactauras:GetPreviewSizes()
     if not frame then return nil end
     local ok, m = pcall(GetFrameMetrics, frame)
     if not ok or not m then return nil end
-    return m.buffSize, m.debuffSize, COUNT_REF_SIZE, frame:GetEffectiveScale()
+    return m.buffSize, m.debuffSize, COUNT_REF_SIZE, frame:GetEffectiveScale(),
+        frame:GetWidth(), frame:GetHeight(), m.bottomY
 end
 
 -- Called from the options panel whenever a compact aura setting changes.
