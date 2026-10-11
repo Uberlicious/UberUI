@@ -121,13 +121,21 @@ function targetframes:Color()
     self:ColorComboPoints()
 end
 
--- WoW Forever combo points on ComboFrame (base diamond region).
+-- WoW Forever combo points on ComboFrame. Since 1.60.1 (70291) these are
+-- RogueComboPointTemplate frames: only the BG art is darkened (the icon/FX
+-- layers are the point itself). Older builds had a base diamond region plus
+-- Highlight/Shine.
 function targetframes:ColorComboPoints()
     if not (ComboFrame and ComboFrame.ComboPoints) then return end
     for _, cp in ipairs(ComboFrame.ComboPoints) do
-        for _, region in ipairs({ cp:GetRegions() }) do
-            if region ~= cp.Highlight and region ~= cp.Shine and region.SetVertexColor then
-                ApplyDarkenColor(region)
+        if cp.BGActive or cp.BGInactive then
+            if cp.BGInactive then ApplyDarkenColor(cp.BGInactive) end
+            if cp.BGActive then ApplyDarkenColor(cp.BGActive) end
+        else
+            for _, region in ipairs({ cp:GetRegions() }) do
+                if region ~= cp.Highlight and region ~= cp.Shine and region.SetVertexColor then
+                    ApplyDarkenColor(region)
+                end
             end
         end
     end

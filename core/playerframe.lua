@@ -300,18 +300,17 @@ function playerframes:ColorHolyPower()
     end
 end
 
--- Rogue points: BGActive/BGInactive; druid points: BG_Active/BG_Inactive.
+-- Rogue points: BGActive/BGInactive; retail druid points: BG_Active/BG_Inactive
+-- (Forever 1.60.1+ druids use the rogue point template).
+local COMBO_POINT_BG_KEYS = { "BGActive", "BGInactive", "BG_Active", "BG_Inactive" }
 function playerframes:ColorComboPoints()
-    if RogueComboPointBarFrame then
-        for _, cp in pairs({ RogueComboPointBarFrame:GetChildren() }) do
-            if cp.BGInactive then ApplyDarkenColor(cp.BGInactive) end
-            if cp.BGActive then ApplyDarkenColor(cp.BGActive) end
-        end
-    end
-    if DruidComboPointBarFrame then
-        for _, cp in pairs({ DruidComboPointBarFrame:GetChildren() }) do
-            if cp.BG_Inactive then ApplyDarkenColor(cp.BG_Inactive) end
-            if cp.BG_Active then ApplyDarkenColor(cp.BG_Active) end
+    for _, bar in ipairs({ RogueComboPointBarFrame or false, DruidComboPointBarFrame or false }) do
+        if bar then
+            for _, cp in pairs({ bar:GetChildren() }) do
+                for _, key in ipairs(COMBO_POINT_BG_KEYS) do
+                    if cp[key] then ApplyDarkenColor(cp[key]) end
+                end
+            end
         end
     end
 end

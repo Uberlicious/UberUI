@@ -366,7 +366,7 @@ end
 local CLASS_RESOURCE_ART = {
     PALADIN = { frame = { "Background", "ActiveTexture" } }, -- PaladinPowerBarFrameTemplate
     ROGUE   = { points = { "BGActive", "BGInactive" } },     -- RogueComboPointTemplate
-    DRUID   = { points = { "BG_Active", "BG_Inactive" } },   -- DruidComboPointTemplate
+    DRUID   = { points = { "BG_Active", "BG_Inactive", "BGActive", "BGInactive" } }, -- DruidComboPointTemplate (Forever: RogueComboPointTemplate)
     WARLOCK = { points = { "Background" } },                 -- ShardTemplate
     MONK    = { points = { "Chi_BG", "Chi_BG_Active" } },    -- MonkLightEnergyTemplate
 }
