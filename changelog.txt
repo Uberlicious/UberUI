@@ -1,3 +1,6 @@
+1.0.8:
+    - WoW Forever: Updated for the 1.60.1 combo point change. Rogue combo points around the Target portrait show again (only their backgrounds are darkened), and druid combo points on the Player Frame and Personal Resource Display are darkened again.
+
 1.0.7:
     - Show Raid Buffs (Raid & Group Frames): Long raid-wide buffs (Mark of the Wild, Fortitude, Arcane Intellect, Battle Shout, Skyfury, Blessing of the Bronze) are now hidden on compact raid and party frames, so buffs worth watching like Earth Shield, heal over time effects and externals keep their place. Pick any you want back from the icon grid. WoW Forever has its own list covering every rank, including the paladin blessings, Divine Spirit, Battle Shout and Shadow Protection.
     - Threat Highlight (Raid & Group Frames): Choose how party and raid threat shows: Blizzard's frame, a Thin Border, an Inner Glow, Corner Marks, a Top Stripe, or Hidden, with adjustable line thickness and a live preview.
