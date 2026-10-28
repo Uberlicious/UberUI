@@ -410,13 +410,12 @@ local function UpdateHealthBarPreview(preview)
     local setup = _G.NamePlateSetupOptions
     local levelW = tonumber(setup and setup.playerLevelDiffWidth)
     if not levelW or levelW < 4 then levelW = 18 end
-    local levelH = tonumber(setup and setup.playerLevelDiffHeight)
-    if levelH and levelH < 4 then levelH = nil end
 
     -- Live plate: its health bar's size and scale (per-plate scale removed).
-    -- A bar measured without its level badge showing is shortened here the
-    -- way Blizzard does when the badge shows.
-    local w, h, measuredWithBadge = 110, 10, false
+    -- Start from the plate's full bar width: a live bar Uber UI has already
+    -- shortened for its level badge gets the badge's room added back.
+    local w, h = 110, 10
+    local np = UberUI.nameplates
     for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
         local uf = not plate:IsForbidden() and plate.UnitFrame
         local hb = uf and uf.healthBar
@@ -426,35 +425,47 @@ local function UpdateHealthBarPreview(preview)
                 and not (issecretvalue and (issecretvalue(bw) or issecretvalue(bh))) then
                 w, h = bw, bh
                 local lb = uf.PlayerLevelDiffFrame
-                measuredWithBadge = lb and not lb:IsForbidden() and lb:IsShown() or false
+                local shortened = lb and not lb:IsForbidden() and lb:IsShown()
+                    and np and np.IsLevelBadgeFixed and np.IsLevelBadgeFixed(lb)
+                if shortened then w = w + levelW + LEVEL_GAP end
                 break
             end
         end
     end
-    if badge and not measuredWithBadge then w = math.max(20, w - levelW - LEVEL_GAP) end
-    local totalW = w + (badge and (LEVEL_GAP + levelW) or 0)
+
+    -- Level Box Placement (Forever): Uber UI shortens the bar so bar + badge
+    -- share the plate's width, centered under the name; Blizzard (1.60.1)
+    -- keeps the full bar, centers the name over it, and the badge hangs past
+    -- its right edge. Either way the badge is the bar's height + 5.
+    local fixOn = badge and np and np.LevelAnchorFixOn and np.LevelAnchorFixOn()
+    if fixOn then w = math.max(20, w - levelW - LEVEL_GAP) end
+    local badgeRoom = badge and (LEVEL_GAP + levelW) or 0
+    local totalW = w + badgeRoom
+    local plateW = fixOn and totalW or w
 
     local eff = opt.NameplateBaseScale("healthbar", function(uf) return uf.healthBar end) or 1
     local r = eff / peff
     local fit = math.min(1, (WIDTH - EDGE * 2) / (totalW * r), (preview.stageHeight - 24) / (h * r))
     r = r * fit
     f:SetScale(r)
-    f:SetSize(totalW, h)
+    f:SetSize(plateW, h)
     f:ClearAllPoints()
-    f:SetPoint("CENTER", preview.stage, "CENTER", 0, -4 / r)
+    -- Center bar + badge on the stage in both modes.
+    f:SetPoint("CENTER", preview.stage, "CENTER", -(totalW - plateW) / 2, -4 / r)
 
     local bar = f.healthBar
     bar:SetWidth(w)
     bar:SetValue(0.6)
     bar:SetStatusBarColor(1, 0.1, 0.1)
-    -- Blizzard centers the name over bar + badge.
     f.name:ClearAllPoints()
     f.name:SetPoint("BOTTOM", f, "TOP", 0, 3)
     f.name:SetText("Enemy")
     f.name:SetTextColor(1, 0.1, 0.1)
 
     if badge then
-        badge:SetSize(levelW, levelH or h)
+        badge:ClearAllPoints()
+        badge:SetPoint("LEFT", bar, "RIGHT", LEVEL_GAP, 0.5)
+        badge:SetSize(levelW, h + 5)
         local level = UnitLevel("player") or 1
         badge.playerLevelDiffText:SetText(tostring(level))
         local ok, color = pcall(GetQuestDifficultyColor, level)

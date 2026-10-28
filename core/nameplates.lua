@@ -498,6 +498,57 @@ local function ApplyBarLook(healthBar, unitFrame)
     end
 end
 
+-- WoW Forever 1.60.1 (70425) anchors the level badge TOPLEFT/BOTTOMLEFT to
+-- the health bar's right edge. Blizzard's UpdateAnchors only makes room for
+-- the badge when its first anchor's relativePoint is "RIGHT", so the bar keeps
+-- its full width and the badge hangs off the plate's right side. Re-anchor it
+-- with a single LEFT->RIGHT point (same 5px gap; height keeps the old +3/-2
+-- overhang) so Blizzard's own next pass sees it, and shrink the bar for the
+-- pass that already ran.
+-- Nameplates are restricted regions: addon code can't measure them
+-- (GetPoint/GetWidth/GetHeight throw), so sizes come from Blizzard's
+-- NamePlateSetupOptions, the same values it sizes the badge and bar with.
+-- The "Level Box Placement" option can hand this back to Blizzard: the badge
+-- then gets Forever's own XML anchors again and the bar its full width, as
+-- Blizzard's pass computes it with those anchors.
+local fixedBadges = setmetatable({}, { __mode = "k" })
+local function LevelAnchorFixOn()
+    return UberUI.util.IsForeverClient()
+        and not (uuidb and uuidb.general and uuidb.general.nameplatelevelanchor == "blizzard")
+end
+local function FixLevelBadgeAnchor(unitFrame)
+    if not UberUI.util.IsForeverClient() then return end
+    local opts = NamePlateSetupOptions
+    local badge = unitFrame.PlayerLevelDiffFrame
+    local container = unitFrame.HealthBarsContainer
+    local healthBar = container and container.healthBar
+    if not (opts and opts.healthBarHeight and opts.playerLevelDiffWidth) then return end
+    if not (badge and healthBar and unitFrame.CastBarsContainer) or badge:IsForbidden() then return end
+    if not LevelAnchorFixOn() then
+        if fixedBadges[badge] then
+            fixedBadges[badge] = nil
+            badge:ClearAllPoints()
+            badge:SetPoint("TOPLEFT", healthBar, "TOPRIGHT", 5, 3)
+            badge:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMRIGHT", 5, -2)
+            container:SetPoint("BOTTOMRIGHT", unitFrame.CastBarsContainer, "TOPRIGHT",
+                0, opts.castBarToHealthBarSpacing or 0)
+        end
+        return
+    end
+    local firstFix = not fixedBadges[badge]
+    if firstFix then
+        badge:ClearAllPoints()
+        badge:SetPoint("LEFT", healthBar, "RIGHT", 5, 0.5)
+        fixedBadges[badge] = true
+    end
+    -- Blizzard's setup SetSize()s the badge before every UpdateAnchors.
+    badge:SetHeight(opts.healthBarHeight + 5)
+    if firstFix and badge:IsShown() then
+        container:SetPoint("BOTTOMRIGHT", unitFrame.CastBarsContainer, "TOPRIGHT",
+            -(opts.playerLevelDiffWidth + 5), opts.castBarToHealthBarSpacing or 0)
+    end
+end
+
 local function EnsureUpdateAnchorsHook(unitFrame)
     if anchorHooked[unitFrame] or not unitFrame.UpdateAnchors then return end
     anchorHooked[unitFrame] = true
@@ -507,6 +558,7 @@ local function EnsureUpdateAnchorsHook(unitFrame)
         C_Timer.After(0, function()
             anchorPending[self] = nil
             if self:IsForbidden() or not self.healthBar or self.healthBar:IsForbidden() then return end
+            FixLevelBadgeAnchor(self)
             ApplyBarLook(self.healthBar, self)
         end)
     end)
@@ -525,7 +577,8 @@ function nameplates:OnNamePlateLoad(unitFrame)
 
     local textureToApply = GetNameplateBarTexture()
     ApplyHealthBarTexture(healthBar, textureToApply)
-    if textureToApply or SquareBorderOn() then
+    FixLevelBadgeAnchor(unitFrame)
+    if textureToApply or SquareBorderOn() or LevelAnchorFixOn() then
         EnsureUpdateAnchorsHook(unitFrame)
     end
 
@@ -796,6 +849,14 @@ end
 -- bgTexture, selectedBorder, deselectedOverlay).
 -- unitFrame (optional): a mock with .healthBar and Forever's
 -- .PlayerLevelDiffFrame, for the level box.
+-- For the options preview: whether bars are shortened for the level box
+-- (Level Box Placement = Uber UI), and whether a live plate's badge has been
+-- re-anchored yet (its bar is then already shortened).
+nameplates.LevelAnchorFixOn = LevelAnchorFixOn
+function nameplates.IsLevelBadgeFixed(badge)
+    return badge ~= nil and fixedBadges[badge] == true
+end
+
 function nameplates.PreviewHealthBar(healthBar, unitFrame)
     if not (uuidb and uuidb.general) then return end
     local dc = uuidb.general.darkencolor

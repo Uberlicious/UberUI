@@ -33,6 +33,22 @@ function opt.BuildNameplates(page)
         end,
     });
 
+    if UberUI.util.IsForeverClient() then
+        opt.AddDropdown(page, {
+            variable = "NameplateLevelAnchor", name = "Level Box Placement",
+            tooltip = "Where the level box sits next to the health bar.\n\nUber UI: the health bar is shortened to make room for the level box, so bar and box together are centered under the name (how Forever looked before 1.60.1).\n\nBlizzard: Forever 1.60.1's own placement. The bar keeps its full width and the level box sticks out past its right side.",
+            default = "uberui",
+            values = { { "uberui", "Uber UI" }, { "blizzard", "Blizzard" } },
+            get = function()
+                return (uuidb.general and uuidb.general.nameplatelevelanchor == "blizzard") and "blizzard" or "uberui"
+            end,
+            set = function(value) uuidb.general.nameplatelevelanchor = value end,
+            onChange = function()
+                if UberUI.nameplates then UberUI.nameplates:ForceNameplateTexture() end
+            end,
+        });
+    end
+
     opt.AddBarTextureSetting(page, {
         dbTable = uuidb.general,
         cbVariable = "NameplateBarTextures", cbName = "Bar Textures", cbField = "nameplatebartextures",

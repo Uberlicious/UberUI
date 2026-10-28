@@ -4,8 +4,8 @@ local addon, ns = ...
 -- except the combat log (faint until hovered; uuidb.general.chatcopybutton)
 -- and /uucopychat [lines] open that window's history in the copyable popup.
 -- It shows in chat's colors (channel color, class-colored names, link
--- colors); copying from the box gives only the text, no color codes (checked
--- in game). Links become their text and icons are dropped; messages the game
+-- colors) until clicked, then plain text so the selection highlight lines up
+-- with the text. Links become their text and icons are dropped; messages the game
 -- hides from addons (secret) show as a placeholder. Only our own buttons on
 -- Blizzard's chat frames -- no hooks.
 
@@ -37,6 +37,13 @@ local function ColoredChatText(text, r, g, b)
     return text
 end
 
+-- The same line without color codes (|cAARRGGBB, |cn<name>:, |r). Codes
+-- draw nothing but still count as characters in the EditBox, so its
+-- selection highlight drifts behind them; selecting happens on this.
+local function StripColors(text)
+    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:|]*:", ""):gsub("|r", ""))
+end
+
 -- count: the last N lines, or nil for the whole history.
 function chatcopy.Copy(frame, count)
     frame = frame or SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME
@@ -62,8 +69,10 @@ function chatcopy.Copy(frame, count)
     local name = frame.GetName and frame:GetName() or "chat"
     local tab = _G[name .. "Tab"]
     local label = (tab and tab.GetText and tab:GetText()) or name
+    local text = ("Chat: %s -- %d line(s)\n\n%s"):format(tostring(label), #lines, table.concat(lines, "\n"))
+    local okP, plain = pcall(StripColors, text)
     -- Opens at the bottom: the latest messages are what's usually wanted.
-    UberUI.ShowReport(("Chat: %s -- %d line(s)\n\n%s"):format(tostring(label), #lines, table.concat(lines, "\n")), true)
+    UberUI.ShowReport(text, true, okP and plain or nil)
 end
 
 local function CreateButton(chatFrame)

@@ -56,6 +56,28 @@ function minimap.Color()
         ColorBorderRegion(MinimapCluster.DielFrame)
     end
 
+    -- Header buttons above the minimap (Forever 1.60.1+ templates). Each draws
+    -- its whole bordered art in StateTexture; Blizzard re-SetAtlas()es it on
+    -- state changes, which keeps our vertex color. AddTexture is the ADD-blend
+    -- hover highlight, left alone.
+    local function ColorStateTexture(button)
+        if button and button.StateTexture and button.StateTexture.SetVertexColor then
+            button.StateTexture:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+        end
+    end
+    if MinimapCluster then
+        ColorStateTexture(MinimapCluster.ZoneTextButton)
+        local tracking = MinimapCluster.Tracking
+        if tracking then
+            if tracking.Background and tracking.Background.SetVertexColor then
+                tracking.Background:SetVertexColor(dc.r, dc.g, dc.b, dc.a)
+            end
+            ColorStateTexture(tracking.Button)
+        end
+    end
+    ColorStateTexture(GameTimeFrame)
+    ColorStateTexture(AddonCompartmentFrame)
+
     minimap.DarkenAddonButtons()
 end
 

@@ -180,6 +180,7 @@ local defaults = {
         nameplateraidtargetscale     = 1,
         nameplateraidtargettopanchor = false,
         smallfriendlynameplate       = false,
+        nameplatelevelanchor         = "uberui",
         nameplatesquareborder        = false,
         nameplatesquareborder_thickness = 1,
         namehealthstyle              = "off",
@@ -292,7 +293,10 @@ local errorFrame
 -- visible text (checked in game), so colored text is safe to paste.
 -- scrollToEnd: open at the bottom (chat copies, where the latest lines are
 -- what's wanted) instead of the top.
-local function ShowErrors(text, scrollToEnd)
+-- plainText: `text` without color codes, swapped in when the box is clicked.
+-- The codes draw nothing but still count as characters, so the selection
+-- highlight drifts behind them on colored text.
+local function ShowErrors(text, scrollToEnd, plainText)
     if not errorFrame then
         errorFrame = CreateFrame("Frame", "UberUIErrorFrame", UIParent, "BackdropTemplate")
         errorFrame:SetSize(640, 360)
@@ -319,6 +323,19 @@ local function ShowErrors(text, scrollToEnd)
         edit:SetWidth(570)
         edit:SetAutoFocus(false)
         edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        -- Plain text from the first click on; the codes have no width, so
+        -- the lines lay out the same and the scroll position holds.
+        edit:SetScript("OnEditFocusGained", function(self)
+            local plain = self.plainText
+            if not plain then return end
+            self.plainText = nil
+            local offset = scroll:GetVerticalScroll()
+            self:SetText(plain)
+            C_Timer.After(0, function()
+                scroll:UpdateScrollChildRect()
+                scroll:SetVerticalScroll(math.min(offset, scroll:GetVerticalScrollRange()))
+            end)
+        end)
         scroll:SetScrollChild(edit)
         errorFrame.edit = edit
         errorFrame.scroll = scroll
@@ -337,6 +354,9 @@ local function ShowErrors(text, scrollToEnd)
     -- a long chat copy) would otherwise sit past the end of shorter text
     -- and show an empty box.
     scroll:SetVerticalScroll(0)
+    -- Unfocus first so the next click swaps in this report's plain text.
+    errorFrame.edit:ClearFocus()
+    errorFrame.edit.plainText = plainText
     errorFrame.edit:SetText(text)
     errorFrame:Show()
     if scrollToEnd then
@@ -350,8 +370,8 @@ local function ShowErrors(text, scrollToEnd)
 end
 
 -- Copyable popup for longer text (chat copy), never chat.
-function UberUI.ShowReport(text, scrollToEnd)
-    ShowErrors(text, scrollToEnd)
+function UberUI.ShowReport(text, scrollToEnd, plainText)
+    ShowErrors(text, scrollToEnd, plainText)
 end
 
 function UberUI:ReportError(where, err)

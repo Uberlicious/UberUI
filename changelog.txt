@@ -1,3 +1,8 @@
+1.0.9:
+    - WoW Forever Nameplates: New Level Box Placement setting. Uber UI (default) shortens the health bar to make room for the level box so both stay centered under the name, as before Forever 1.60.1; Blizzard keeps 1.60.1's full-width bar with the level box sticking out on the right. The nameplate preview follows the setting.
+    - WoW Forever Minimap: The zone text, tracking, calendar and addon compartment buttons above the minimap (new in 1.60.1) are darkened again.
+    - Copy Chat: Clicking into the copy box switches it to plain text, so the selection highlight lines up with the text you're selecting.
+
 1.0.8:
     - WoW Forever: Updated for the 1.60.1 combo point change. Rogue combo points around the Target portrait show again (only their backgrounds are darkened), and druid combo points on the Player Frame and Personal Resource Display are darkened again.
 
